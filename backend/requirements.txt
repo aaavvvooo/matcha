@@ -7,7 +7,13 @@ pydantic[email]==2.5.0
 pydantic-settings==2.1.0
 python-dotenv==1.0.0
 alembic==1.12.1
-passlib[bcrypt]==1.7.4
+passlib[argon2]==1.7.4
+argon2-cffi>=21.3.0
 python-jose[cryptography]==3.3.0
 python-multipart==0.0.6
 zxcvbn
+resend
+jinja2==3.1.2
+celery==5.3.4
+redis==5.0.1
+flower==2.0.1

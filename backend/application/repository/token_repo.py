@@ -17,12 +17,14 @@ class TokenRepository:
         """
         try:
             if not transaction:
-                await self.db.fetch_one(query, user_id, token, token_type, expires_at)
+                token = await self.db.fetch_one(query, user_id, token, token_type, expires_at)
             else:
-                await transaction.fetchrow(query, user_id, token, token_type, expires_at)
+                token = await transaction.fetchrow(query, user_id, token, token_type, expires_at)
+            return token
         except Exception as e:
             print(e)
-    
+            raise e
+
 
 
 

@@ -4,7 +4,7 @@ from passlib.context import CryptContext
 from fastapi import HTTPException, status
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 def get_password_hash(password):
     return pwd_context.hash(password)
@@ -38,11 +38,12 @@ def validate_password(password: str):
             detail="Password must contain at least one lowercase letter"
         )
 
-    if not re.search('r[!@#$%^&*()_+{}\[\]:;<>,.?~\\/]', password):
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
-            detail='Password must contain at least one special character'
+            detail="Password must contain at least one special character"
         )
+
 
     if not re.search(r'[0-9]', password):
         raise HTTPException(
