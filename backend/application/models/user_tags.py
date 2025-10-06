@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.sql import func
-from app.database import Base
+from application.database import Base
 
 
 class UserTags(Base):

@@ -7,11 +7,10 @@ from alembic import context
 import os
 import sys
 
-# Add parent directory to path to import app modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-from app.database import Base
-from app.models import *  # Import all models
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, BASE_DIR)
+from application.database import Base
+from application.models import *  # Import all models
 
 # this is the Alembic Config object
 config = context.config
