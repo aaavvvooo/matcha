@@ -16,6 +16,7 @@ class EmailClient:
 
     async def send_verification_email(self, to: str, username: str, subject: str, token: str):
         verification_url = f"{self.frontend_url}/verify?token={token}"
+        print(verification_url)
         html_content = self._render_email_template("email_confirmation.html", {
             "verification_url": verification_url,
             "username": username
@@ -25,19 +26,20 @@ class EmailClient:
 
     async def _send_email(self, to: str, subject: str, html_content: str):
         try:
-            # Correct: use **params to pass as keyword arguments
             params = {
-                "from_email": self.from_email, 
+                "from": self.from_email, 
                 "to": to,
                 "subject": subject,
                 "html": html_content
             }
-            await resend.Emails.send(**params)
+            await resend.Emails.send(params)
             print(f"✅ Email to {to} sent successfully")
 
         except Exception as e:
             print(f"❌ Failed to send email to {to}: {e}")
             raise e
+
+
 
 
     def _render_email_template(self, template_name: str, context: dict):

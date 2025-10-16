@@ -10,7 +10,10 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    verified = pwd_context.verify(plain_password, hashed_password)
+    print(verified)
+    return verified
+
 
 def validate_password(password: str):
     result = zxcvbn.zxcvbn(password)

@@ -26,22 +26,26 @@ class TokenRepository:
             raise e
 
 
-
-
-
-    async def get_verification_token(self, token: str, token_type: str):
+    async def get_verification_token(self, token: str):
         query = """
             SELECT id, user_id, token, token_type, created_at, expires_at, used
             FROM verification_tokens
-            WHERE token = $1 AND token_type = $2 AND used = FALSE AND expires_at > NOW()
+            WHERE token = $1 
         """
-        return await self.db.fetch_one(query, token, token_type)
+        return await self.db.fetch_one(query, token)
 
-    async def mark_token_as_used(self, token_id: int):
+    async def mark_token_as_used(self, token_id: int, transaction: Optional[Connection] = None):
         query = """
             UPDATE verification_tokens
-            SET used = TRUE, updated_at = NOW()
+            SET used = TRUE
             WHERE id = $1
-            RETURNING id, used, updated_at
+            RETURNING id, used
         """
-        return await self.db.fetch_one(query, token_id)
+        try:
+            if not transaction:
+                return await self.db.fetch_one(query, token_id)
+            else:
+                return await transaction.fetchrow(query, token_id)
+        except Exception as e:
+            print(e)
+            raise e

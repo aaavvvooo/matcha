@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, text
 from sqlalchemy.sql import func
 from application.database import Base
 
@@ -12,4 +12,4 @@ class VerivicationToken(Base):
     token_type = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=False)
-    used = Column(Boolean, default=False)
+    used = Column(Boolean, default=False, server_default=text('false'))

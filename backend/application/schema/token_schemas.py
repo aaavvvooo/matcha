@@ -8,12 +8,22 @@ class TokenInfo(BaseModel):
     token_type: str
     created_at: datetime
     expires_at: datetime
+    used: bool
+
 
 
     @validator("created_at", pre=True)
     def created_at_formatter(cls, v):
         return v.strftime("%Y-%m-%d %H:%M:%S")
     
+    model_config = {
+        "from_attributes": True
+    }
+
+
+class VerificationToken(BaseModel):
+    token: str = Field(..., max_length=64)
+
     model_config = {
         "from_attributes": True
     }

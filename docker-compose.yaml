@@ -21,6 +21,54 @@ services:
     networks:
       - app-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis_cache
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  celery_worker:
+    build: ./backend
+    container_name: celery_worker
+    command: celery -A application.celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REACT_APP_API_URL: ${REACT_APP_API_URL}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${JWT_SECRET_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      FROM_EMAIL: ${FROM_EMAIL}
+      FRONTEND_URL: ${REACT_APP_API_URL}
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - app-network
+
+
+  flower:
+    build: ./backend
+    container_name: celery_flower
+    command: celery -A application.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+      - celery_worker
+    networks:
+      - app-network
+
   backend:
     build:
       context: ./backend
@@ -29,6 +77,8 @@ services:
     env_file:
       - .env
     environment:
+      REACT_APP_API_URL: ${REACT_APP_API_URL}
+      RESEND_API_KEY: ${RESEND_API_KEY}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       POSTGRES_USER: ${POSTGRES_USER}

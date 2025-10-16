@@ -13,6 +13,6 @@ class UserProfile(Base):
     gender = Column(String, nullable=True)
     sexual_orientation = Column(String, nullable=True)
     profile_picture_id = Column(Integer, ForeignKey('photos.id'), nullable=True)
-    fame_rating = Column(Float, default=0)
+    fame_rating = Column(Float, default=0, server_default='0')
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
