@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator, Field
+from pydantic import BaseModel, validator, Field, EmailStr
 from datetime import datetime
 
 class TokenInfo(BaseModel):
@@ -27,3 +27,16 @@ class VerificationToken(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+
+class ForgetPasswordRequest(BaseModel):
+    username_or_email: str = Field(...)
+
+    model_config = {
+        "from_attributes": True
+    }
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"

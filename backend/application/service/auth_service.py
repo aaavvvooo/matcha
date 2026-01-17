@@ -1,9 +1,8 @@
 from fastapi import HTTPException, status
-from application.repository.user_repo import UserRepository
-from application.repository.token_repo import TokenRepository
+from application.repository import UserRepository, TokenRepository
 from application.schema import RegisterRequest, RegisterUserResponse, TokenInfo
-from application.utils.password import get_password_hash, validate_password
-from application.utils.tokens import create_access_token, create_verification_token
+from application.utils import get_password_hash, validate_password, verify_password, create_access_token, create_verification_token
+from pydantic import EmailStr
 from application.database import Database
 from datetime import timedelta, datetime, timezone
 
@@ -24,7 +23,7 @@ class AuthService:
             user = await self.user_repo.get_user_by_username(request.username)
             if user:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")   
-
+            
             validate_password(request.password)
             hashed_password = get_password_hash(request.password) 
             token = create_verification_token()
@@ -37,6 +36,8 @@ class AuthService:
                     token_record = await self.token_repo.create_verification_token(user.id, token, "email", expiration_date, connection)
                     token = TokenInfo(**token_record)
             return user, token
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal server error: {e}")
         
@@ -59,13 +60,34 @@ class AuthService:
             raise
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal server error: {e}")
+        
+    async def login(self, username: str, password: str):
+        try:
+            user = await self.user_repo.get_user_by_username(username)
+            if not user:
+                user = await self.user_repo.get_user_by_email(username)
+            if not user:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User does not exist")
+            if not verify_password(password, user["hashed_password"]):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid credentials")
+            if not user["is_validated"]:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email not verified")
+            access_token = create_access_token(data={"sub": user["username"]})
+            return access_token
+        except HTTPException:
+            raise
 
+    async def forget_password(self, username_or_email: str):
+        try:
+            user = await self.user_repo.get_user_by_email(username_or_email)
+            if not user:
+                user = await self.user_repo.get_user_by_username(username_or_email)
+                if not user:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User does not exist")   
+            
+            
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal server error: {e}")
         
 
-
-
-        
-        
-
-        
-        
+                

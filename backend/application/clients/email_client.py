@@ -16,13 +16,17 @@ class EmailClient:
 
     async def send_verification_email(self, to: str, username: str, subject: str, token: str):
         verification_url = f"{self.frontend_url}/verify?token={token}"
-        print(verification_url)
         html_content = self._render_email_template("email_confirmation.html", {
             "verification_url": verification_url,
             "username": username
         })
         
         await self._send_email(to, subject, html_content)
+
+
+    async def send_forget_password_email(self, to: str):
+        pass
+        
 
     async def _send_email(self, to: str, subject: str, html_content: str):
         try:

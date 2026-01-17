@@ -24,12 +24,12 @@ class UserRepository:
             raise e
 
     async def get_user_by_email(self, email: str):
-        query = "SELECT id, full_name, username, email, hashed_password FROM users WHERE email = $1"
+        query = "SELECT id, full_name, username, email, hashed_password, is_validated FROM users WHERE email = $1"
         user = await self.db.fetch_one(query, email)
         return user
 
     async def get_user_by_username(self, username: str):
-        query = "SELECT id, full_name, username, email, hashed_password FROM users WHERE username = $1"
+        query = "SELECT id, full_name, username, email, hashed_password, is_validated FROM users WHERE username = $1"
         user = await self.db.fetch_one(query, username)
         return user
     

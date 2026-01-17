@@ -11,7 +11,6 @@ def get_password_hash(password):
 
 def verify_password(plain_password, hashed_password):
     verified = pwd_context.verify(plain_password, hashed_password)
-    print(verified)
     return verified
 
 
@@ -22,8 +21,7 @@ def validate_password(password: str):
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail="Password must be at least 8 characters long"
         )
-
-    if result['score'] < 3:
+    if result['score'] < 2:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail="Password is not strong enough"

@@ -9,23 +9,21 @@ from application.api.router import router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown"""
-    # Startup
     await database.connect()
     print("✅ Database connection pool created")
     
     yield
     
-    # Shutdown
+
     await database.disconnect()
     print("❌ Database connection pool closed")
 
 from .database import database
 
 
-app = FastAPI(title="My Full Stack App",
+app = FastAPI(title="Matcha",
               lifespan=lifespan)
 
-# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -49,23 +47,19 @@ async def health_check():
     Checks database connection and returns pool stats
     """
     try:
-        # Check if pool exists
         if not database.pool:
             raise HTTPException(
                 status_code=503,
                 detail="Database pool not initialized"
             )
         
-        # Test database query
         result = await database.fetch_val("SELECT 1")
         
         
-        # Get pool statistics
         pool_size = database.pool.get_size()
         pool_free = database.pool.get_idle_size()
         pool_used = pool_size - pool_free
         
-        # Check database version
         db_version = await database.fetch_val("SELECT version()")
         
         return {
