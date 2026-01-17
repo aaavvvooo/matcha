@@ -1,7 +1,7 @@
 """init photos
 
 Revision ID: 651fa443ec28
-Revises: 53fd618dedc0
+Revises: 7a36fbba1a92
 Create Date: 2025-10-05 14:38:31.323387
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '651fa443ec28'
-down_revision: Union[str, None] = '53fd618dedc0'
+down_revision: Union[str, None] = '7a36fbba1a92'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

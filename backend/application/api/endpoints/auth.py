@@ -17,14 +17,17 @@ async def register(
     request: RegisterRequest,
     db = Depends(get_db)
 ):
-    service = AuthService(db)
-    user, token = await service.register(request)
-
-    send_verification_email_task.delay(
-        email=user.email,
-        username=user.username,
-        token=token.token
-    )
+    try:
+        service = AuthService(db)
+        user, token = await service.register(request)
+        send_verification_email_task.delay(
+            email=user.email,
+            username=user.username,
+            token=token.token
+        )
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail=str(e))
 
     return user
 
