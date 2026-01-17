@@ -1,7 +1,8 @@
 from fastapi import HTTPException, status
 from application.repository import UserRepository, TokenRepository
 from application.schema import RegisterRequest, RegisterUserResponse, TokenInfo
-from application.utils import get_password_hash, validate_password, verify_password, create_access_token, create_verification_token
+from application.utils import get_password_hash, validate_password, verify_password, create_access_token, create_verification_token, decode_token
+from pprint import pprint
 from pydantic import EmailStr
 from application.database import Database
 from datetime import timedelta, datetime, timezone
@@ -77,17 +78,43 @@ class AuthService:
         except HTTPException:
             raise
 
-    async def forget_password(self, username_or_email: str):
+    async def logout(self, token: str):
         try:
-            user = await self.user_repo.get_user_by_email(username_or_email)
-            if not user:
-                user = await self.user_repo.get_user_by_username(username_or_email)
-                if not user:
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User does not exist")   
-            
-            
+            payload = decode_token(token)
+            if not payload:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token")
+
+            exp = payload.get("exp")
+            if not exp:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token missing expiration")
+
+            if isinstance(exp, (int, float)):
+                exp_time = datetime.fromtimestamp(exp, tz=timezone.utc)
+            elif isinstance(exp, datetime):
+                exp_time = exp
+            else:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token expiration")
+
+            if exp_time < datetime.now(timezone.utc):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token expired")
+            return True
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal server error: {e}")
+
+
+    # async def forget_password(self, username_or_email: str):
+    #     try:
+    #         user = await self.user_repo.get_user_by_email(username_or_email)
+    #         if not user:
+    #             user = await self.user_repo.get_user_by_username(username_or_email)
+    #             if not user:
+    #                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User does not exist")   
+            
+            
+    #     except Exception as e:
+    #         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal server error: {e}")
         
 
                 

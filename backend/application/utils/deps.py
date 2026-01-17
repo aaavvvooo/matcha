@@ -11,6 +11,7 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Database = Depends(get_db)
 ):
+#TODO: check if token is expired or no, if expired, xz cho
     user_repo = UserRepository(db)
     try:
         payload = decode_token(token)
@@ -20,7 +21,10 @@ async def get_current_user(
         user = await user_repo.get_user_by_username(username)
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
-        return user
+        return {
+            "user": user,
+            "token": token
+        }
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
