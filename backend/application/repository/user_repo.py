@@ -35,23 +35,23 @@ class UserRepository:
 
         
     
-    # async def update_user(self, data: dict, transaction: Optional[Connection]=None):
-    #     set_clauses = [f"{column} = ${i+1}" for i, column in enumerate(data.keys())]
-    #     set_clause = ", ".join(set_clauses)
-    #     query = f"""
-    #         UPDATE users
-    #         SET {set_clause}
-    #         WHERE id = $1
-    #         RETURNING id, full_name, username, email, created_at
-    #     """
-    #     try:
-    #         if not transaction:
-    #             user = await self.db.execute(query, *data.values())
-    #         else:
-    #             user = await transaction.fetchrow(query, *data.values())
-    #         return user
-    #     except Exception as e:
-    #         print(e)
-    #         raise e
+    async def update_user(self, data: dict, transaction: Optional[Connection]=None):
+        set_clauses = [f"{column} = ${i+1}" for i, column in enumerate(data.keys())]
+        set_clause = ", ".join(set_clauses)
+        query = f"""
+            UPDATE users
+            SET {set_clause}
+            WHERE id = $1
+            RETURNING id, full_name, username, email, created_at
+        """
+        try:
+            if not transaction:
+                user = await self.db.execute(query, *data.values())
+            else:
+                user = await transaction.fetchrow(query, *data.values())
+            return user
+        except Exception as e:
+            print(e)
+            raise e
 
         

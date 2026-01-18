@@ -19,6 +19,7 @@ dependencies = [
     "python-jose[cryptography]>=3.5.0",
     "python-multipart>=0.0.18",
     "redis>=5.2.1",
+    "sib-api-v3-sdk>=7.6.0",
     "sqlalchemy[asyncio]>=2.0.36",
     "uvicorn[standard]>=0.34.0",
     "zxcvbn>=4.4.28",

@@ -4,7 +4,7 @@ from datetime import timedelta
 from application.schema import RegisterRequest, VerificationToken, ForgetPasswordRequest, TokenResponse, UserLogin, RegisterUserResponse
 from application.database import get_db, Database
 from application.service import AuthService
-# from application.tasks.email_tasks import send_verification_email_task
+from application.tasks.email_tasks import send_verification_email_task
 from application.utils import get_current_user
 from application.repository.user_repo import UserRepository
 from pprint import pprint
@@ -13,23 +13,24 @@ from pprint import pprint
 
 router = APIRouter()
 
-@router.post("/register")
-async def register(request: RegisterRequest,db: Database = Depends(get_db), response_model=RegisterUserResponse):
+@router.post("/register",  response_model=RegisterUserResponse)
+async def register(request: RegisterRequest,db: Database = Depends(get_db)):
     try:
         service = AuthService(db)
         user, token = await service.register(request)
-        return user
 
-        # send_verification_email_task.delay(
-        #     email=user.email,
-        #     username=user.username,
-        #     token=token.token
-        # )
+        send_verification_email_task.delay(
+            to=user.email,
+            username=user.username,
+            token=token.token
+        )
+
+        return user
     except Exception as e:
         raise 
 
 
-@router.post("/verify-email")
+@router.post("/verify-email", response_model=RegisterUserResponse)
 async def verify(request: VerificationToken,db = Depends(get_db)):
     service = AuthService(db)
     user = await service.verify_email(request.token)
