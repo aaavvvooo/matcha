@@ -13,7 +13,7 @@ from pprint import pprint
 
 router = APIRouter()
 
-@router.post("/register",  response_model=RegisterUserResponse)
+@router.post("/register", response_model=RegisterUserResponse)
 async def register(request: RegisterRequest,db: Database = Depends(get_db)):
     try:
         service = AuthService(db)
