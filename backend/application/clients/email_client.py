@@ -40,7 +40,7 @@ class EmailClient:
     def send_password_reset_email(self, to: str, token: str):
         url = f"{self.frontend_url}/reset-password?token={token}"
         html_content = self._render_template("password_reset_email.html", **{"verification_url": verification_url, "username": username})
-        self._send_email(to, "Reset your password", html_content)
+        self._send_email(to, "Password reset request", html_content)
 
 
 

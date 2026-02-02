@@ -1,11 +1,14 @@
 from fastapi import HTTPException, status
-from application.repository import UserRepository, TokenRepository
-from application.schema import RegisterRequest, RegisterUserResponse, TokenInfo
-from application.utils import get_password_hash, validate_password, verify_password, create_access_token, create_verification_token, decode_token
+from datetime import timedelta, datetime, timezone
 from pprint import pprint
 from pydantic import EmailStr
+
+from application.repository import UserRepository, TokenRepository
+from application.schema import RegisterRequest, RegisterUserResponse, TokenInfo
+from application.utils import get_password_hash, validate_password, verify_password, create_access_token, create_verification_token, decode_token, create_password_reset_token
+from application.tasks.email_tasks import send_password_reset_email_task
 from application.database import Database
-from datetime import timedelta, datetime, timezone
+
 
 
 class AuthService:
@@ -104,17 +107,22 @@ class AuthService:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal server error: {e}")
 
 
-    # async def forget_password(self, username_or_email: str):
-    #     try:
-    #         user = await self.user_repo.get_user_by_email(username_or_email)
-    #         if not user:
-    #             user = await self.user_repo.get_user_by_username(username_or_email)
-    #             if not user:
-    #                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User does not exist")   
+    async def forget_password(self, username_or_email: str):
+        try:
+            user = await self.user_repo.get_user_by_email(username_or_email)
+            if not user:
+                user = await self.user_repo.get_user_by_username(username_or_email)
+                if not user:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User does not exist")   
+            tokens = create_password_reset_token()
+            await self.token_repo.create_verification_token(user_id=user["id"], token=tokens["hashed_token"], token_type="password_reset", expires_at=tokens["expiry"])
+            send_password_reset_email_task.delay(to=user["email"], username=user["username"], token=tokens["token"])
+            # return {"message": "Password reset email sent"}
+        except HTTPException:
+            raise
             
-            
-    #     except Exception as e:
-    #         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal server error: {e}")
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal server error: {e}")
         
 
                 

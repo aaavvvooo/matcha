@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
+
 from application.schema import RegisterRequest, VerificationToken, ForgetPasswordRequest, TokenResponse, UserLogin, RegisterUserResponse
 from application.database import get_db, Database
 from application.service import AuthService
 from application.tasks.email_tasks import send_verification_email_task
 from application.utils import get_current_user
 from application.repository.user_repo import UserRepository
-from pprint import pprint
-
 
 
 router = APIRouter()
@@ -47,11 +46,11 @@ async def current_user(current_user: dict = Depends(get_current_user)):
     pprint(current_user)
     return {"user": current_user["user"]["username"]}
 
-# @router.post("/forget-password")
-# async def forget_password(request: ForgetPasswordRequest, db = Depends(get_db)):
-#     service = AuthService(db)
-#     user = await service.forget_password(request.username_or_email)
-#     return user
+@router.post("/forget-password")
+async def forget_password(request: ForgetPasswordRequest, db = Depends(get_db)):
+    service = AuthService(db)
+    user = await service.forget_password(request.username_or_email)
+    return user
 
 # @router.post("/login", response_model=TokenResponse)
 # async def login(payload: UserLogin, db: Database = Depends(get_db)):

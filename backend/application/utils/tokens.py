@@ -1,11 +1,14 @@
+import secrets
+import hashlib
 from jose import jwt
 from ..config import JWT_SECRET_KEY, JWT_ALGORITHM
-import secrets
 from datetime  import datetime, timedelta, timezone
 
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 60
+
 
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -33,3 +36,9 @@ def decode_token(token: str):
     
 def create_verification_token() -> str:
     return secrets.token_urlsafe(32)
+
+def create_password_reset_token() -> dict:
+    reset_token = secrets.token_urlsafe(32)
+    hashed_token = hashlib.sha256(reset_token.encode()).hexdigest()
+    expiry = datetime.now(timezone.utc) + timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    return {"hashed_token": hashed_token, "token": reset_token,  "expiry": expiry}
