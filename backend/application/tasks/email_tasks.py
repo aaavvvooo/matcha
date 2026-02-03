@@ -1,11 +1,12 @@
 from celery import Task
+from typing import Optional
 from application.clients import EmailClient
 from application.celery_app import celery_app
 from application.config import BREVO_API_KEY
 
 
 class EmailTask(Task):
-    _email_service = None
+    _email_service: Optional[EmailClient] = None
 
     @property
     def email_service(self):
@@ -42,5 +43,3 @@ def send_password_reset_email_task(self, to: str, username: str, token: str):
         return {"status": "success", "send_to": to}
     except Exception as e:
         self.retry(exc=e)
-
-    

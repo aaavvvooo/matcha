@@ -6,6 +6,8 @@ from application.config import REACT_APP_API_URL, FROM_EMAIL
 
 class EmailClient:
     def __init__(self, api_key: str):
+        if FROM_EMAIL is None:
+            raise RuntimeError("FROM_EMAIL must be set")
         self.configuration = sib_api_v3_sdk.Configuration()
         self.configuration.api_key['api-key'] = api_key
         self.api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(self.configuration))
@@ -37,10 +39,7 @@ class EmailClient:
         html_content = self._render_template("verification_email.html", **{"verification_url": url, "username": username})
         self._send_email(to, "Verify your email", html_content)
 
-    def send_password_reset_email(self, to: str, token: str):
+    def send_password_reset_email(self, to: str, username: str, token: str):
         url = f"{self.frontend_url}/reset-password?token={token}"
-        html_content = self._render_template("password_reset_email.html", **{"verification_url": verification_url, "username": username})
+        html_content = self._render_template("password_reset_email.html", **{"verification_url": url, "username": username})
         self._send_email(to, "Password reset request", html_content)
-
-
-

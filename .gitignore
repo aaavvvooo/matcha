@@ -46,6 +46,7 @@ frontend/.cache/
 
 # Alembic
 backend/alembic/versions/*.pyc
+.mypy*
 
 # Testing
 coverage/

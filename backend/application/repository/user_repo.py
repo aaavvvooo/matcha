@@ -7,7 +7,7 @@ class UserRepository:
     def __init__(self, db: Database):
         self.db = db
 
-    async def create_user(self, full_name, username, email, hashed_password, transaction: Optional[Connection]=None):
+    async def create_user(self, full_name, username, email, hashed_password, transaction: Optional[Connection] = None):
         query = """
             INSERT INTO users (full_name, username, email, hashed_password)
             VALUES ($1, $2, $3, $4)
@@ -33,10 +33,9 @@ class UserRepository:
         user = await self.db.fetch_one(query, username)
         return user
 
-        
-    
-    async def update_user(self, data: dict, transaction: Optional[Connection]=None):
-        set_clauses = [f"{column} = ${i+1}" for i, column in enumerate(data.keys())]
+    async def update_user(self, data: dict, transaction: Optional[Connection] = None):
+        set_clauses = [f"{column} = ${i+1}" for i,
+                       column in enumerate(data.keys())]
         set_clause = ", ".join(set_clauses)
         query = f"""
             UPDATE users
@@ -53,5 +52,3 @@ class UserRepository:
         except Exception as e:
             print(e)
             raise e
-
-        

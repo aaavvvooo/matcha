@@ -1,15 +1,14 @@
-from datetime import timedelta
+from datetime import datetime
 from asyncpg.connection import Connection
 from application.database import Database
 from typing import Optional
-
 
 
 class TokenRepository:
     def __init__(self, db: Database):
         self.db = db
 
-    async def create_verification_token(self, user_id: int, token: str, token_type: str, expires_at: timedelta, transaction: Optional[Connection] = None):
+    async def create_verification_token(self, user_id: int, token: str, token_type: str, expires_at: datetime, transaction: Optional[Connection] = None):
         query = """
             INSERT INTO verification_tokens (user_id, token, token_type, expires_at)
             VALUES ($1, $2, $3, $4)
@@ -24,7 +23,6 @@ class TokenRepository:
         except Exception as e:
             print(e)
             raise e
-
 
     async def get_verification_token(self, token: str):
         query = """

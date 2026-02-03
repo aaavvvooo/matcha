@@ -36,3 +36,11 @@ class UserLogin(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+class ResetPasswordReauest(BaseModel):
+    token: str
+    password: str = Field(min_length=8, max_length=128)
+
+    model_config = {
+        "from_attributes": True
+    }

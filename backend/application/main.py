@@ -1,6 +1,6 @@
+from .database import database
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
 from contextlib import asynccontextmanager
 import asyncpg
 from application.api.router import router
@@ -11,21 +11,18 @@ async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown"""
     await database.connect()
     print("✅ Database connection pool created")
-    
+
     yield
-    
 
     await database.disconnect()
     print("❌ Database connection pool closed")
-
-from .database import database
 
 
 app = FastAPI(title="Matcha",
               lifespan=lifespan)
 
 app.add_middleware(
-    CORSMiddleware,
+    middleware_class=CORSMiddleware,
     allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
@@ -52,16 +49,15 @@ async def health_check():
                 status_code=503,
                 detail="Database pool not initialized"
             )
-        
+
         result = await database.fetch_val("SELECT 1")
-        
-        
+
         pool_size = database.pool.get_size()
         pool_free = database.pool.get_idle_size()
         pool_used = pool_size - pool_free
-        
+
         db_version = await database.fetch_val("SELECT version()")
-        
+
         return {
             "status": "healthy",
             "database": {
@@ -77,7 +73,7 @@ async def health_check():
                 "min_size": database.pool.get_min_size()
             }
         }
-        
+
     except asyncpg.PostgresError as e:
         raise HTTPException(
             status_code=503,

@@ -7,6 +7,7 @@ from application.repository.user_repo import UserRepository
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
+
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Database = Depends(get_db)
@@ -25,6 +26,3 @@ async def get_current_user(
         "user": user,
         "token": token
     }
-
-
-        
