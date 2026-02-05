@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, validator
 from datetime import datetime
 
+
 class RegisterRequest(BaseModel):
     full_name: str = Field(..., max_length=100)
     username: str = Field(..., max_length=50)
@@ -14,6 +15,7 @@ class RegisterRequest(BaseModel):
             raise ValueError("Passwords do not match")
         return v
 
+
 class RegisterUserResponse(BaseModel):
     id: int
     full_name: str
@@ -24,23 +26,19 @@ class RegisterUserResponse(BaseModel):
     @validator("created_at", pre=True)
     def created_at_formatter(cls, v):
         return v.strftime("%Y-%m-%d %H:%M:%S")
-    
-    model_config = {
-        "from_attributes": True
-    }
+
+    model_config = {"from_attributes": True}
+
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = {"from_attributes": True}
+
 
 class ResetPasswordReauest(BaseModel):
     token: str
     password: str = Field(min_length=8, max_length=128)
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = {"from_attributes": True}

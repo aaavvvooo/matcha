@@ -19,8 +19,7 @@ def _get_jwt_settings() -> tuple[str, str]:
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + \
-        timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire, "type": "access"})
     secret, algorithm = _get_jwt_settings()
     encoded_jwt = jwt.encode(to_encode, secret, algorithm=algorithm)
@@ -29,8 +28,7 @@ def create_access_token(data: dict):
 
 def create_refresh_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + \
-        timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "type": "refresh"})
     secret, algorithm = _get_jwt_settings()
     encoded_jwt = jwt.encode(to_encode, secret, algorithm=algorithm)
@@ -52,9 +50,10 @@ def create_verification_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def create_password_reset_token() -> dict:
+async def create_password_reset_token() -> dict:
     reset_token = secrets.token_urlsafe(32)
     hashed_token = hashlib.sha256(reset_token.encode()).hexdigest()
-    expiry = datetime.now(timezone.utc) + \
-        timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
-    return {"hashed_token": hashed_token, "token": reset_token,  "expiry": expiry}
+    expiry = datetime.now(timezone.utc) + timedelta(
+        minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
+    return {"hashed_token": hashed_token, "token": reset_token, "expiry": expiry}

@@ -2,7 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from pprint import pprint
 
-from application.schema import RegisterRequest, VerificationToken, ForgetPasswordRequest, TokenResponse, RegisterUserResponse, ResetPasswordReauest
+from application.schema import (
+    RegisterRequest,
+    VerificationToken,
+    ForgetPasswordRequest,
+    TokenResponse,
+    RegisterUserResponse,
+    ResetPasswordReauest,
+)
 from application.database import get_db, Database
 from application.service import AuthService
 from application.tasks.email_tasks import send_verification_email_task
@@ -19,9 +26,7 @@ async def register(request: RegisterRequest, db: Database = Depends(get_db)):
         user, token = await service.register(request)
 
         send_verification_email_task.delay(
-            to=user.email,
-            username=user.username,
-            token=token.token
+            to=user.email, username=user.username, token=token.token
         )
 
         return user
@@ -55,6 +60,7 @@ async def forget_password(request: ForgetPasswordRequest, db=Depends(get_db)):
     user = await service.forget_password(request.username_or_email)
     return user
 
+
 # @router.post("/login", response_model=TokenResponse)
 # async def login(payload: UserLogin, db: Database = Depends(get_db)):
 #     auth_service = AuthService(session)
@@ -66,7 +72,9 @@ async def forget_password(request: ForgetPasswordRequest, db=Depends(get_db)):
 
 
 @router.post("/logout")
-async def logout(db: Database = Depends(get_db), current_user=Depends(get_current_user)):
+async def logout(
+    db: Database = Depends(get_db), current_user=Depends(get_current_user)
+):
     auth_service = AuthService(db)
     try:
         await auth_service.logout(current_user["token"])

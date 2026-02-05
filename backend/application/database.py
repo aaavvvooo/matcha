@@ -1,11 +1,20 @@
 import asyncpg
 from typing import Optional, AsyncGenerator
 from sqlalchemy.ext.declarative import declarative_base
-from .config import POSTGRES_PASSWORD, POSTGRES_USER, POSTGRES_DB, POSTGRES_HOST, POSTGRES_PORT_INNER
+from .config import (
+    POSTGRES_PASSWORD,
+    POSTGRES_USER,
+    POSTGRES_DB,
+    POSTGRES_HOST,
+    POSTGRES_PORT_INNER,
+)
 
 Base = declarative_base()
 
-DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT_INNER}/{POSTGRES_DB}"
+DATABASE_URL = (
+    f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}"
+    f"@{POSTGRES_HOST}:{POSTGRES_PORT_INNER}/{POSTGRES_DB}"
+)
 
 
 class Database:
@@ -13,7 +22,7 @@ class Database:
 
     def __init__(self):
         self.pool: Optional[asyncpg.Pool] = None
-    
+
     def require_pool(self) -> asyncpg.Pool:
         if self.pool is None:
             raise RuntimeError("Database pool not initialized")
@@ -27,9 +36,7 @@ class Database:
                 min_size=5,
                 max_size=20,
                 command_timeout=60,
-                server_settings={
-                    'application_name': 'matcha_backend'
-                }
+                server_settings={"application_name": "matcha_backend"},
             )
 
     async def disconnect(self):

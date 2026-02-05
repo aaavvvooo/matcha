@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncpg
 from application.api.router import router
+from typing import Any, cast
 
 
 @asynccontextmanager
@@ -18,23 +19,27 @@ async def lifespan(app: FastAPI):
     print("❌ Database connection pool closed")
 
 
-app = FastAPI(title="Matcha",
-              lifespan=lifespan)
+app = FastAPI(title="Matcha", lifespan=lifespan)
+
 
 app.add_middleware(
-    middleware_class=CORSMiddleware,
+    cast(Any, CORSMiddleware),
     allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
 app.include_router(router)
 
 
 @app.get("/")
 async def read_root():
-    return {"message": "FastAPI Backend Connected to PostgreSQL", "database": "Connected"}
+    return {
+        "message": "FastAPI Backend Connected to PostgreSQL",
+        "database": "Connected",
+    }
 
 
 @app.get("/health")
@@ -45,10 +50,7 @@ async def health_check():
     """
     try:
         if not database.pool:
-            raise HTTPException(
-                status_code=503,
-                detail="Database pool not initialized"
-            )
+            raise HTTPException(status_code=503, detail="Database pool not initialized")
 
         result = await database.fetch_val("SELECT 1")
 
@@ -63,15 +65,15 @@ async def health_check():
             "database": {
                 "connected": True,
                 "test_query": result == 1,
-                "version": db_version.split(',')[0] if db_version else "unknown"
+                "version": db_version.split(",")[0] if db_version else "unknown",
             },
             "connection_pool": {
                 "size": pool_size,
                 "used": pool_used,
                 "free": pool_free,
                 "max_size": database.pool.get_max_size(),
-                "min_size": database.pool.get_min_size()
-            }
+                "min_size": database.pool.get_min_size(),
+            },
         }
 
     except asyncpg.PostgresError as e:
@@ -79,19 +81,12 @@ async def health_check():
             status_code=503,
             detail={
                 "status": "unhealthy",
-                "database": {
-                    "connected": False,
-                    "error": str(e)
-                }
-            }
+                "database": {"connected": False, "error": str(e)},
+            },
         )
     except Exception as e:
         raise HTTPException(
-            status_code=503,
-            detail={
-                "status": "unhealthy",
-                "error": str(e)
-            }
+            status_code=503, detail={"status": "unhealthy", "error": str(e)}
         )
 
 

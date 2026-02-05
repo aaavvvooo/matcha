@@ -20,7 +20,7 @@ class EmailTask(Task):
     base=EmailTask,
     name="send_verification_email",
     max_retries=3,
-    default_retry_delay=10
+    default_retry_delay=10,
 )
 def send_verification_email_task(self, to: str, username: str, token: str):
     try:
@@ -35,7 +35,7 @@ def send_verification_email_task(self, to: str, username: str, token: str):
     base=EmailTask,
     name="send_password_reset_email",
     max_retries=3,
-    default_retry_delay=10
+    default_retry_delay=10,
 )
 def send_password_reset_email_task(self, to: str, username: str, token: str):
     try:

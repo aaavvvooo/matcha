@@ -21,34 +21,34 @@ def validate_password(password: str):
     if len(password) < 8:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 8 characters long"
+            detail="Password must be at least 8 characters long",
         )
-    if result['score'] < 2:
+    if result["score"] < 2:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password is not strong enough"
-        )
-
-    if not re.search(r'[A-Z]', password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must contain at least one uppercase letter"
+            detail="Password is not strong enough",
         )
 
-    if not re.search(r'[a-z]', password):
+    if not re.search(r"[A-Z]", password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must contain at least one lowercase letter"
+            detail="Password must contain at least one uppercase letter",
+        )
+
+    if not re.search(r"[a-z]", password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must contain at least one lowercase letter",
         )
 
     if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must contain at least one special character"
+            detail="Password must contain at least one special character",
         )
 
-    if not re.search(r'[0-9]', password):
+    if not re.search(r"[0-9]", password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must contain at least one number"
+            detail="Password must contain at least one number",
         )
