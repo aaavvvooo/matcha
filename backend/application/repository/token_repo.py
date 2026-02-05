@@ -1,15 +1,21 @@
-from datetime import timedelta
+from datetime import datetime
 from asyncpg.connection import Connection
 from application.database import Database
 from typing import Optional
-
 
 
 class TokenRepository:
     def __init__(self, db: Database):
         self.db = db
 
-    async def create_verification_token(self, user_id: int, token: str, token_type: str, expires_at: timedelta, transaction: Optional[Connection] = None):
+    async def create_verification_token(
+        self,
+        user_id: int,
+        token: str,
+        token_type: str,
+        expires_at: datetime,
+        transaction: Optional[Connection] = None,
+    ):
         query = """
             INSERT INTO verification_tokens (user_id, token, token_type, expires_at)
             VALUES ($1, $2, $3, $4)
@@ -17,14 +23,17 @@ class TokenRepository:
         """
         try:
             if not transaction:
-                token = await self.db.fetch_one(query, user_id, token, token_type, expires_at)
+                token_record = await self.db.fetch_one(
+                    query, user_id, token, token_type, expires_at
+                )
             else:
-                token = await transaction.fetchrow(query, user_id, token, token_type, expires_at)
-            return token
+                token_record = await transaction.fetchrow(
+                    query, user_id, token, token_type, expires_at
+                )
+            return token_record
         except Exception as e:
             print(e)
             raise e
-
 
     async def get_verification_token(self, token: str):
         query = """
@@ -34,7 +43,9 @@ class TokenRepository:
         """
         return await self.db.fetch_one(query, token)
 
-    async def mark_token_as_used(self, token_id: int, transaction: Optional[Connection] = None):
+    async def mark_token_as_used(
+        self, token_id: int, transaction: Optional[Connection] = None
+    ):
         query = """
             UPDATE verification_tokens
             SET used = TRUE
