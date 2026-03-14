@@ -7,7 +7,7 @@ from alembic import context
 import os
 import sys
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, BASE_DIR)
 from application.database import Base
 from application.models import *  # Import all models
@@ -28,14 +28,14 @@ POSTGRES_DB = os.getenv("POSTGRES_DB", "myapp_db")
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT_INNER}/{POSTGRES_DB}"
+    f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT_INNER}/{POSTGRES_DB}",
 )
 
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 # add your model's MetaData object here for 'autogenerate' support
 target_metadata = Base.metadata
-print("DEBUGGING: tables ->",Base.metadata.tables.keys())
+print("DEBUGGING: tables ->", Base.metadata.tables.keys())
 
 
 def run_migrations_offline() -> None:

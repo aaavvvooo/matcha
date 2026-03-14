@@ -4,3 +4,12 @@ from .tags import Tag
 from .user_tags import UserTags
 from .photos import Photo
 from .verification_tokens import VerivicationToken
+
+__all__ = [
+    "User",
+    "UserProfile",
+    "Tag",
+    "UserTags",
+    "Photo",
+    "VerivicationToken",
+]

@@ -14,8 +14,7 @@ JWT_ALGORITHM = os.getenv("JWT_ALGORITHM")
 
 REACT_APP_API_URL = os.getenv("REACT_APP_API_URL")
 FROM_EMAIL = os.getenv("FROM_EMAIL")
+BREVO_API_KEY = os.getenv("BREVO_API_KEY")
+
 
 REDIS_URL = os.getenv("REDIS_URL")
-
-
-
