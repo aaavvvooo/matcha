@@ -23,6 +23,7 @@ dependencies = [
     "python-jose[cryptography]>=3.5.0",
     "python-multipart>=0.0.18",
     "redis>=5.2.1",
+    "slowapi>=0.1.9",
     "sib-api-v3-sdk>=7.6.0",
     "sqlalchemy[asyncio]>=2.0.36",
     "types-python-jose>=3.5.0.20250531",

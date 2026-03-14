@@ -3,7 +3,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncpg
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from application.api.router import router
+from application.limiter import limiter
 from typing import Any, cast
 
 
@@ -21,6 +24,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Matcha", lifespan=lifespan)
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     cast(Any, CORSMiddleware),

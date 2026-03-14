@@ -6,8 +6,8 @@ class RegisterRequest(BaseModel):
     full_name: str = Field(..., max_length=100)
     username: str = Field(..., max_length=50)
     email: EmailStr = Field(...)
-    password: str = Field(..., min_length=8)
-    confirm_password: str = Field(..., min_length=8)
+    password: str = Field(..., min_length=8, max_length=128)
+    confirm_password: str = Field(..., min_length=8, max_length=128)
 
     @validator("confirm_password")
     def passwords_match(cls, v, values):
@@ -37,7 +37,7 @@ class UserLogin(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ResetPasswordReauest(BaseModel):
+class ResetPasswordRequest(BaseModel):
     token: str
     password: str = Field(min_length=8, max_length=128)
 

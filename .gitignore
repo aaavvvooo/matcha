@@ -2,23 +2,37 @@
 .env
 .env.local
 .env.*.local
-.venv
+**/.venv/
 
 # Python
-__pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
+*.pyd
 __pycache
 *.py[cod]
 *$py.class
 *.so
 .Python
-venv/
-env/
-ENV/
-backend/.pytest_cache/
-backend/htmlcov/
-backend/.coverage
+**/venv/
+**/env/
+**/ENV/
+**/.pytest_cache/
+**/htmlcov/
+.coverage
+.coverage.*
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+site/
+
+# Type checking / linting
+**/.mypy_cache
+**/.ruff_cache
+.dmypy.json
+dmypy.json
 
 # Node
 node_modules/
@@ -26,8 +40,12 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
 frontend/build/
 frontend/.cache/
+frontend/dist/
+.next/
+.nuxt/
 
 # IDEs
 .vscode/
@@ -36,9 +54,13 @@ frontend/.cache/
 *.swo
 *~
 .DS_Store
+Thumbs.db
 
-# Docker
+# Logs
 *.log
+logs/
+celerybeat-schedule
+celerybeat.pid
 
 # Database
 *.db
@@ -46,13 +68,12 @@ frontend/.cache/
 
 # Alembic
 backend/alembic/versions/*.pyc
-.mypy*
-.ruff*
 
 # Testing
 coverage/
 .nyc_output/
 
-# Build
-dist/
-build/
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride

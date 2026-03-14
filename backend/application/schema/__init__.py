@@ -2,7 +2,7 @@ from .auth_schemas import (
     RegisterRequest,
     RegisterUserResponse,
     UserLogin,
-    ResetPasswordReauest,
+    ResetPasswordRequest,
 )
 from .token_schemas import (
     TokenInfo,
@@ -15,7 +15,7 @@ __all__ = [
     "RegisterRequest",
     "RegisterUserResponse",
     "UserLogin",
-    "ResetPasswordReauest",
+    "ResetPasswordRequest",
     "TokenInfo",
     "VerificationToken",
     "ForgetPasswordRequest",

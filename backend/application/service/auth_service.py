@@ -11,12 +11,14 @@ from application.utils import (
     validate_password,
     verify_password,
     create_access_token,
+    create_refresh_token,
     create_verification_token,
     decode_token,
     create_password_reset_token,
 )
 from application.tasks.email_tasks import send_password_reset_email_task
 from application.database import Database
+from application.redis_client import get_redis
 
 
 class AuthService:
@@ -44,6 +46,9 @@ class AuthService:
             validate_password(request.password)
             hashed_password = get_password_hash(request.password)
             verification_token = create_verification_token()
+            hashed_verification_token = hashlib.sha256(
+                verification_token.encode()
+            ).hexdigest()
             expiration_date = datetime.now(timezone.utc) + timedelta(days=1)
 
             pool = self.db.require_pool()
@@ -58,11 +63,14 @@ class AuthService:
                         conn,
                     )
                     user = RegisterUserResponse(**user_record)
-                    token_record = await self.token_repo.create_verification_token(
-                        user.id, verification_token, "email", expiration_date, conn
+                    await self.token_repo.create_verification_token(
+                        user.id,
+                        hashed_verification_token,
+                        "email",
+                        expiration_date,
+                        conn,
                     )
-                    token_info = TokenInfo(**token_record)
-            return user, token_info
+            return user, verification_token
         except HTTPException:
             raise
         except Exception as e:
@@ -73,7 +81,8 @@ class AuthService:
 
     async def verify_email(self, token: str):
         try:
-            token_record = await self.token_repo.get_verification_token(token)
+            hashed_token = hashlib.sha256(token.encode()).hexdigest()
+            token_record = await self.token_repo.get_verification_token(hashed_token)
             if not token_record:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
@@ -110,7 +119,7 @@ class AuthService:
             if not user:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="User does not exist",
+                    detail="Invalid credentials",
                 )
             if not verify_password(password, user["hashed_password"]):
                 raise HTTPException(
@@ -122,9 +131,24 @@ class AuthService:
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Email not verified"
                 )
             access_token = create_access_token(data={"sub": user["username"]})
-            return access_token
+            refresh_token = create_refresh_token(data={"sub": user["username"]})
+            refresh_token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+            async with get_redis() as redis:
+                await redis.setex(
+                    f"refresh:{user['username']}",
+                    7 * 24 * 60 * 60,
+                    refresh_token_hash,
+                )
+            return access_token, refresh_token
         except HTTPException:
             raise
+        except Exception as e:
+            raise (
+                HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Internal server error: {e}",
+                )
+            )
 
     async def logout(self, token: str):
         try:
@@ -155,7 +179,58 @@ class AuthService:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Token expired"
                 )
-            return True
+
+            username = payload.get("sub")
+            token_hash = hashlib.sha256(token.encode()).hexdigest()
+            ttl = int((exp_time - datetime.now(timezone.utc)).total_seconds())
+            async with get_redis() as redis:
+                await redis.setex(f"blacklist:{token_hash}", ttl, 1)
+                if username:
+                    await redis.delete(f"refresh:{username}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Internal server error: {e}",
+            )
+
+    async def refresh(self, refresh_token: str):
+        try:
+            payload = decode_token(refresh_token)
+            if not payload or payload.get("type") != "refresh":
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid refresh token",
+                )
+
+            username = payload.get("sub")
+            if not username:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid refresh token",
+                )
+
+            incoming_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+            async with get_redis() as redis:
+                stored_hash = await redis.get(f"refresh:{username}")
+
+            if not stored_hash or stored_hash != incoming_hash:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Refresh token revoked",
+                )
+
+            new_access_token = create_access_token(data={"sub": username})
+            new_refresh_token = create_refresh_token(data={"sub": username})
+            new_refresh_hash = hashlib.sha256(new_refresh_token.encode()).hexdigest()
+
+            async with get_redis() as redis:
+                await redis.setex(
+                    f"refresh:{username}", 7 * 24 * 60 * 60, new_refresh_hash
+                )
+
+            return new_access_token, new_refresh_token
         except HTTPException:
             raise
         except Exception as e:
@@ -169,22 +244,19 @@ class AuthService:
             user = await self.user_repo.get_user_by_email(username_or_email)
             if not user:
                 user = await self.user_repo.get_user_by_username(username_or_email)
-                if not user:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="User does not exist",
-                    )
-            tokens = await create_password_reset_token()
-            await self.token_repo.create_verification_token(
-                user_id=user["id"],
-                token=tokens["hashed_token"],
-                token_type="password_reset",
-                expires_at=tokens["expiry"],
-            )
-            send_password_reset_email_task.delay(
-                to=user["email"], username=user["username"], token=tokens["token"]
-            )
-            # return {"message": "Password reset email sent"}
+
+            if user:
+                tokens = await create_password_reset_token()
+                await self.token_repo.create_verification_token(
+                    user_id=user["id"],
+                    token=tokens["hashed_token"],
+                    token_type="password_reset",
+                    expires_at=tokens["expiry"],
+                )
+                send_password_reset_email_task.delay(
+                    to=user["email"], username=user["username"], token=tokens["token"]
+                )
+            return {"message": "If the account exists, a reset email has been sent"}
         except HTTPException:
             raise
         except Exception as e:
@@ -202,7 +274,7 @@ class AuthService:
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
                 )
             token_info = TokenInfo(**token_record)
-            if token_info.expires_at < datetime.now(timezone.utc):
+            if token_info.expires_at < datetime.now(timezone.utc) or token_info.used:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Token expired"
                 )
