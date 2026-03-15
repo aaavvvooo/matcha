@@ -3,7 +3,7 @@ from sqlalchemy.sql import func
 from application.database import Base
 
 
-class VerivicationToken(Base):
+class VerificationToken(Base):
     __tablename__ = "verification_tokens"
 
     id = Column(Integer, primary_key=True, index=True)
