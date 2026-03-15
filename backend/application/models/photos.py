@@ -8,7 +8,7 @@ class Photo(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(
-        Integer, ForeignKey("users.id"), unique=True, index=True, nullable=False
+        Integer, ForeignKey("users.id"), unique=False, index=True, nullable=False
     )
     url = Column(String, nullable=False)
     order = Column(Integer, nullable=False)
