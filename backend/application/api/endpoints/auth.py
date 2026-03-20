@@ -69,7 +69,7 @@ async def login(
 
 @router.get("/me")
 async def current_user(current_user: dict = Depends(get_current_user)):
-    return {"user": current_user["user"]["username"]}
+    return {"user": current_user}
 
 
 @router.post("/forget-password")
