@@ -80,3 +80,4 @@ coverage/
 
 en.subject*
 PLAN.md
+.markdownlint.json
