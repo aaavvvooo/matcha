@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
     print("✅ Database connection pool created")
 
     yield
-
+ 
     await database.disconnect()
     print("❌ Database connection pool closed")
 
