@@ -1,0 +1,992 @@
+<rpg-method>
+# Repository Planning Graph (RPG) Method - PRD
+
+This PRD uses the RPG methodology: separate WHAT (functional) from HOW (structural), then connect them with explicit dependencies. Task Master will parse this into a dependency-aware task graph.
+</rpg-method>
+
+---
+
+<overview>
+
+## Problem Statement
+Young adults seeking romantic connections need a reliable, safe platform to discover and communicate with compatible partners nearby. Existing solutions are either too casual (swipe-only, no depth) or too complex (subscription walls, cluttered UX). Matcha is a full-featured dating web application where users discover profiles based on geographic proximity, shared interests, and compatibility — and can chat in real time once they mutually connect.
+
+The platform is currently functional only at the authentication layer. All core dating features (profile management, discovery, social mechanics, real-time communication) remain unimplemented, blocking any meaningful use.
+
+## Target Users
+- **Primary**: Adults aged 18–65 seeking romantic or social connections, comfortable using browser-based apps.
+- **Secondary**: 42 school evaluators verifying subject compliance (minimum 500 profiles, all mandatory features demonstrable).
+
+## Success Metrics
+- User can complete full registration → profile setup → browse → like → mutual match → chat flow end-to-end with zero server errors.
+- Browse endpoint returns orientation-filtered, distance-sorted results for any authenticated user with a complete profile.
+- Real-time chat message delivered within 10 seconds of sending.
+- Minimum 500 seed profiles present in the database for evaluation.
+- All mandatory security requirements pass (no SQL injection, no XSS, MIME-validated uploads, rate-limited sensitive endpoints).
+
+</overview>
+
+---
+
+<functional-decomposition>
+
+## Capability Tree
+
+### Capability: Profile Management
+Users can create and maintain a rich public profile including personal info, photos, location, and interest tags.
+
+#### Feature: Profile Setup (First-Time)
+- **Description**: New users complete their profile before they can browse or be discovered.
+- **Inputs**: first_name, last_name, gender, sexual_preference, biography, at least 1 photo, at least 1 tag, location.
+- **Outputs**: Populated user_profiles row; user redirected to /browse.
+- **Behavior**: All fields validated server-side; profile marked complete only when photo + tag + location are set; incomplete profiles are redirected to /profile/setup by middleware.
+
+#### Feature: Profile Edit
+- **Description**: Authenticated users update any profile field at any time.
+- **Inputs**: Partial update payload (any subset of profile fields).
+- **Outputs**: Updated user_profiles row; updated response payload.
+- **Behavior**: PATCH semantics; only provided fields are changed; email uniqueness re-validated if changed.
+
+#### Feature: Photo Upload and Management
+- **Description**: Users upload up to 5 photos; one is designated as the profile picture.
+- **Inputs**: Multipart image file (MIME validated), photo ID for delete/set-main.
+- **Outputs**: File stored in /uploads volume; photos row created with URL and order.
+- **Behavior**: MIME type checked with python-magic (not extension); max 5MB; max 5 photos; filename replaced with UUID; first upload auto-sets is_main=true; cannot delete last photo if it is the profile picture.
+
+#### Feature: Tag Management
+- **Description**: Users associate interest tags (reusable pool) with their profile.
+- **Inputs**: List of tag names (new or existing).
+- **Outputs**: Tags created if new; user_tags rows updated (replace full list).
+- **Behavior**: Tag names stripped of HTML; GET /tags returns full list for autocomplete; POST /profile/tags replaces existing associations atomically.
+
+---
+
+### Capability: Geolocation
+The system captures and maintains each user's geographic position to power distance-based discovery.
+
+#### Feature: Browser GPS Consent
+- **Description**: On profile setup, request GPS coordinates from the browser with explicit user consent.
+- **Inputs**: Browser geolocation API response (latitude, longitude).
+- **Outputs**: lat/lon stored in user_profiles; location_label resolved and stored.
+- **Behavior**: If consent granted → send coords to backend directly. If denied → show city text input → geocode via Nominatim API → send resolved coords.
+
+#### Feature: Manual Location Update
+- **Description**: Users update their location at any time from profile settings.
+- **Inputs**: Text city input or new GPS coordinates.
+- **Outputs**: Updated lat/lon/location_label in user_profiles.
+- **Behavior**: Same geocoding flow as initial setup; triggers fame recalculation if relevant.
+
+#### Feature: Distance Calculation
+- **Description**: Compute geographic distance between two users for sorting and filtering.
+- **Inputs**: Two (lat, lon) pairs.
+- **Outputs**: Distance in kilometers (float).
+- **Behavior**: Haversine formula implemented as a SQL expression or Python utility; whitelisted sort column name injection prevention.
+
+---
+
+### Capability: Discovery and Search
+Authenticated users with complete profiles can browse and search for compatible matches.
+
+#### Feature: Browse Feed
+- **Description**: Returns a paginated list of compatible profiles sorted by relevance.
+- **Inputs**: Authenticated user context; optional query params: sort, age_min, age_max, fame_min, fame_max, tags, page, limit.
+- **Outputs**: Array of profile cards (id, first_name, age, profile_picture_url, fame_rating, distance_km, shared_tags, is_online, last_seen).
+- **Behavior**: Filter by sexual orientation compatibility; exclude blocked users and own profile; sort by distance → shared tags → fame rating; apply optional user filters; paginate.
+
+#### Feature: Advanced Search
+- **Description**: User-driven search with explicit multi-criteria filtering.
+- **Inputs**: age_min, age_max, fame_min, fame_max, lat, lon, radius_km, tags (AND logic), sort, page.
+- **Outputs**: Same profile card array as browse.
+- **Behavior**: Reuses browse query with different defaults; location search applies Haversine ≤ radius filter; orientation and block exclusion still applied.
+
+---
+
+### Capability: Social Mechanics
+Users interact with profiles via likes, views, blocks, and reports, forming the connection layer that enables chat.
+
+#### Feature: Like / Unlike
+- **Description**: Users like or unlike a profile; mutual likes create a connection.
+- **Inputs**: Authenticated user, target profile ID.
+- **Outputs**: Like record created/removed; connection event if mutual; notifications dispatched; fame recalculated for target.
+- **Behavior**: Liker must have a profile picture (403 otherwise); unique constraint on (liker_id, liked_id); mutual like detection triggers both users notified; unlike removes connection and disables chat.
+
+#### Feature: Profile View Recording
+- **Description**: Visiting a profile is logged and shown to the viewed user.
+- **Inputs**: Authenticated viewer, target profile ID.
+- **Outputs**: profile_views row inserted; fame recalculated for viewed user; notification dispatched.
+- **Behavior**: Do not record a view when user visits their own profile; all views kept (not deduplicated).
+
+#### Feature: Block and Report
+- **Description**: Users can block or report other users for safety.
+- **Inputs**: Authenticated user, target profile ID, optional report reason.
+- **Outputs**: blocks/reports row created; blocked user removed from all future browse/search results for both parties; any existing like removed on block.
+- **Behavior**: Unique constraint on (blocker_id, blocked_id); reports stored for admin review; report decrements fame of reported user.
+
+#### Feature: Profile View History and Liked-By Lists
+- **Description**: Users see who has viewed or liked their profile.
+- **Inputs**: Authenticated user (own profile context).
+- **Outputs**: Paginated lists with viewer/liker info and timestamps.
+- **Behavior**: Only own data accessible; sorted by most recent.
+
+---
+
+### Capability: Fame Rating
+A dynamic score (0–100) representing each user's popularity and profile quality, used as a browse/search sort criterion.
+
+#### Feature: Fame Calculation
+- **Description**: Recalculates a user's fame rating based on social interactions.
+- **Inputs**: user_id; counts of likes received, views received, connections, blocks received, reports, profile completeness.
+- **Outputs**: Updated fame_rating in user_profiles.
+- **Behavior**: Formula: +10/like received (max 50), +5/view (max 30), +15 for complete profile, +5/connection, -15/block received, -20/report (max -40). Capped 0–100. Called on every relevant event; also run as hourly Celery periodic task as safety net.
+
+---
+
+### Capability: Online Status
+The system tracks and exposes whether each user is currently active.
+
+#### Feature: Online Presence Tracking
+- **Description**: Mark a user online when WebSocket connected; update last_seen on activity.
+- **Inputs**: WebSocket connect/disconnect events; heartbeat pings every 60s.
+- **Outputs**: Redis key `user:{id}:online` with 300s TTL; `users.last_seen` timestamp updated.
+- **Behavior**: On connect → SET Redis key. On disconnect → DELETE key. Heartbeat refreshes TTL. last_seen updated on every auth action and heartbeat.
+
+#### Feature: Online Status on Profile
+- **Description**: Any profile card or view page displays whether the user is online or shows last seen time.
+- **Inputs**: target user_id.
+- **Outputs**: `is_online` (bool), `last_seen` (datetime) included in profile response.
+- **Behavior**: Check Redis key for is_online; fall back to users.last_seen for display.
+
+---
+
+### Capability: Real-Time Chat
+Mutually connected users exchange text messages with sub-10-second delivery.
+
+#### Feature: WebSocket Connection Management
+- **Description**: Maintain authenticated WebSocket connections per user for real-time communication.
+- **Inputs**: Access token (query param on WS URL).
+- **Outputs**: Persistent bidirectional channel; connection registered in ConnectionManager.
+- **Behavior**: Validate token on upgrade; store {user_id: WebSocket} in ConnectionManager; handle disconnect gracefully; client reconnects automatically.
+
+#### Feature: Message Sending and Delivery
+- **Description**: Send a chat message from one connected user to another; persist and deliver in real time.
+- **Inputs**: Sender WebSocket, JSON payload {type: "message", to_user_id, content}.
+- **Outputs**: Message persisted to messages table; delivered to recipient WebSocket if online; stored for retrieval if offline.
+- **Behavior**: Validate mutual connection (both liked, no block); reject if connection broken; index on (sender_id, receiver_id) for history queries.
+
+#### Feature: Chat History
+- **Description**: Fetch paginated message history between two users.
+- **Inputs**: Authenticated user, other user_id, page, limit.
+- **Outputs**: Paginated list of messages with sender, content, sent_at, read_at.
+- **Behavior**: Only accessible to participants of the conversation; auto-scroll to latest on page load.
+
+---
+
+### Capability: Real-Time Notifications
+Users receive sub-10-second notifications for key social events from any page on the site.
+
+#### Feature: Notification Dispatch
+- **Description**: Server-side notification emission when social events occur.
+- **Inputs**: Event type (like, view, message, match, unlike), actor user, recipient user_id.
+- **Outputs**: Notification persisted to notifications table; delivered over WebSocket if recipient is online.
+- **Behavior**: Multiplexed over same WebSocket as chat using `type` field; events: like created, view recorded, message received, mutual like, like deleted.
+
+#### Feature: Notification REST API
+- **Description**: Fetch, display, and mark notifications as read.
+- **Inputs**: Authenticated user; optional unread_only filter; notification ID for mark-read.
+- **Outputs**: List of notifications; updated is_read status.
+- **Behavior**: GET /notifications hydrates badge on page load before WS connects; PATCH /notifications/{id}/read and /notifications/read-all.
+
+---
+
+### Capability: Database Seed
+500 realistic profiles prepopulate the database for evaluation and testing.
+
+#### Feature: Seed Script
+- **Description**: Generate and insert 500 distinct realistic user profiles with all required data.
+- **Inputs**: None (run once via Docker Compose or Makefile).
+- **Outputs**: 500 users with profiles, photos, tags, locations distributed across 5–10 cities.
+- **Behavior**: Use Faker for names/bios/emails; randomized gender/preference distributions; real lat/lon for cities; 1–5 tags from predefined list of ~30; photo URLs from picsum.photos; fame_rating 0–100 random; is_validated=True; skip if profiles already exist.
+
+---
+
+### Capability: Security Hardening
+Mandatory security requirements from the project subject.
+
+#### Feature: Input Sanitization
+- **Description**: Prevent XSS and HTML injection in all user-supplied text fields.
+- **Inputs**: Any text field (bio, tags, usernames, etc.).
+- **Outputs**: Sanitized string stored in DB.
+- **Behavior**: Pydantic validators strip/reject HTML tags on all text inputs; React default escaping; never use dangerouslySetInnerHTML.
+
+#### Feature: SQL Injection Prevention
+- **Description**: All database queries use parameterized statements.
+- **Inputs**: Any user-supplied filter values (sort fields, search criteria).
+- **Outputs**: Safe parameterized query execution.
+- **Behavior**: SQLAlchemy parameterized expressions everywhere; sort column names whitelisted server-side before interpolation.
+
+#### Feature: Secure File Upload
+- **Description**: Validate uploaded files are genuine images, reject malicious content.
+- **Inputs**: Uploaded file bytes.
+- **Outputs**: Accepted (stored) or rejected (400 error).
+- **Behavior**: python-magic MIME check (not extension); whitelist: image/jpeg, image/png, image/gif, image/webp; max 5MB; UUID-renamed filename; stored outside web root if possible.
+
+---
+
+### Capability: Bonus Features
+Optional enhancements evaluated only after all mandatory features are complete.
+
+#### Feature: OmniAuth / Social Login
+- **Description**: Register and login via OAuth providers (Google, GitHub, 42 intra).
+- **Inputs**: OAuth provider callback with code and state.
+- **Outputs**: User created/linked; session established.
+- **Behavior**: Authlib for OAuth flow; oauth_accounts table; if email matches existing user → link; else create new user with is_validated=True.
+
+#### Feature: Drag-and-Drop Photo Gallery with Editing
+- **Description**: Reorder photos via drag-and-drop; crop/rotate/filter before upload.
+- **Inputs**: Drag-and-drop events; canvas-edited image blob.
+- **Outputs**: Updated photo order in DB; edited image file uploaded.
+- **Behavior**: react-beautiful-dnd or @dnd-kit for reordering; react-image-crop for crop; canvas for rotation/filters; PATCH /profile/photos/reorder for order update.
+
+#### Feature: Interactive Map View
+- **Description**: Map page showing nearby users as pins with profile pictures.
+- **Inputs**: User location; browse results with lat/lon.
+- **Outputs**: Leaflet map with user markers; popup with name/age/fame linking to profile.
+- **Behavior**: React-Leaflet; navigator.geolocation.watchPosition() for real-time tracking; same orientation/block filtering as browse.
+
+#### Feature: Video / Audio Chat
+- **Description**: Connected users initiate peer-to-peer video or audio calls.
+- **Inputs**: WebRTC offer/answer/ICE signals over existing WebSocket.
+- **Outputs**: Live media stream between peers.
+- **Behavior**: WebRTC + STUN (Google's stun:stun.l.google.com:19302); simple-peer library; signaling over WebSocket; "Video call" button on ChatPage.
+
+#### Feature: Date / Event Scheduling
+- **Description**: Connected users propose, accept, and track real-life dates.
+- **Inputs**: Title, datetime, location label, recipient user_id.
+- **Outputs**: Event record created; notifications dispatched; events list page.
+- **Behavior**: events table with ENUM status (pending/accepted/declined/cancelled); proposer can cancel; notifications on proposal and status change; countdown display.
+
+</functional-decomposition>
+
+---
+
+<structural-decomposition>
+
+## Repository Structure
+
+```
+matcha/
+├── backend/
+│   ├── alembic/
+│   │   └── versions/            # Migration files (currently empty)
+│   ├── application/
+│   │   ├── api/
+│   │   │   ├── endpoints/
+│   │   │   │   ├── auth.py      # ✅ Existing: auth endpoints
+│   │   │   │   ├── profile.py   # NEW: profile CRUD, photos, tags
+│   │   │   │   ├── browse.py    # NEW: browse + search
+│   │   │   │   ├── social.py    # NEW: likes, views, blocks, reports
+│   │   │   │   ├── chat.py      # NEW: chat history REST
+│   │   │   │   ├── notifications.py # NEW: notification REST
+│   │   │   │   └── websocket.py # NEW: WebSocket endpoint
+│   │   │   └── router.py        # ✅ Existing: aggregates routers
+│   │   ├── models/
+│   │   │   ├── users.py         # ✅ Existing (add last_seen column)
+│   │   │   ├── user_profiles.py # ✅ Existing (add lat, lon, location_label)
+│   │   │   ├── photos.py        # ✅ Existing
+│   │   │   ├── tags.py          # ✅ Existing
+│   │   │   ├── user_tags.py     # ✅ Existing
+│   │   │   ├── verification_tokens.py # ✅ Existing
+│   │   │   ├── likes.py         # NEW
+│   │   │   ├── profile_views.py # NEW
+│   │   │   ├── blocks.py        # NEW
+│   │   │   ├── reports.py       # NEW
+│   │   │   ├── messages.py      # NEW
+│   │   │   ├── notifications.py # NEW
+│   │   │   └── events.py        # NEW (bonus)
+│   │   ├── service/
+│   │   │   ├── auth_service.py  # ✅ Existing
+│   │   │   ├── profile_service.py  # NEW
+│   │   │   ├── photo_service.py    # NEW
+│   │   │   ├── browse_service.py   # NEW
+│   │   │   ├── social_service.py   # NEW (likes, views, blocks, reports)
+│   │   │   ├── fame_service.py     # NEW
+│   │   │   ├── chat_service.py     # NEW
+│   │   │   ├── notification_service.py # NEW
+│   │   │   └── websocket_manager.py    # NEW
+│   │   ├── repository/
+│   │   │   ├── user_repo.py     # ✅ Existing
+│   │   │   ├── token_repo.py    # ✅ Existing
+│   │   │   ├── profile_repo.py  # NEW
+│   │   │   ├── social_repo.py   # NEW
+│   │   │   ├── chat_repo.py     # NEW
+│   │   │   └── notification_repo.py # NEW
+│   │   ├── schema/              # ✅ Existing (add profile, browse, social schemas)
+│   │   ├── tasks/
+│   │   │   ├── email_tasks.py   # ✅ Existing
+│   │   │   ├── cleanup_tasks.py # ✅ Existing
+│   │   │   └── fame_tasks.py    # NEW: periodic fame recalculation
+│   │   ├── utils/               # ✅ Existing (add haversine, sanitizer)
+│   │   ├── clients/             # ✅ Existing (add nominatim geocoder)
+│   │   └── main.py              # ✅ Existing (mount static /uploads)
+│   └── scripts/
+│       └── seed.py              # NEW: 500-profile seed
+│
+├── frontend/
+│   └── src/
+│       ├── api/
+│       │   ├── authApi.js       # ✅ Existing
+│       │   ├── client.js        # ✅ Existing
+│       │   ├── profileApi.js    # NEW
+│       │   ├── browseApi.js     # NEW
+│       │   ├── socialApi.js     # NEW
+│       │   ├── chatApi.js       # NEW
+│       │   └── notificationApi.js # NEW
+│       ├── components/
+│       │   ├── auth/            # ✅ Existing
+│       │   ├── layout/          # ✅ Existing (update Header for notification bell)
+│       │   ├── profile/         # NEW: ProfileCard, PhotoUploader, TagInput
+│       │   ├── browse/          # NEW: FilterSidebar, SortDropdown, ProfileGrid
+│       │   └── chat/            # NEW: MessageList, MessageInput, NotificationBell
+│       ├── context/
+│       │   ├── AuthContext.jsx  # ✅ Existing
+│       │   └── WebSocketContext.jsx # NEW
+│       ├── pages/
+│       │   ├── home/            # ✅ Existing
+│       │   ├── auth/            # ✅ Existing
+│       │   ├── profile/         # ✅ Existing stubs → complete
+│       │   ├── browse/          # NEW: BrowsePage.jsx
+│       │   ├── search/          # NEW: SearchPage.jsx
+│       │   ├── social/          # NEW: ProfileViewPage.jsx
+│       │   ├── chat/            # NEW: ChatPage.jsx
+│       │   └── map/             # NEW (bonus): MapPage.jsx
+│       └── hooks/
+│           └── useWebSocket.js  # NEW
+│
+├── uploads/                     # NEW: Docker volume for photo storage
+├── docker-compose.yaml          # ✅ Existing (add uploads volume mount)
+├── docs/
+│   └── prd.txt                  # Existing flat PRD (this file replaces it at root)
+└── prd.txt                      # This RPG-structured PRD
+```
+
+## Module Definitions
+
+### Module: profile (backend)
+- **Maps to capability**: Profile Management
+- **Responsibility**: All profile CRUD, photo upload/management, tag association
+- **File structure**:
+  ```
+  api/endpoints/profile.py
+  service/profile_service.py
+  service/photo_service.py
+  repository/profile_repo.py
+  models/photos.py (extend)
+  models/user_profiles.py (extend)
+  ```
+- **Exports**:
+  - `POST /profile/setup` — first-time profile creation
+  - `GET /profile/me` — own profile
+  - `PATCH /profile/me` — update profile
+  - `POST /profile/photos` — upload photo
+  - `DELETE /profile/photos/{id}` — remove photo
+  - `PATCH /profile/photos/{id}` — set main photo
+  - `GET /tags` — list all tags
+  - `POST /tags` — create tag
+  - `POST /profile/tags` — associate tags
+
+### Module: browse (backend)
+- **Maps to capability**: Discovery and Search
+- **Responsibility**: Orientation-filtered, distance-sorted discovery and explicit search
+- **File structure**:
+  ```
+  api/endpoints/browse.py
+  service/browse_service.py
+  utils/haversine.py
+  ```
+- **Exports**:
+  - `GET /browse` — paginated filtered browse
+  - `GET /search` — explicit criteria search
+
+### Module: social (backend)
+- **Maps to capability**: Social Mechanics + Fame Rating
+- **Responsibility**: Likes, views, blocks, reports, fame recalculation
+- **File structure**:
+  ```
+  api/endpoints/social.py
+  service/social_service.py
+  service/fame_service.py
+  repository/social_repo.py
+  models/likes.py
+  models/profile_views.py
+  models/blocks.py
+  models/reports.py
+  tasks/fame_tasks.py
+  ```
+- **Exports**:
+  - `GET /profile/{id}` — public profile view (records view)
+  - `POST /profile/{id}/like` — like
+  - `DELETE /profile/{id}/like` — unlike
+  - `POST /profile/{id}/block` — block
+  - `DELETE /profile/{id}/block` — unblock
+  - `POST /profile/{id}/report` — report
+  - `GET /profile/me/views` — who viewed me
+  - `GET /profile/me/liked-by` — who liked me
+
+### Module: realtime (backend)
+- **Maps to capability**: Real-Time Chat + Notifications + Online Status
+- **Responsibility**: WebSocket connection management, message routing, notification dispatch
+- **File structure**:
+  ```
+  api/endpoints/websocket.py
+  api/endpoints/chat.py
+  api/endpoints/notifications.py
+  service/websocket_manager.py
+  service/chat_service.py
+  service/notification_service.py
+  repository/chat_repo.py
+  repository/notification_repo.py
+  models/messages.py
+  models/notifications.py
+  ```
+- **Exports**:
+  - `WS /ws` — authenticated WebSocket endpoint
+  - `GET /chat/{user_id}/history` — message history
+  - `GET /notifications` — list notifications
+  - `PATCH /notifications/{id}/read` — mark read
+  - `PATCH /notifications/read-all` — mark all read
+
+### Module: seed (backend)
+- **Maps to capability**: Database Seed
+- **Responsibility**: Generate 500 realistic profiles for evaluation
+- **File structure**:
+  ```
+  scripts/seed.py
+  ```
+- **Exports**: CLI script (no HTTP interface)
+
+</structural-decomposition>
+
+---
+
+<dependency-graph>
+
+## Dependency Chain
+
+### Foundation Layer (Phase 0)
+No dependencies — build these first.
+
+- **db-migrations**: Adds all missing columns and tables (lat/lon/location_label on user_profiles, last_seen on users, likes, profile_views, blocks, reports, messages, notifications, events). All other modules depend on these tables existing.
+- **utils-haversine**: Pure function, no dependencies. Distance calculation used by browse, social.
+- **utils-sanitizer**: Pure function, no dependencies. Input sanitization used by profile, social.
+- **uploads-volume**: Docker volume + static route for /uploads. Photo service depends on this.
+
+### Profile Layer (Phase 1)
+Depends on: db-migrations, uploads-volume, utils-sanitizer
+
+- **profile-module**: Depends on [db-migrations, uploads-volume, utils-sanitizer]. Provides profile data that browse and social modules query.
+- **geolocation-client**: Depends on [db-migrations]. Nominatim geocoding; used by profile-module.
+
+### Discovery Layer (Phase 2)
+Depends on: profile-module, utils-haversine, db-migrations
+
+- **browse-module**: Depends on [profile-module, utils-haversine, db-migrations]. Requires profiles with locations and tags to return meaningful results.
+
+### Social Layer (Phase 3)
+Depends on: profile-module, db-migrations, notification-service (async call)
+
+- **social-module**: Depends on [profile-module, db-migrations]. Like/view/block/report actions. Triggers fame recalculation.
+- **fame-service**: Depends on [social-module, profile-module, db-migrations]. Recalculates score; called by social-module and periodic Celery task.
+
+### Real-Time Layer (Phase 4)
+Depends on: social-module (for connection validation), db-migrations
+
+- **websocket-manager**: Depends on [db-migrations, social-module]. Connection manager must check mutual-like status before routing messages.
+- **chat-service**: Depends on [websocket-manager, db-migrations].
+- **notification-service**: Depends on [websocket-manager, social-module, db-migrations]. Dispatched by social-module events.
+- **online-status**: Depends on [websocket-manager, redis-client]. Redis already exists.
+
+### Seed Layer (Phase 5)
+Depends on: All Phase 0–3 modules (needs all tables and models to exist)
+
+- **seed-script**: Depends on [db-migrations, profile-module, social-module]. Inserts data through models, not HTTP.
+
+### Bonus Layer (Phase 6)
+Depends on: All mandatory layers complete
+
+- **omniauth**: Depends on [auth-module (existing), db-migrations].
+- **photo-gallery-dnd**: Depends on [profile-module (photo reorder endpoint)].
+- **map-view**: Depends on [browse-module, geolocation-client].
+- **video-chat**: Depends on [websocket-manager, chat-service].
+- **event-scheduling**: Depends on [social-module, notification-service, db-migrations].
+
+</dependency-graph>
+
+---
+
+<implementation-roadmap>
+
+## Development Phases
+
+### Phase 0: Database Foundation
+**Goal**: All missing DB columns and tables exist; photo storage volume is mounted; utility functions ready.
+
+**Entry Criteria**: Clean main branch; existing Alembic setup working.
+
+**Tasks**:
+- [ ] Create Alembic migration: add `lat FLOAT`, `lon FLOAT`, `location_label VARCHAR` to user_profiles (depends on: none)
+  - Acceptance criteria: `alembic upgrade head` succeeds; columns visible in psql.
+  - Test strategy: Manual psql inspection.
+
+- [ ] Create Alembic migration: add `last_seen TIMESTAMP` to users (depends on: none)
+  - Acceptance criteria: Column visible after migration.
+
+- [ ] Create Alembic migration: create tables `likes`, `profile_views`, `blocks`, `reports`, `messages`, `notifications` with all FK constraints and unique constraints (depends on: none)
+  - Acceptance criteria: All tables created; FK integrity enforced.
+  - Test strategy: psql \d table_name checks.
+
+- [ ] Create Alembic migration: create `events` table (bonus; depends on: none)
+
+- [ ] Add `/uploads` Docker volume in docker-compose.yaml; mount into backend container; add FastAPI static files route for `/uploads` (depends on: none)
+  - Acceptance criteria: A file placed in the volume is served at /uploads/filename.
+
+- [ ] Implement `utils/haversine.py` — pure Haversine distance function (depends on: none)
+  - Acceptance criteria: Unit test: distance(Paris, London) ≈ 343 km.
+
+- [ ] Implement `utils/sanitizer.py` — strip HTML tags from text input (depends on: none)
+  - Acceptance criteria: Unit test: `<script>alert(1)</script>` → empty or stripped.
+
+**Exit Criteria**: All migrations applied cleanly; uploads served; utility functions passing unit tests.
+
+**Delivers**: Stable DB schema that all subsequent modules can build on.
+
+---
+
+### Phase 1: Profile Foundation
+**Goal**: Users can complete their profile including photos, tags, and location.
+
+**Entry Criteria**: Phase 0 complete.
+
+**Tasks**:
+- [ ] Implement `POST /profile/setup` — create user_profile row (depends on: db-migrations, utils-sanitizer)
+  - Acceptance criteria: New user submits all required fields → 201; profile_complete flag set; revisit returns 400 "already set up".
+  - Test strategy: Integration test; check DB row.
+
+- [ ] Implement `GET /profile/me` and `PATCH /profile/me` (depends on: profile-setup)
+  - Acceptance criteria: GET returns all fields; PATCH updates only provided fields; email uniqueness re-validated.
+
+- [ ] Implement photo endpoints: `POST /profile/photos`, `DELETE /profile/photos/{id}`, `PATCH /profile/photos/{id}` (depends on: uploads-volume, db-migrations)
+  - Acceptance criteria: MIME rejection for non-images; UUID filename; max 5 enforced; cannot delete last photo when it is profile picture.
+  - Test strategy: Upload a .txt file → 400. Upload valid JPEG → 201. Upload 6th photo → 400.
+
+- [ ] Implement `GET /tags`, `POST /tags`, `POST /profile/tags` (depends on: db-migrations, utils-sanitizer)
+  - Acceptance criteria: GET returns all tags; POST /tags creates new tag, returns existing if duplicate; POST /profile/tags replaces list atomically.
+
+- [ ] Implement Nominatim geocoder client `clients/nominatim.py` (depends on: none)
+  - Acceptance criteria: `geocode("Paris")` returns lat/lon within expected range.
+
+- [ ] Add profile completeness middleware/dependency — redirect to /profile/setup if profile incomplete (depends on: GET /profile/me)
+  - Acceptance criteria: Unauthenticated user → 401. Authenticated user without profile → 307 to /profile/setup. Complete profile → request passes through.
+
+- [ ] Complete `ProfileSetupPage.jsx` — wire all fields, photo uploader, tag input, geolocation consent flow (depends on: all backend profile endpoints)
+  - Acceptance criteria: Full form submits successfully; GPS consent shows on load; city fallback works.
+
+- [ ] Complete `ProfileEditPage.jsx`, `MyProfilePage.jsx` (depends on: GET/PATCH /profile/me, photo endpoints)
+
+**Exit Criteria**: A freshly registered user can complete their full profile from the UI with no errors; profile data visible on MyProfilePage.
+
+**Delivers**: Users have complete profiles; app can now show profile data in browse/search.
+
+---
+
+### Phase 2: Discovery
+**Goal**: Users can browse and search for compatible profiles.
+
+**Entry Criteria**: Phase 1 complete; at least a few test profiles with locations and tags exist.
+
+**Tasks**:
+- [ ] Implement `GET /browse` endpoint with orientation filter, Haversine sort, pagination, optional filters (depends on: profile-module, utils-haversine, db-migrations)
+  - Acceptance criteria: Returns correct orientation-filtered list; own profile excluded; blocked users excluded; sorted by distance; pagination works.
+  - Test strategy: Create test profiles with known orientations and locations; verify response ordering.
+
+- [ ] Implement `GET /search` endpoint (depends on: browse-module logic)
+  - Acceptance criteria: All filter params applied correctly; distance radius filter works.
+
+- [ ] Build `BrowsePage.jsx` — grid of profile cards, filter sidebar, sort dropdown, pagination/infinite scroll (depends on: GET /browse)
+  - Acceptance criteria: Cards show photo, name, age, distance, fame, tags; filter/sort changes update results.
+
+- [ ] Build `SearchPage.jsx` (depends on: GET /search)
+
+**Exit Criteria**: Authenticated user with complete profile can browse a list of compatible profiles filtered and sorted correctly.
+
+**Delivers**: Core discovery feature is usable.
+
+---
+
+### Phase 3: Social Mechanics and Fame
+**Goal**: Users can like, view, block, and report; fame rating updates dynamically.
+
+**Entry Criteria**: Phase 2 complete; profile view page needed.
+
+**Tasks**:
+- [ ] Implement `GET /profile/{id}` — public profile view with view recording (depends on: profile-module, db-migrations)
+  - Acceptance criteria: View recorded in profile_views; own-view not recorded; response includes is_online, last_seen.
+
+- [ ] Implement `POST/DELETE /profile/{id}/like` with fame recalculation and connection detection (depends on: GET /profile/{id}, fame-service, db-migrations)
+  - Acceptance criteria: Liker without profile picture gets 403; like recorded; mutual like detected and both notified; unlike removes connection.
+
+- [ ] Implement `fame_service.py` — recalculate_fame function + periodic Celery task (depends on: social-module models, db-migrations)
+  - Acceptance criteria: Fame updates correctly after each event; Celery periodic task runs hourly.
+
+- [ ] Implement `POST /profile/{id}/block`, `DELETE /profile/{id}/block`, `POST /profile/{id}/report` (depends on: db-migrations, social-module)
+  - Acceptance criteria: Blocked user disappears from browse/search; existing like removed on block.
+
+- [ ] Implement `GET /profile/me/views`, `GET /profile/me/liked-by` (depends on: db-migrations)
+
+- [ ] Build `ProfileViewPage.jsx` — full public profile, like/unlike button, connection badge, liked-you indicator, block/report menu (depends on: all social endpoints)
+
+- [ ] Complete `ProfileViewersPage.jsx`, `LikedByPage.jsx` stubs (depends on: view/liked-by endpoints)
+
+**Exit Criteria**: Full like → mutual match flow works end-to-end from UI; blocking removes users from discovery; fame rating visible and updating.
+
+**Delivers**: Core social mechanics complete; connections established that enable chat.
+
+---
+
+### Phase 4: Real-Time Features
+**Goal**: Connected users can chat; all users receive real-time notifications.
+
+**Entry Criteria**: Phase 3 complete; at least one mutual connection exists for testing.
+
+**Tasks**:
+- [ ] Implement `websocket_manager.py` — ConnectionManager class with connect/disconnect/send (depends on: redis-client, db-migrations)
+  - Acceptance criteria: Two clients connect; server routes message to correct recipient.
+
+- [ ] Implement `WS /ws` endpoint — authenticated WebSocket (token in query param) (depends on: websocket-manager)
+  - Acceptance criteria: Invalid token → close 4001; valid token → connection registered.
+
+- [ ] Implement online status tracking — Redis SET on connect, DEL on disconnect, heartbeat TTL refresh, last_seen update (depends on: websocket-manager, redis-client)
+  - Acceptance criteria: User connects → /profile/{id} shows is_online=true; user disconnects → is_online=false within 5 min.
+
+- [ ] Implement `chat_service.py` and `GET /chat/{user_id}/history` — message persistence and retrieval (depends on: websocket-manager, db-migrations)
+  - Acceptance criteria: Message sent and persisted; history endpoint returns correct messages paginated; blocked users cannot send messages.
+
+- [ ] Implement `notification_service.py` — dispatch notifications over WebSocket and persist to DB; trigger from social events (depends on: websocket-manager, social-module, db-migrations)
+  - Acceptance criteria: Like triggers notification to liked user; view triggers notification to viewed user; message triggers notification to receiver.
+
+- [ ] Implement notification REST: `GET /notifications`, `PATCH /notifications/{id}/read`, `PATCH /notifications/read-all` (depends on: notification-service)
+
+- [ ] Build `ChatPage.jsx` — message list with auto-scroll, text input, send on Enter, WebSocket client with auto-reconnect (depends on: WS /ws, GET /chat/{id}/history)
+  - Acceptance criteria: Messages appear in real time; history loads on page open; "not connected" shown if no mutual like.
+
+- [ ] Add notification bell + unread badge to `Header.jsx`; notification dropdown with links (depends on: GET /notifications, WebSocket notifications)
+  - Acceptance criteria: Badge shows unread count; updates in real time on new notification; hydrated from REST on page load.
+
+**Exit Criteria**: Two mutually connected users can exchange messages in real time; all notification types delivered within 10 seconds.
+
+**Delivers**: Full real-time communication layer; app is functionally complete for mandatory requirements.
+
+---
+
+### Phase 5: Security Polish and Seed Data
+**Goal**: All security requirements met; 500 profiles present for evaluation.
+
+**Entry Criteria**: Phase 4 complete.
+
+**Tasks**:
+- [ ] Audit all text input endpoints for HTML sanitization; apply `utils/sanitizer.py` consistently (depends on: utils-sanitizer, all service modules)
+  - Acceptance criteria: `<script>` in bio field → sanitized on save.
+
+- [ ] Audit all browse/search query builders for parameterization; whitelist sort column names (depends on: browse-module)
+  - Acceptance criteria: Code review confirms no f-string/% SQL interpolation with user input.
+
+- [ ] Extend rate limiting to profile, like, report, and chat endpoints (depends on: all endpoint modules)
+  - Acceptance criteria: Exceeding rate limit returns 429.
+
+- [ ] Write `scripts/seed.py` — 500 profiles with Faker, picsum photos, real city coordinates (depends on: all Phase 0–3 migrations and models)
+  - Acceptance criteria: Script runs to completion; 500 users in DB; browse returns results after seeding; idempotent (re-run skips existing).
+
+- [ ] End-to-end smoke test: registration → profile setup → browse → like → match → chat → notification flow (depends on: all phases complete)
+
+**Exit Criteria**: Security audit passed; 500 profiles seeded; full user journey completable from fresh account.
+
+**Delivers**: Production-ready mandatory feature set; ready for evaluation.
+
+---
+
+### Phase 6: Bonus Features
+**Goal**: Optional enhancements to maximize evaluation score.
+
+**Entry Criteria**: Phase 5 verified complete.
+
+**Tasks** (implement in order of complexity/time):
+- [ ] Drag-and-drop photo reordering + image editing (`PATCH /profile/photos/reorder`, react-beautiful-dnd, react-image-crop)
+- [ ] Interactive map view (React-Leaflet, /map page, watchPosition)
+- [ ] OmniAuth Google login (Authlib, oauth_accounts table, /auth/oauth/google endpoints)
+- [ ] Video/audio chat (WebRTC + simple-peer over existing WebSocket)
+- [ ] Date/event scheduling (events table, REST endpoints, EventsPage.jsx)
+
+**Exit Criteria**: Each bonus feature end-to-end testable.
+
+</implementation-roadmap>
+
+---
+
+<test-strategy>
+
+## Test Pyramid
+
+```
+        /\
+       /E2E\       ← 10% (Playwright: full user journey flows)
+      /------\
+     /Integration\ ← 30% (pytest: endpoint + DB + service interactions)
+    /------------\
+   /  Unit Tests  \ ← 60% (pytest: pure functions, validators, sanitizers)
+  /----------------\
+```
+
+## Coverage Requirements
+- Line coverage: 70% minimum (focus on service and repository layers)
+- Branch coverage: 60% minimum
+- Function coverage: 80% minimum
+- Statement coverage: 70% minimum
+
+## Critical Test Scenarios
+
+### Profile Management
+**Happy path**:
+- Complete profile setup with all required fields → 201; profile_complete=true
+- Upload valid JPEG under 5MB → photo row created, UUID filename in response
+
+**Edge cases**:
+- Upload 6th photo → 400 "max 5 photos"
+- Delete only photo when it is profile picture → 400 "cannot delete"
+- PATCH with only bio field → only bio updated, other fields unchanged
+
+**Error cases**:
+- Upload .php file disguised as .jpg → 400 MIME rejection
+- Bio with `<script>alert(1)</script>` → sanitized on save; not stored as HTML
+- POST /profile/setup twice → 400 "already set up"
+
+### Browse and Search
+**Happy path**:
+- Straight male user browses → only female profiles returned
+- Bisexual user browses → all genders returned
+- Results sorted by distance ascending by default
+
+**Edge cases**:
+- User with no location set → excluded from results or shown at end
+- All nearby users are blocked → empty result set (not 404)
+- search with radius_km=0 → only exact location matches
+
+**Error cases**:
+- sort='; DROP TABLE users; -- → whitelisted sort field rejects input → 400
+
+### Social Mechanics
+**Happy path**:
+- User A likes User B; User B likes User A → both notified of mutual match
+- User A blocks User B → B disappears from A's browse; A disappears from B's browse
+
+**Edge cases**:
+- User without profile picture tries to like → 403
+- User likes same profile twice → 409 or idempotent 200
+- View own profile → no view recorded
+
+**Error cases**:
+- Like a blocked user → 403
+- Deleted user's profile viewed → 404
+
+### Real-Time Chat
+**Happy path**:
+- User A sends message to connected User B → B receives within 10 seconds
+- Page load → last 20 messages fetched and displayed
+
+**Edge cases**:
+- User A sends message to User B after unlike → 403 "not connected"
+- User A sends message to blocked User B → 403
+- Recipient is offline → message stored; delivered when they reconnect and fetch history
+
+**Error cases**:
+- WebSocket connection with invalid token → close 4001
+- Message content over max length → 400
+
+### Security
+**Happy path**:
+- All auth endpoints enforce rate limits → 429 after threshold
+
+**Edge cases**:
+- XSS in bio field stored and retrieved → HTML stripped, not rendered as markup
+- SQL injection in sort parameter → rejected by whitelist → 400
+
+## Test Generation Guidelines
+- Use pytest + httpx AsyncClient for integration tests against the FastAPI app.
+- Seed test DB with factory functions (not the 500-profile seed script).
+- Mock Brevo and Nominatim external API calls with pytest-mock.
+- For WebSocket tests, use FastAPI's TestClient WebSocket context manager.
+- Never use `time.sleep()` in tests — use asyncio.wait_for with timeout.
+- All tests must be isolated — each test rolls back DB changes via transaction rollback or truncation.
+
+</test-strategy>
+
+---
+
+<architecture>
+
+## System Components
+
+```
+Browser (React SPA)
+    ↕ HTTPS REST + WSS WebSocket
+FastAPI Backend
+    ├── Auth Layer (JWT + refresh cookie)
+    ├── Profile / Browse / Social / Chat / Notification Endpoints
+    ├── WebSocket ConnectionManager (in-process dict)
+    └── Celery Task Dispatcher
+         ├── Email Tasks → Brevo SMTP API
+         └── Fame Recalculation Tasks
+PostgreSQL ← SQLAlchemy async (asyncpg)
+Redis ← token blacklist + online presence + Celery broker
+/uploads volume ← static file storage for photos
+```
+
+## Data Models
+
+**Core Entities**: users, user_profiles, photos, tags, user_tags (all exist)
+
+**Social Layer (new)**:
+- `likes(id, liker_id FK, liked_id FK, created_at)` — UNIQUE(liker_id, liked_id)
+- `profile_views(id, viewer_id FK, viewed_id FK, viewed_at)` — indexed on viewed_id
+- `blocks(id, blocker_id FK, blocked_id FK, created_at)` — UNIQUE(blocker_id, blocked_id)
+- `reports(id, reporter_id FK, reported_id FK, reason TEXT, created_at)`
+
+**Real-Time Layer (new)**:
+- `messages(id, sender_id FK, receiver_id FK, content TEXT, sent_at, read_at nullable)` — indexed on (sender_id, receiver_id)
+- `notifications(id, recipient_id FK, type VARCHAR, from_user_id FK, related_id nullable, is_read BOOL, created_at)`
+
+**Bonus**:
+- `events(id, proposer_id FK, recipient_id FK, title, description, proposed_datetime, location_label, status ENUM, created_at, updated_at)`
+- `oauth_accounts(id, user_id FK, provider VARCHAR, provider_user_id VARCHAR, access_token TEXT)`
+
+**Column additions**:
+- `user_profiles`: lat FLOAT, lon FLOAT, location_label VARCHAR(255)
+- `users`: last_seen TIMESTAMP
+
+## Technology Stack
+
+**Backend**: FastAPI (Python 3.13), SQLAlchemy 2.0 async, asyncpg, Alembic, Celery + Redis, Argon2, JWT, SlowAPI, python-magic, Faker (seed), Authlib (bonus)
+
+**Frontend**: React 19, React Router v7, Axios, react-hot-toast, React-Leaflet (bonus), react-beautiful-dnd (bonus), react-image-crop (bonus), simple-peer (bonus)
+
+**Infrastructure**: Docker Compose (PostgreSQL, Redis, backend, frontend, Celery worker, Flower)
+
+**Decision: WebSocket for real-time (not polling)**
+- **Rationale**: Subject requires ≤10s delivery; WebSocket allows sub-second delivery and reuse for both chat and notifications.
+- **Trade-offs**: More complex connection management; must handle reconnect logic client-side.
+- **Alternatives considered**: Long polling (simpler but higher latency and server load).
+
+**Decision: Haversine in Python/SQL instead of PostGIS**
+- **Rationale**: PostGIS adds deployment complexity; Haversine formula is sufficient for city-level distance calculation.
+- **Trade-offs**: Less accurate than geodesic; no advanced spatial indexing.
+- **Alternatives considered**: PostGIS with ST_Distance (overkill for this scale).
+
+**Decision: Local /uploads volume instead of S3**
+- **Rationale**: No cloud credentials required; simpler for 42 school evaluation environment; subject does not mandate cloud storage.
+- **Trade-offs**: Photos lost if volume not persisted; not horizontally scalable.
+- **Alternatives considered**: S3/MinIO (better but adds complexity and cost).
+
+</architecture>
+
+---
+
+<risks>
+
+## Technical Risks
+
+**Risk**: WebSocket authentication via query param (token in URL) logs token in access logs.
+- **Impact**: Medium — token exposure in server logs
+- **Likelihood**: Low (evaluation environment, short-lived tokens)
+- **Mitigation**: Use short-lived access tokens (15 min already configured); clear tokens from logs if possible; alternatively validate token in first WebSocket message instead of URL.
+- **Fallback**: Accept the risk for evaluation; document it.
+
+**Risk**: Haversine distance query becomes slow with 500+ profiles at scale.
+- **Impact**: Low (evaluation has 500 profiles, not millions)
+- **Likelihood**: Low
+- **Mitigation**: Add index on (lat, lon) on user_profiles; apply bounding-box pre-filter before Haversine calculation.
+- **Fallback**: Compute distances in Python after a bounding-box SQL filter.
+
+**Risk**: MIME type validation with python-magic requires libmagic system dependency in Docker.
+- **Impact**: Medium — photo upload broken if not installed
+- **Likelihood**: Medium
+- **Mitigation**: Add `RUN apt-get install -y libmagic1` to backend Dockerfile.
+- **Fallback**: Use filetype Python library which bundles its own magic bytes database.
+
+## Dependency Risks
+
+**Risk**: Nominatim geocoding API has rate limits (1 req/sec, requires User-Agent header).
+- **Impact**: Medium — location setup fails under load
+- **Likelihood**: Low (individual users on evaluation)
+- **Mitigation**: Add proper User-Agent header; cache geocoding results; add retry with backoff.
+- **Fallback**: Allow manual lat/lon entry as direct fallback.
+
+**Risk**: Brevo email API credentials not configured in evaluation environment.
+- **Impact**: Low — email verification still works (token visible in DB)
+- **Likelihood**: Low (already working)
+- **Mitigation**: Document .env setup; provide test credentials.
+
+## Scope Risks
+
+**Risk**: Phase 4 (real-time) is the most complex phase and may consume disproportionate time.
+- **Impact**: High — bonus features would be cut
+- **Likelihood**: Medium
+- **Mitigation**: Complete Phases 0–3 first; treat Phase 4 as a unit with clear entry/exit criteria; start with basic WebSocket before notifications.
+- **Fallback**: Long-polling fallback for notifications if WebSocket proves unmanageable.
+
+**Risk**: 500-profile seed script requires all tables to exist; running it before migrations complete will fail.
+- **Impact**: Medium — evaluation blocked
+- **Likelihood**: Low
+- **Mitigation**: Seed script is Phase 5 (last before bonus); document run order.
+- **Fallback**: Idempotent script can be re-run after fixing migrations.
+
+</risks>
+
+---
+
+<appendix>
+
+## References
+- Project subject: `docs/en.subject_matcha.pdf` (v6.1)
+- Existing flat PRD: `docs/prd.txt`
+- Nominatim API: https://nominatim.org/release-docs/develop/api/Search/
+- FastAPI WebSockets: https://fastapi.tiangolo.com/advanced/websockets/
+- Haversine formula: https://en.wikipedia.org/wiki/Haversine_formula
+
+## Glossary
+- **Connection**: Two users who have mutually liked each other. Prerequisite for chat.
+- **Fame Rating**: A calculated score (0–100) reflecting a user's popularity and profile quality.
+- **Profile Complete**: A user profile that has gender, sexual_preference, biography, at least 1 tag, at least 1 photo, and a location set.
+- **Orientation Compatibility**: Browse/search filter ensuring users only see profiles relevant to their sexual preference.
+- **Seed Profile**: A generated profile used to populate the database for evaluation.
+
+## Open Questions
+- Should `full_name` in the users table be split into `first_name` / `last_name` at the DB level, or handled only in the UI/profile layer? (Current: single column; leaning toward profile-level split.)
+- Should SQLAlchemy ORM-style queries be replaced with raw asyncpg for the browse/search endpoints to satisfy the "manual queries" requirement from the subject?
+- For the defense: be ready to explain the FastAPI vs. micro-framework question (subject suggests Flask/Express but FastAPI is already in use).
+
+</appendix>
+
+---
+
+<task-master-integration>
+# How Task Master Uses This PRD
+
+When you run `task-master parse-prd prd.txt`, the parser:
+
+1. **Extracts capabilities** → Main tasks (Profile Management, Discovery, Social Mechanics, etc.)
+2. **Extracts features** → Subtasks under each capability
+3. **Parses dependencies** → From the Dependency Chain section
+4. **Orders by phases** → Phase 0 tasks = highest priority; Phase 5 = lowest mandatory priority
+5. **Uses test strategy** → Feeds critical test scenarios to test generation during implementation
+
+**Execution order from topological sort**:
+Phase 0 (db-migrations, utils, uploads) → Phase 1 (profile) → Phase 2 (browse) → Phase 3 (social + fame) → Phase 4 (real-time) → Phase 5 (security + seed) → Phase 6 (bonus)
+</task-master-integration>
