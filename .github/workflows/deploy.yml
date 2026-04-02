@@ -111,7 +111,8 @@ jobs:
             FROM_EMAIL=${{ secrets.FROM_EMAIL }},
             FRONTEND_URL=${{ secrets.FRONTEND_URL }},
             GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME }},
-            GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+            GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},
+            REACT_APP_API_URL=${{ secrets.REACT_APP_API_URL }}
 
   # ── Celery Worker → e2-micro ─────────────────────────────────────
   deploy-celery:
