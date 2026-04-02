@@ -8,6 +8,7 @@ env:
   GCP_REGION: us-central1
   REGISTRY: us-central1-docker.pkg.dev
   IMAGE: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/matcha/backend
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ── Detect which service changed ────────────────────────────────
