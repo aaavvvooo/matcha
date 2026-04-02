@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
     print("✅ Database connection pool created")
 
     yield
- 
+
     await database.disconnect()
     print("❌ Database connection pool closed")
 
@@ -106,3 +106,4 @@ async def health_check_simple():
         return {"status": "ok"}
     except Exception:
         raise HTTPException(status_code=503, detail={"status": "error"})
+
