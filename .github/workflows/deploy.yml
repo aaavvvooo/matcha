@@ -64,6 +64,15 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
+      - name: Run database migrations
+        working-directory: ./backend
+        run: |
+          pip install uv --quiet
+          uv sync --frozen --no-dev --quiet
+          uv run alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@${{ secrets.POSTGRES_HOST }}:${{ secrets.POSTGRES_PORT_INNER }}/${{ secrets.POSTGRES_DB }}?ssl=require
+
       - name: Build and push image
         run: |
           docker build \
@@ -90,7 +99,12 @@ jobs:
             --port=8000
             --service-account=${{ secrets.GCP_SERVICE_ACCOUNT }}
           env_vars: |
-            DATABASE_URL=${{ secrets.DATABASE_URL }},
+            POSTGRES_USER=${{ secrets.POSTGRES_USER }},
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }},
+            POSTGRES_HOST=${{ secrets.POSTGRES_HOST }},
+            POSTGRES_PORT_INNER=${{ secrets.POSTGRES_PORT_INNER }},
+            POSTGRES_DB=${{ secrets.POSTGRES_DB }},
+            PGSSLMODE=require,
             REDIS_URL=${{ secrets.REDIS_URL }},
             JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }},
             BREVO_API_KEY=${{ secrets.BREVO_API_KEY }},
