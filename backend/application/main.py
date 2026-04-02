@@ -106,4 +106,3 @@ async def health_check_simple():
         return {"status": "ok"}
     except Exception:
         raise HTTPException(status_code=503, detail={"status": "error"})
-
