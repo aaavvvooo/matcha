@@ -128,7 +128,7 @@ jobs:
           script: |
             cd /opt/matcha
             git pull origin main
-            cd backend && uv sync --frozen --no-dev
+            cd backend && $HOME/.local/bin/uv sync --frozen --no-dev
             sudo systemctl restart matcha-celery
             sleep 3
             sudo systemctl is-active matcha-celery
