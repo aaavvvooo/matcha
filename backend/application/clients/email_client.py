@@ -2,7 +2,7 @@ import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
-from application.config import REACT_APP_API_URL, FROM_EMAIL
+from application.config import FRONTEND_URL, FROM_EMAIL
 
 
 class EmailClient:
@@ -14,7 +14,7 @@ class EmailClient:
         self.api_instance = sib_api_v3_sdk.TransactionalEmailsApi(
             sib_api_v3_sdk.ApiClient(self.configuration)
         )
-        self.frontend_url = REACT_APP_API_URL
+        self.frontend_url = FRONTEND_URL
         self.from_email = FROM_EMAIL
 
         self.template_dir = Path(__file__).parent.parent / "templates"

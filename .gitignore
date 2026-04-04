@@ -78,5 +78,7 @@ coverage/
 .AppleDouble
 .LSOverride
 
-en.subject*
-PLAN.md
+*/en.subject*
+*/PLAN.md
+.markdownlint.json
+.taskmaster/

@@ -56,7 +56,7 @@ async def login(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=True,
+        secure=False,
         samesite="strict",
         max_age=7 * 24 * 60 * 60,
     )
@@ -109,7 +109,7 @@ async def refresh(request: Request, response: Response, db=Depends(get_db)):
         key="refresh_token",
         value=new_refresh_token,
         httponly=True,
-        secure=True,
+        secure=False,
         samesite="strict",
         max_age=7 * 24 * 60 * 60,
     )

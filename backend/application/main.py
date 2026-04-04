@@ -1,4 +1,5 @@
 from .database import database
+from .config import FRONTEND_URL
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -29,7 +30,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     cast(Any, CORSMiddleware),
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", FRONTEND_URL],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
