@@ -133,12 +133,12 @@ class AuthService:
             access_token = create_access_token(data={"sub": user["username"]})
             refresh_token = create_refresh_token(data={"sub": user["username"]})
             refresh_token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-            async with get_redis() as redis:
-                await redis.setex(
-                    f"refresh:{user['username']}",
-                    7 * 24 * 60 * 60,
-                    refresh_token_hash,
-                )
+            redis = get_redis()
+            await redis.setex(
+                f"refresh:{user['username']}",
+                7 * 24 * 60 * 60,
+                refresh_token_hash,
+            )
             return access_token, refresh_token
         except HTTPException:
             raise
@@ -183,10 +183,10 @@ class AuthService:
             username = payload.get("sub")
             token_hash = hashlib.sha256(token.encode()).hexdigest()
             ttl = int((exp_time - datetime.now(timezone.utc)).total_seconds())
-            async with get_redis() as redis:
-                await redis.setex(f"blacklist:{token_hash}", ttl, 1)
-                if username:
-                    await redis.delete(f"refresh:{username}")
+            redis = get_redis()
+            await redis.setex(f"blacklist:{token_hash}", ttl, 1)
+            if username:
+                await redis.delete(f"refresh:{username}")
         except HTTPException:
             raise
         except Exception as e:
@@ -212,8 +212,8 @@ class AuthService:
                 )
 
             incoming_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-            async with get_redis() as redis:
-                stored_hash = await redis.get(f"refresh:{username}")
+            redis = get_redis()
+            stored_hash = await redis.get(f"refresh:{username}")
 
             if not stored_hash or stored_hash != incoming_hash:
                 raise HTTPException(
@@ -225,10 +225,9 @@ class AuthService:
             new_refresh_token = create_refresh_token(data={"sub": username})
             new_refresh_hash = hashlib.sha256(new_refresh_token.encode()).hexdigest()
 
-            async with get_redis() as redis:
-                await redis.setex(
-                    f"refresh:{username}", 7 * 24 * 60 * 60, new_refresh_hash
-                )
+            await redis.setex(
+                f"refresh:{username}", 7 * 24 * 60 * 60, new_refresh_hash
+            )
 
             return new_access_token, new_refresh_token
         except HTTPException:

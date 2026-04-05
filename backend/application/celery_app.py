@@ -19,6 +19,8 @@ celery_app.conf.update(
     task_time_limit=30 * 60,
     worker_prefetch_multiplier=1,
     worker_max_tasks_per_child=1000,
+    broker_transport_options={"polling_interval": 5},
+    worker_send_task_events=False,
     beat_schedule={
         "cleanup-expired-tokens-hourly": {
             "task": "cleanup_expired_tokens",

@@ -19,9 +19,9 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    async with get_redis() as redis:
-        if await redis.exists(f"blacklist:{token_hash}"):
-            raise HTTPException(status_code=401, detail="Token has been revoked")
+    redis = get_redis()
+    if await redis.exists(f"blacklist:{token_hash}"):
+        raise HTTPException(status_code=401, detail="Token has been revoked")
 
     username = payload.get("sub")
 
