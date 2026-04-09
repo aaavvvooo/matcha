@@ -16,9 +16,7 @@ from application.utils import (
     decode_token,
     create_password_reset_token,
 )
-from application.tasks.email_tasks import send_password_reset_email_task
 from application.database import Database
-from application.redis_client import get_redis
 
 
 class AuthService:
@@ -133,12 +131,8 @@ class AuthService:
             access_token = create_access_token(data={"sub": user["username"]})
             refresh_token = create_refresh_token(data={"sub": user["username"]})
             refresh_token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-            redis = get_redis()
-            await redis.setex(
-                f"refresh:{user['username']}",
-                7 * 24 * 60 * 60,
-                refresh_token_hash,
-            )
+            expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+            await self.token_repo.upsert_refresh_token(user["username"], refresh_token_hash, expires_at)
             return access_token, refresh_token
         except HTTPException:
             raise
@@ -182,11 +176,9 @@ class AuthService:
 
             username = payload.get("sub")
             token_hash = hashlib.sha256(token.encode()).hexdigest()
-            ttl = int((exp_time - datetime.now(timezone.utc)).total_seconds())
-            redis = get_redis()
-            await redis.setex(f"blacklist:{token_hash}", ttl, 1)
+            await self.token_repo.blacklist_token(token_hash, exp_time)
             if username:
-                await redis.delete(f"refresh:{username}")
+                await self.token_repo.delete_refresh_token(username)
         except HTTPException:
             raise
         except Exception as e:
@@ -212,10 +204,9 @@ class AuthService:
                 )
 
             incoming_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-            redis = get_redis()
-            stored_hash = await redis.get(f"refresh:{username}")
+            record = await self.token_repo.get_refresh_token(username)
 
-            if not stored_hash or stored_hash != incoming_hash:
+            if not record or record["token_hash"] != incoming_hash:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Refresh token revoked",
@@ -224,10 +215,8 @@ class AuthService:
             new_access_token = create_access_token(data={"sub": username})
             new_refresh_token = create_refresh_token(data={"sub": username})
             new_refresh_hash = hashlib.sha256(new_refresh_token.encode()).hexdigest()
-
-            await redis.setex(
-                f"refresh:{username}", 7 * 24 * 60 * 60, new_refresh_hash
-            )
+            new_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+            await self.token_repo.upsert_refresh_token(username, new_refresh_hash, new_expires_at)
 
             return new_access_token, new_refresh_token
         except HTTPException:
@@ -252,9 +241,14 @@ class AuthService:
                     token_type="password_reset",
                     expires_at=tokens["expiry"],
                 )
-                send_password_reset_email_task.delay(
-                    to=user["email"], username=user["username"], token=tokens["token"]
-                )
+                return {
+                    "message": "If the account exists, a reset email has been sent",
+                    "email_data": {
+                        "to": user["email"],
+                        "username": user["username"],
+                        "token": tokens["token"],
+                    },
+                }
             return {"message": "If the account exists, a reset email has been sent"}
         except HTTPException:
             raise

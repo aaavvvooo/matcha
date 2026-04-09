@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, Request
+import asyncio
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, Request
 from fastapi.security import OAuth2PasswordRequestForm
 
 from application.schema import (
@@ -11,23 +12,46 @@ from application.schema import (
 )
 from application.database import get_db, Database
 from application.service import AuthService
-from application.tasks.email_tasks import send_verification_email_task
+from application.clients.email_client import EmailClient
+from application.config import BREVO_API_KEY
 from application.utils import get_current_user
 from application.limiter import limiter
 
 
 router = APIRouter()
 
+_email_client = EmailClient(api_key=BREVO_API_KEY)
+
+
+async def _send_with_retry(fn, *args, max_retries: int = 3, delay: float = 10.0):
+    loop = asyncio.get_event_loop()
+    for attempt in range(max_retries):
+        try:
+            await loop.run_in_executor(None, fn, *args)
+            return
+        except Exception as e:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(delay)
+            else:
+                print(f"Email failed after {max_retries} attempts: {e}")
+
 
 @router.post("/register", response_model=RegisterUserResponse)
 @limiter.limit("10/hour")
 async def register(
-    request: Request, body: RegisterRequest, db: Database = Depends(get_db)
+    request: Request,
+    body: RegisterRequest,
+    background_tasks: BackgroundTasks,
+    db: Database = Depends(get_db),
 ):
     service = AuthService(db)
     user, token = await service.register(body)
-    send_verification_email_task.delay(
-        to=user.email, username=user.username, token=token
+    background_tasks.add_task(
+        _send_with_retry,
+        _email_client.send_verification_email,
+        user.email,
+        user.username,
+        token,
     )
     return user
 
@@ -75,10 +99,22 @@ async def current_user(current_user: dict = Depends(get_current_user)):
 @router.post("/forget-password")
 @limiter.limit("3/minute")
 async def forget_password(
-    request: Request, body: ForgetPasswordRequest, db=Depends(get_db)
+    request: Request,
+    body: ForgetPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db=Depends(get_db),
 ):
     service = AuthService(db)
     result = await service.forget_password(body.username_or_email)
+    email_data = result.pop("email_data", None)
+    if email_data:
+        background_tasks.add_task(
+            _send_with_retry,
+            _email_client.send_password_reset_email,
+            email_data["to"],
+            email_data["username"],
+            email_data["token"],
+        )
     return result
 
 

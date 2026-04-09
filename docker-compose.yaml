@@ -21,53 +21,6 @@ services:
     networks:
       - app-network
 
-  redis:
-    image: redis:7-alpine
-    container_name: redis_cache
-    ports:
-      - "6379:6379"
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
-  celery_worker:
-    build: ./backend
-    container_name: celery_worker
-    command: celery -A application.celery_app worker --loglevel=info
-    volumes:
-      - ./backend:/app
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      REACT_APP_API_URL: ${REACT_APP_API_URL}
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${JWT_SECRET_KEY}
-      BREVO_API_KEY: ${BREVO_API_KEY}
-      FROM_EMAIL: ${FROM_EMAIL}
-      FRONTEND_URL: ${FRONTEND_URL}
-    depends_on:
-      - redis
-      - postgres
-    networks:
-      - app-network
-
-
-  flower:
-    build: ./backend
-    container_name: celery_flower
-    command: celery -A application.celery_app flower --port=5555
-    ports:
-      - "5555:5555"
-    environment:
-      REDIS_URL: redis://redis:6379/0
-    depends_on:
-      - redis
-      - celery_worker
-    networks:
-      - app-network
 
   backend:
     build:
@@ -110,7 +63,7 @@ services:
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
     ports:
-      - "3000:3000"
+      - "3000:80"
     depends_on:
       - backend
     volumes:

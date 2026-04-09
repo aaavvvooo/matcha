@@ -17,6 +17,4 @@ FROM_EMAIL = os.getenv("FROM_EMAIL")
 BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 
 
-REDIS_URL = os.getenv("REDIS_URL")
-
 FRONTEND_URL = os.getenv("FRONTEND_URL")
