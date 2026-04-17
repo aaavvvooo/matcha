@@ -192,12 +192,12 @@ token_blacklist
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/register` | Create account, send verification email |
-| GET  | `/verify/{token}` | Activate account |
+| POST | `/verify-email` | Activate account using token in request body |
 | POST | `/login` | Return access + refresh JWT |
 | POST | `/logout` | Blacklist access token |
 | POST | `/refresh` | Rotate refresh token |
-| POST | `/forgot-password` | Send reset email |
-| POST | `/reset-password/{token}` | Set new password |
+| POST | `/forget-password` | Send reset email |
+| POST | `/reset-password` | Set new password using token in request body |
 
 ### Users (`/api/users`)
 | Method | Path | Description |
