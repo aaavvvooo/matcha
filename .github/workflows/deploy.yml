@@ -105,7 +105,6 @@ jobs:
             POSTGRES_PORT_INNER=${{ secrets.POSTGRES_PORT_INNER }},
             POSTGRES_DB=${{ secrets.POSTGRES_DB }},
             PGSSLMODE=require,
-            REDIS_URL=${{ secrets.REDIS_URL }},
             JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }},
             JWT_ALGORITHM=HS256,
             BREVO_API_KEY=${{ secrets.BREVO_API_KEY }},
@@ -115,22 +114,3 @@ jobs:
             GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},
             REACT_APP_API_URL=${{ secrets.REACT_APP_API_URL }}
 
-  # ── Celery Worker → e2-micro ─────────────────────────────────────
-  deploy-celery:
-    needs: [changes, deploy-backend]
-    if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Pull latest code and restart worker
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          script: |
-            cd /opt/matcha
-            git pull origin main
-            cd backend && $HOME/.local/bin/uv sync --frozen --no-dev
-            sudo systemctl restart matcha-celery
-            sleep 3
-            sudo systemctl is-active matcha-celery
