@@ -10,6 +10,8 @@ from .token_schemas import (
     ForgetPasswordRequest,
     TokenResponse,
 )
+from .tag_schemas import TagResponse
+from .photo_schemas import PhotoResponse
 
 __all__ = [
     "RegisterRequest",
@@ -20,4 +22,6 @@ __all__ = [
     "VerificationToken",
     "ForgetPasswordRequest",
     "TokenResponse",
+    "TagResponse",
+    "PhotoResponse",
 ]

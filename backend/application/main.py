@@ -2,8 +2,10 @@ from .database import database
 from .config import FRONTEND_URL
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import asyncio
+import os
 import asyncpg
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -48,6 +50,10 @@ app.add_middleware(
 
 
 app.include_router(router)
+
+_IMAGES_DIR = "/app/images"
+os.makedirs(_IMAGES_DIR, exist_ok=True)
+app.mount("/images", StaticFiles(directory=_IMAGES_DIR), name="images")
 
 
 @app.get("/")
