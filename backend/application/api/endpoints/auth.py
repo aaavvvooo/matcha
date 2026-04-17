@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, Request
 from fastapi.security import OAuth2PasswordRequestForm
 
@@ -17,14 +18,27 @@ from application.config import BREVO_API_KEY
 from application.utils import get_current_user
 from application.limiter import limiter
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_email_client = EmailClient(api_key=BREVO_API_KEY)
+_email_client: EmailClient | None = None
+
+
+def _get_email_client() -> EmailClient:
+    global _email_client
+    if _email_client is None:
+        if not BREVO_API_KEY:
+            raise RuntimeError("BREVO_API_KEY is not configured")
+        _email_client = EmailClient(api_key=BREVO_API_KEY)
+    return _email_client
 
 
 async def _send_with_retry(fn, *args, max_retries: int = 3, delay: float = 10.0):
-    loop = asyncio.get_event_loop()
+    # NOTE: email delivery via BackgroundTasks is best-effort — jobs are lost
+    # on process restart. Acceptable for this project; upgrade to a persistent
+    # queue if stronger delivery guarantees are needed.
+    loop = asyncio.get_running_loop()
     for attempt in range(max_retries):
         try:
             await loop.run_in_executor(None, fn, *args)
@@ -33,7 +47,7 @@ async def _send_with_retry(fn, *args, max_retries: int = 3, delay: float = 10.0)
             if attempt < max_retries - 1:
                 await asyncio.sleep(delay)
             else:
-                print(f"Email failed after {max_retries} attempts: {e}")
+                logger.error("Email delivery failed after %d attempts: %s", max_retries, e)
 
 
 @router.post("/register", response_model=RegisterUserResponse)
@@ -48,7 +62,7 @@ async def register(
     user, token = await service.register(body)
     background_tasks.add_task(
         _send_with_retry,
-        _email_client.send_verification_email,
+        _get_email_client().send_verification_email,
         user.email,
         user.username,
         token,
@@ -106,16 +120,15 @@ async def forget_password(
 ):
     service = AuthService(db)
     result = await service.forget_password(body.username_or_email)
-    email_data = result.pop("email_data", None)
-    if email_data:
+    if result.has_email:
         background_tasks.add_task(
             _send_with_retry,
-            _email_client.send_password_reset_email,
-            email_data["to"],
-            email_data["username"],
-            email_data["token"],
+            _get_email_client().send_password_reset_email,
+            result.email_to,
+            result.email_username,
+            result.email_token,
         )
-    return result
+    return {"message": result.message}
 
 
 @router.post("/logout")

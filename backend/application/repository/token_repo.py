@@ -74,7 +74,7 @@ class TokenRepository:
         await self.db.execute(query, username, token_hash, expires_at)
 
     async def get_refresh_token(self, username: str):
-        query = "SELECT token_hash FROM refresh_tokens WHERE username = $1"
+        query = "SELECT token_hash FROM refresh_tokens WHERE username = $1 AND expires_at > NOW()"
         return await self.db.fetch_one(query, username)
 
     async def delete_refresh_token(self, username: str):
@@ -95,3 +95,7 @@ class TokenRepository:
         query = "SELECT 1 FROM token_blacklist WHERE token_hash = $1 AND expires_at > NOW()"
         result = await self.db.fetch_val(query, token_hash)
         return result is not None
+
+    async def cleanup_expired_tokens(self) -> None:
+        await self.db.execute("DELETE FROM token_blacklist WHERE expires_at <= NOW()")
+        await self.db.execute("DELETE FROM refresh_tokens WHERE expires_at <= NOW()")

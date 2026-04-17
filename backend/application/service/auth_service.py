@@ -1,7 +1,8 @@
 from fastapi import HTTPException, status
 from datetime import timedelta, datetime, timezone
 import hashlib
-from typing import cast
+from dataclasses import dataclass
+from typing import cast, Optional
 from asyncpg.connection import Connection
 
 from application.repository import UserRepository, TokenRepository
@@ -17,6 +18,18 @@ from application.utils import (
     create_password_reset_token,
 )
 from application.database import Database
+
+
+@dataclass
+class ForgetPasswordResult:
+    message: str
+    email_to: Optional[str] = None
+    email_username: Optional[str] = None
+    email_token: Optional[str] = None
+
+    @property
+    def has_email(self) -> bool:
+        return self.email_to is not None
 
 
 class AuthService:
@@ -227,7 +240,8 @@ class AuthService:
                 detail=f"Internal server error: {e}",
             )
 
-    async def forget_password(self, username_or_email: str):
+    async def forget_password(self, username_or_email: str) -> ForgetPasswordResult:
+        msg = "If the account exists, a reset email has been sent"
         try:
             user = await self.user_repo.get_user_by_email(username_or_email)
             if not user:
@@ -241,15 +255,13 @@ class AuthService:
                     token_type="password_reset",
                     expires_at=tokens["expiry"],
                 )
-                return {
-                    "message": "If the account exists, a reset email has been sent",
-                    "email_data": {
-                        "to": user["email"],
-                        "username": user["username"],
-                        "token": tokens["token"],
-                    },
-                }
-            return {"message": "If the account exists, a reset email has been sent"}
+                return ForgetPasswordResult(
+                    message=msg,
+                    email_to=user["email"],
+                    email_username=user["username"],
+                    email_token=tokens["token"],
+                )
+            return ForgetPasswordResult(message=msg)
         except HTTPException:
             raise
         except Exception as e:

@@ -46,6 +46,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
+      - image_upload:/app/images
     command: uvicorn application.main:app --host ${BACKEND_HOST} --port 8000 --reload
     networks:
       - app-network
@@ -76,6 +77,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  image_upload:
   postgres_data:
 
 networks:

@@ -3,24 +3,34 @@ from .config import FRONTEND_URL
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import asyncio
 import asyncpg
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from application.api.router import router
 from application.limiter import limiter
+from application.repository.token_repo import TokenRepository
 from typing import Any, cast
+
+_CLEANUP_INTERVAL_SECONDS = 3600  # run every hour
+
+
+async def _token_cleanup_loop() -> None:
+    repo = TokenRepository(database)
+    while True:
+        await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
+        await repo.cleanup_expired_tokens()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan event handler for startup and shutdown"""
     await database.connect()
-    print("✅ Database connection pool created")
+    cleanup_task = asyncio.create_task(_token_cleanup_loop())
 
     yield
 
+    cleanup_task.cancel()
     await database.disconnect()
-    print("❌ Database connection pool closed")
 
 
 app = FastAPI(title="Matcha", lifespan=lifespan)
