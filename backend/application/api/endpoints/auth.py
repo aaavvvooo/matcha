@@ -29,7 +29,10 @@ def _get_email_client() -> EmailClient:
     global _email_client
     if _email_client is None:
         if not BREVO_API_KEY:
-            raise RuntimeError("BREVO_API_KEY is not configured")
+            raise HTTPException(
+                status_code=503,
+                detail="Email service is not configured",
+            )
         _email_client = EmailClient(api_key=BREVO_API_KEY)
     return _email_client
 
