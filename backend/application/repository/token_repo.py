@@ -60,3 +60,42 @@ class TokenRepository:
         except Exception as e:
             print(e)
             raise e
+
+    # --- Refresh tokens ---
+
+    async def upsert_refresh_token(self, username: str, token_hash: str, expires_at: datetime):
+        query = """
+            INSERT INTO refresh_tokens (username, token_hash, expires_at)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (username) DO UPDATE
+                SET token_hash = EXCLUDED.token_hash,
+                    expires_at = EXCLUDED.expires_at
+        """
+        await self.db.execute(query, username, token_hash, expires_at)
+
+    async def get_refresh_token(self, username: str):
+        query = "SELECT token_hash FROM refresh_tokens WHERE username = $1 AND expires_at > NOW()"
+        return await self.db.fetch_one(query, username)
+
+    async def delete_refresh_token(self, username: str):
+        query = "DELETE FROM refresh_tokens WHERE username = $1"
+        await self.db.execute(query, username)
+
+    # --- Token blacklist ---
+
+    async def blacklist_token(self, token_hash: str, expires_at: datetime):
+        query = """
+            INSERT INTO token_blacklist (token_hash, expires_at)
+            VALUES ($1, $2)
+            ON CONFLICT (token_hash) DO NOTHING
+        """
+        await self.db.execute(query, token_hash, expires_at)
+
+    async def is_token_blacklisted(self, token_hash: str) -> bool:
+        query = "SELECT 1 FROM token_blacklist WHERE token_hash = $1 AND expires_at > NOW()"
+        result = await self.db.fetch_val(query, token_hash)
+        return result is not None
+
+    async def cleanup_expired_tokens(self) -> None:
+        await self.db.execute("DELETE FROM token_blacklist WHERE expires_at <= NOW()")
+        await self.db.execute("DELETE FROM refresh_tokens WHERE expires_at <= NOW()")
