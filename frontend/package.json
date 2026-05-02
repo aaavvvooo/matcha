@@ -27,6 +27,9 @@
       "react-app/jest"
     ]
   },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-arm64-musl": "*"
+  },
   "browserslist": {
     "production": [
       ">0.2%",
