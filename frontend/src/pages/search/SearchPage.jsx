@@ -1,168 +1,162 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { search } from '../../api/profilesApi'
-import { likeUser, unlikeUser } from '../../api/usersApi'
-import './SearchPage.css'
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { search } from '../../api/profilesApi';
+import Avatar from '../../components/ui/Avatar';
+import FameMeter from '../../components/ui/FameMeter';
+import Chip from '../../components/ui/Chip';
+import Btn from '../../components/ui/Btn';
+import FormInput from '../../components/ui/FormInput';
 
-const GENDER_OPTIONS = ['', 'male', 'female', 'non-binary', 'other']
-const PREF_OPTIONS = ['', 'male', 'female', 'both']
+const TAGS = ['#photography', '#music', '#cooking', '#travel', '#reading', '#cycling', '#art', '#tech', '#yoga', '#film', '#plants', '#coffee'];
 
 export default function SearchPage() {
-  const [filters, setFilters] = useState({
-    gender: '',
-    sexual_preference: '',
-    min_age: '',
-    max_age: '',
-    min_fame: '',
-    max_fame: '',
-    tags: '',
-    location: '',
-  })
-  const [results, setResults] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [searched, setSearched] = useState(false)
-  const [error, setError] = useState(null)
-  const [likedSet, setLikedSet] = useState(new Set())
+  const [filters, setFilters] = useState({ ageMin: 18, ageMax: 35, fameMin: 0, tags: [], location: '' });
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
-  function set(field, value) {
-    setFilters(prev => ({ ...prev, [field]: value }))
-  }
+  const toggleTag = t => setFilters(f => ({
+    ...f,
+    tags: f.tags.includes(t) ? f.tags.filter(x => x !== t) : [...f.tags, t],
+  }));
 
-  async function handleSearch(e) {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-    setSearched(true)
-    const params = Object.fromEntries(
-      Object.entries(filters).filter(([, v]) => v !== '')
-    )
+  async function runSearch() {
+    setLoading(true);
     try {
-      const data = await search(params)
-      setResults(data)
-    } catch (e) {
-      setError(e.response?.data?.detail || 'Search failed')
+      const params = {
+        age_min: filters.ageMin,
+        age_max: filters.ageMax,
+        fame_min: filters.fameMin,
+        tags: filters.tags.map(t => t.replace('#', '')).join(',') || undefined,
+        location: filters.location || undefined,
+        limit: 30,
+        offset: 0,
+      };
+      const data = await search(params);
+      setResults(data);
+    } catch {
+      setResults([]);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
-  async function toggleLike(userId) {
-    try {
-      if (likedSet.has(userId)) {
-        await unlikeUser(userId)
-        setLikedSet(prev => { const s = new Set(prev); s.delete(userId); return s })
-      } else {
-        await likeUser(userId)
-        setLikedSet(prev => new Set(prev).add(userId))
-      }
-    } catch {}
-  }
-
   return (
-    <div className="search-page">
-      <div className="container">
-        <h1 className="search-title">Search</h1>
+    <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '16px 20px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', flexShrink: 0 }}>
+        <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, fontWeight: 700, color: 'var(--ink)' }}>Find someone</div>
+      </div>
 
-        <form className="search-form" onSubmit={handleSearch}>
-          <div className="search-fields">
-            <div className="form-group">
-              <label>Gender</label>
-              <select value={filters.gender} onChange={e => set('gender', e.target.value)}>
-                {GENDER_OPTIONS.map(o => <option key={o} value={o}>{o || 'Any'}</option>)}
-              </select>
+      <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+        {results === null ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {/* Age range */}
+            <div style={{ background: 'var(--white)', borderRadius: 'var(--r-md)', padding: 16, border: '1.5px solid var(--cream3)' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 12 }}>Age range</div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <FormInput
+                  label="Min"
+                  type="number"
+                  value={filters.ageMin}
+                  onChange={e => setFilters(f => ({ ...f, ageMin: +e.target.value }))}
+                  placeholder="18"
+                  style={{ flex: 1 }}
+                />
+                <FormInput
+                  label="Max"
+                  type="number"
+                  value={filters.ageMax}
+                  onChange={e => setFilters(f => ({ ...f, ageMax: +e.target.value }))}
+                  placeholder="50"
+                  style={{ flex: 1 }}
+                />
+              </div>
             </div>
 
-            <div className="form-group">
-              <label>Preference</label>
-              <select value={filters.sexual_preference} onChange={e => set('sexual_preference', e.target.value)}>
-                {PREF_OPTIONS.map(o => <option key={o} value={o}>{o || 'Any'}</option>)}
-              </select>
+            {/* Fame rating */}
+            <div style={{ background: 'var(--white)', borderRadius: 'var(--r-md)', padding: 16, border: '1.5px solid var(--cream3)' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 4 }}>Minimum fame rating</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input
+                  type="range" min={0} max={100} value={filters.fameMin}
+                  onChange={e => setFilters(f => ({ ...f, fameMin: +e.target.value }))}
+                  style={{ flex: 1, accentColor: 'var(--spice)' }}
+                />
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--spice)', minWidth: 28 }}>{filters.fameMin}</span>
+              </div>
             </div>
 
-            <div className="form-group">
-              <label>Min age</label>
-              <input type="number" min="18" max="100" placeholder="18"
-                value={filters.min_age} onChange={e => set('min_age', e.target.value)} />
+            {/* Location */}
+            <div style={{ background: 'var(--white)', borderRadius: 'var(--r-md)', padding: 16, border: '1.5px solid var(--cream3)' }}>
+              <FormInput
+                label="Location"
+                value={filters.location}
+                onChange={e => setFilters(f => ({ ...f, location: e.target.value }))}
+                placeholder="City or neighbourhood"
+              />
             </div>
 
-            <div className="form-group">
-              <label>Max age</label>
-              <input type="number" min="18" max="100" placeholder="99"
-                value={filters.max_age} onChange={e => set('max_age', e.target.value)} />
+            {/* Tags */}
+            <div style={{ background: 'var(--white)', borderRadius: 'var(--r-md)', padding: 16, border: '1.5px solid var(--cream3)' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 12 }}>Interests</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {TAGS.map(t => <Chip key={t} label={t} active={filters.tags.includes(t)} onClick={() => toggleTag(t)}/>)}
+              </div>
             </div>
 
-            <div className="form-group">
-              <label>Min fame</label>
-              <input type="number" min="0" max="100" placeholder="0"
-                value={filters.min_fame} onChange={e => set('min_fame', e.target.value)} />
-            </div>
-
-            <div className="form-group">
-              <label>Max fame</label>
-              <input type="number" min="0" max="100" placeholder="100"
-                value={filters.max_fame} onChange={e => set('max_fame', e.target.value)} />
-            </div>
-
-            <div className="form-group search-tags-field">
-              <label>Tags (comma-separated)</label>
-              <input type="text" placeholder="hiking, music, travel"
-                value={filters.tags} onChange={e => set('tags', e.target.value)} />
-            </div>
+            <Btn onClick={runSearch} disabled={loading} style={{ width: '100%' }}>
+              {loading ? 'Searching…' : 'Search →'}
+            </Btn>
           </div>
-
-          <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Searching…' : 'Search'}
-          </button>
-        </form>
-
-        {error && <p className="error-msg">{error}</p>}
-
-        {searched && !loading && (
-          <>
-            <p className="search-count">
-              {results.length === 0 ? 'No results found.' : `${results.length} profile${results.length !== 1 ? 's' : ''} found`}
-            </p>
-            <div className="search-results">
-              {results.map(p => {
-                const photo = p.photos?.[0]?.url
-                const liked = likedSet.has(p.user_id)
-                return (
-                  <div key={p.user_id} className="result-card">
-                    <Link to={`/users/${p.user_id}`} className="result-photo-wrap">
-                      {photo
-                        ? <img src={photo} alt={p.username} className="result-photo" />
-                        : <div className="result-photo-placeholder">No photo</div>
-                      }
-                    </Link>
-                    <div className="result-info">
-                      <div className="result-name">
-                        <Link to={`/users/${p.user_id}`}>{p.full_name || p.username}</Link>
-                        {p.is_online && <span className="online-dot" />}
-                      </div>
-                      {p.location_label && <p className="result-location">{p.location_label}</p>}
-                      {p.bio && <p className="result-bio">{p.bio}</p>}
-                      {p.tags?.length > 0 && (
-                        <div className="card-tags">
-                          {p.tags.slice(0, 5).map(t => <span key={t} className="tag">#{t}</span>)}
-                        </div>
-                      )}
-                    </div>
-                    <div className="result-actions">
-                      <span className="fame-badge">{Math.round(p.fame_rating ?? 0)} fame</span>
-                      <button
-                        className={`btn-like${liked ? ' liked' : ''}`}
-                        onClick={() => toggleLike(p.user_id)}
-                      >
-                        {liked ? '♥' : '♡'}
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
+        ) : (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ fontSize: 14, color: 'var(--ink3)', fontStyle: 'italic' }}>{results.length} results</div>
+              <button onClick={() => setResults(null)} style={{ background: 'none', border: 'none', color: 'var(--spice)', fontSize: 13, cursor: 'pointer', fontWeight: 500, fontFamily: 'DM Sans, sans-serif' }}>
+                ← Edit search
+              </button>
             </div>
-          </>
+
+            {results.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>🔍</div>
+                <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, color: 'var(--ink2)' }}>No matches found</div>
+                <div style={{ fontSize: 14, color: 'var(--ink4)', marginTop: 8 }}>Try broadening your filters</div>
+              </div>
+            ) : (
+              results.map(p => {
+                const name = p.full_name || p.username || 'Unknown';
+                return (
+                  <div key={p.user_id} onClick={() => navigate(`/profile/${p.user_id}`)} style={{
+                    padding: '14px 16px', marginBottom: 10,
+                    background: 'var(--white)', borderRadius: 'var(--r-md)',
+                    border: '1.5px solid var(--cream3)',
+                    display: 'flex', gap: 14, alignItems: 'center',
+                    cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
+                  }}>
+                    <Avatar name={name} size={48} online={p.is_online}/>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 16, fontWeight: 600, color: 'var(--ink)' }}>
+                        {name}{p.age ? `, ${p.age}` : ''}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--ink3)', marginTop: 2 }}>
+                        {p.distance_km ? `${p.distance_km.toFixed(1)}km · ` : ''}{p.location_label || ''}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                        {(p.tags || []).slice(0, 3).map(t => (
+                          <span key={t} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: 'var(--cream2)', color: 'var(--ink3)', border: '1px solid var(--sand)' }}>#{t}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <FameMeter score={p.fame_rating || 0}/>
+                  </div>
+                );
+              })
+            )}
+          </div>
         )}
       </div>
     </div>
-  )
+  );
 }

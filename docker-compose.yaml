@@ -48,8 +48,6 @@ services:
       - ./backend:/app
       - image_upload:/app/images
     command: uvicorn application.main:app --host ${BACKEND_HOST} --port 8000 --reload
-    dns:
-      - 127.0.0.11
     networks:
       - app-network
     restart: unless-stopped
