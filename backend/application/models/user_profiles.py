@@ -16,5 +16,8 @@ class UserProfile(Base):
     sexual_orientation = Column(String, nullable=True)
     profile_picture_id = Column(Integer, ForeignKey("photos.id"), nullable=True)
     fame_rating = Column(Float, default=0, server_default="0")
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    location_label = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

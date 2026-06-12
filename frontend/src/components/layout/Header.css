@@ -74,10 +74,29 @@
   padding: 4px;
   line-height: 1;
   transition: color var(--transition);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 .btn-notif:hover {
   color: var(--accent);
+  opacity: 1;
+}
+
+.notif-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 99px;
+  pointer-events: none;
 }
 
 .nav-btn-logout {
