@@ -1,0 +1,184 @@
+.search-page {
+  padding: 32px 0 64px;
+}
+
+.search-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 24px;
+}
+
+.search-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.search-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.search-tags-field {
+  grid-column: 1 / -1;
+}
+
+.form-group select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 14px;
+  padding: 10px 14px;
+  outline: none;
+  width: 100%;
+  cursor: pointer;
+}
+
+.form-group select:focus {
+  border-color: var(--accent);
+}
+
+.search-count {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+/* ── Results ───────────────────────────────── */
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.result-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  transition: border-color var(--transition);
+}
+
+.result-card:hover {
+  border-color: var(--accent);
+}
+
+.result-photo-wrap {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: block;
+}
+
+.result-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.result-photo-placeholder {
+  width: 100%;
+  height: 100%;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.result-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.result-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.result-name a {
+  color: var(--text);
+}
+
+.result-name a:hover {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.result-location {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.result-bio {
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  flex-shrink: 0;
+}
+
+.fame-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.btn-like {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color var(--transition);
+  padding: 0;
+  line-height: 1;
+}
+
+.btn-like:hover,
+.btn-like.liked {
+  color: var(--accent);
+}
+
+.tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--surface-2);
+  border-radius: 99px;
+  color: var(--text-muted);
+}

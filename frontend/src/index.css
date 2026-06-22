@@ -1,50 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300;1,9..40,400&display=swap');
+
 :root {
-  --bg:          #0d0d0d;
-  --surface:     #161616;
-  --surface-2:   #1f1f1f;
-  --border:      #2a2a2a;
-  --text:        #efefef;
-  --text-muted:  #888;
-  --accent:      #e8405a;
-  --accent-dark: #c4293f;
-  --success:     #3ecf8e;
-  --error:       #e85540;
-  --radius:      10px;
-  --radius-sm:   6px;
-  --transition:  0.18s ease;
-  --font:        -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  /* ── Colors ─────────────────────────────────────────────── */
+  --cream:   #fdf6ed;
+  --cream2:  #f7ede0;
+  --cream3:  #eeddd0;
+  --sand:    #e8d4bc;
+  --clay:    #d4a882;
+  --spice:   #c2784a;
+  --spice2:  #a85e32;
+  --matcha:  #6b8f5e;
+  --matcha2: #4e6e43;
+  --rose:    #e07a7a;
+  --ink:     #2c2016;
+  --ink2:    #4a3828;
+  --ink3:    #7a6555;
+  --ink4:    #a8978a;
+  --white:   #fffdf9;
+
+  /* ── Border Radius ───────────────────────────────────────── */
+  --r-xs:   4px;
+  --r-sm:   12px;
+  --r-md:   18px;
+  --r-lg:   24px;
+  --r-xl:   28px;
+  --r-2xl:  40px;
+  --r-full: 9999px;
+
+  /* ── Shadows ─────────────────────────────────────────────── */
+  --shadow-sm: 0 2px 8px rgba(44, 32, 22, 0.08);
+  --shadow-md: 0 6px 24px rgba(44, 32, 22, 0.12);
+  --shadow-lg: 0 16px 48px rgba(44, 32, 22, 0.16);
+
+  /* ── Typography ─────────────────────────────────────────── */
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body:    'DM Sans', system-ui, sans-serif;
+
+  /* ── Transitions ─────────────────────────────────────────── */
+  --transition-fast:   all 0.15s ease;
+  --transition-base:   all 0.18s ease;
+  --transition-slow:   all 0.3s ease;
+  --transition-spring: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* ── Base resets ─────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-html {
-  scroll-behavior: smooth;
+html, body, #root {
+  height: 100%;
 }
 
 body {
-  background-color: var(--bg);
-  color: var(--text);
-  font-family: var(--font);
+  font-family: var(--font-body);
+  background: var(--cream);
+  color: var(--ink);
   font-size: 15px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 a {
-  color: var(--accent);
+  color: var(--spice);
   text-decoration: none;
-  transition: opacity var(--transition);
 }
 
-a:hover {
-  opacity: 0.8;
+input, textarea, button, select {
+  font-family: var(--font-body);
 }
 
-code {
-  font-family: 'Fira Code', 'Courier New', monospace;
+input::placeholder, textarea::placeholder {
+  color: var(--ink4);
 }
+
+input:focus, textarea:focus {
+  outline: 2px solid var(--spice);
+  outline-offset: 1px;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--sand); border-radius: 4px; }
+
+/* ── Keyframe animations ─────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-7px); }
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25%       { transform: rotate(-4deg); }
+  75%       { transform: rotate(4deg); }
+}
+@keyframes blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  95%            { transform: scaleY(0.1); }
+}
+@keyframes pulse {
+  0%, 60%, 100% { opacity: 0.35; transform: scale(0.9); }
+  30%            { opacity: 1;    transform: scale(1.1); }
+}
+@keyframes steam1 {
+  0%   { opacity: 0; transform: translateY(0) scaleX(1); }
+  50%  { opacity: 0.7; }
+  100% { opacity: 0; transform: translateY(-14px) scaleX(1.4); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Utility animation classes ───────────────────────────────── */
+.anim-up    { animation: fadeUp   0.4s ease both; }
+.anim-in    { animation: fadeIn   0.25s ease both; }
+.anim-scale { animation: scaleIn  0.3s ease both; }
+.anim-float { animation: float    3s ease-in-out infinite; }
+.screen     { animation: fadeIn   0.25s ease; }
