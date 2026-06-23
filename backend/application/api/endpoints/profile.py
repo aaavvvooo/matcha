@@ -25,8 +25,12 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 @router.post("/set")
 @limiter.limit("10/hour")
 async def set(
-    request: Request, body: SetProfileRequest, db: Database = Depends(get_db)
+    request: Request,
+    body: SetProfileRequest,
+    db: Database = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
+    body.user_id = current_user["user"]["id"]
     service = ProfileService(db)
     return await service.set_profile(body)
 

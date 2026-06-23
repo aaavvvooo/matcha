@@ -47,7 +47,12 @@ services:
     volumes:
       - ./backend:/app
       - image_upload:/app/images
-    command: uvicorn application.main:app --host ${BACKEND_HOST} --port 8000 --reload
+    command: >
+      sh -c "
+        alembic upgrade head &&
+        uvicorn application.main:app --host ${BACKEND_HOST} --port 8000 --reload
+      "
+
     networks:
       - app-network
     restart: unless-stopped

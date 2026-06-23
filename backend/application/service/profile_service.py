@@ -31,8 +31,9 @@ class ProfileService:
                 async with connection.transaction():
                     conn = cast(Connection, connection)
                     photos_record = await self.profile_repo.set_photos(request.user_id, request.photos, conn)
+                    tags_record = await self.profile_repo.add_tags(request.user_id, request.tags)
                     profile_record = await self.profile_repo.set_profile(request, conn)
-            return profile_record, photos_record
+            return profile_record, tags_record, photos_record
         except HTTPException:
             raise
         except Exception as e:

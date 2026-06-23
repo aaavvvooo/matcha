@@ -4,7 +4,7 @@ from typing import Optional
 
 
 class SetProfileRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None
     bio: str = Field(None, max_length=500)
     birth_date: datetime = Field(None)
     gender: str = Field(None, max_length=20)

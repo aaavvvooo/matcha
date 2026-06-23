@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { getMyProfile, updateProfile } from '../../api/profilesApi';
+import { getMyProfile, updateProfile, getAllTags } from '../../api/profilesApi';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
@@ -9,9 +9,8 @@ import Btn from '../../components/ui/Btn';
 import Chip from '../../components/ui/Chip';
 import FormInput from '../../components/ui/FormInput';
 
-const TAGS = ['#photography', '#music', '#cooking', '#travel', '#reading', '#cycling', '#art', '#tech', '#yoga', '#film', '#plants', '#coffee'];
 const GENDERS = ['Man', 'Woman', 'Non-binary', 'Other'];
-const PREFS = ['Men', 'Women', 'Everyone'];
+const ORIENTATIONS = ['Heterosexual', 'Homosexual', 'Bisexual', 'Other'];
 
 function Section({ children, style }) {
   return (
@@ -32,27 +31,27 @@ export default function ProfileEditPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
+  const [availableTags, setAvailableTags] = useState([]);
   const [form, setForm] = useState({
-    firstName: '', lastName: '', username: '', email: '',
-    gender: '', preference: '', bio: '', tags: [], location: '',
+    full_name: '', username: '', email: '',
+    gender: '', sexual_orientation: '', bio: '', tags: [],
   });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getMyProfile()
-      .then(data => {
+    Promise.all([getMyProfile(user.id), getAllTags()])
+      .then(([data, tags]) => {
         setProfile(data);
+        setAvailableTags(tags);
         setForm({
-          firstName: data.first_name || '',
-          lastName: data.last_name || '',
+          full_name: data.full_name || '',
           username: data.username || '',
           email: data.email || '',
           gender: data.gender || '',
-          preference: data.sexual_preference || '',
-          bio: data.biography || '',
+          sexual_orientation: data.sexual_orientation || '',
+          bio: data.bio || '',
           tags: data.tags || [],
-          location: data.location_label || '',
         });
       })
       .catch(() => {})
@@ -64,13 +63,9 @@ export default function ProfileEditPage() {
   async function handleSave() {
     try {
       await updateProfile({
-        first_name: form.firstName,
-        last_name: form.lastName,
-        biography: form.bio,
+        bio: form.bio,
         gender: form.gender,
-        sexual_preference: form.preference,
-        tags: form.tags.map(t => t.replace('#', '')),
-        location_label: form.location,
+        sexual_orientation: form.sexual_orientation,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -82,7 +77,7 @@ export default function ProfileEditPage() {
     navigate('/');
   }
 
-  const name = form.firstName || profile?.username || user?.username || 'You';
+  const name = form.full_name || form.username || user?.username || 'You';
 
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
@@ -134,10 +129,7 @@ export default function ProfileEditPage() {
           </Section>
 
           <Section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <FormInput label="First name" value={form.firstName} onChange={e => setField('firstName', e.target.value)} style={{ flex: 1 }}/>
-              <FormInput label="Last name" value={form.lastName} onChange={e => setField('lastName', e.target.value)} style={{ flex: 1 }}/>
-            </div>
+            <FormInput label="Full name" value={form.full_name} onChange={e => setField('full_name', e.target.value)}/>
             <FormInput label="Username" value={form.username} onChange={e => setField('username', e.target.value)}/>
             <FormInput label="Email" type="email" value={form.email} onChange={e => setField('email', e.target.value)}/>
           </Section>
@@ -150,9 +142,9 @@ export default function ProfileEditPage() {
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 8 }}>Interested in</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 8 }}>Sexual orientation</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {PREFS.map(p => <Chip key={p} label={p} active={form.preference === p} onClick={() => setField('preference', p)}/>)}
+                {ORIENTATIONS.map(o => <Chip key={o} label={o} active={form.sexual_orientation === o} onClick={() => setField('sexual_orientation', o)}/>)}
               </div>
             </div>
           </Section>
@@ -177,20 +169,15 @@ export default function ProfileEditPage() {
           <Section>
             <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 12 }}>Interests</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {TAGS.map(t => {
-                const raw = t.replace('#', '');
-                return <Chip key={t} label={t} active={form.tags.includes(raw)} onClick={() => setField('tags', form.tags.includes(raw) ? form.tags.filter(x => x !== raw) : [...form.tags, raw])}/>;
-              })}
+              {availableTags.map(tag => (
+                <Chip
+                  key={tag.id}
+                  label={`#${tag.name}`}
+                  active={form.tags.includes(tag.id)}
+                  onClick={() => setField('tags', form.tags.includes(tag.id) ? form.tags.filter(x => x !== tag.id) : [...form.tags, tag.id])}
+                />
+              ))}
             </div>
-          </Section>
-
-          <Section>
-            <FormInput
-              label="Location"
-              value={form.location}
-              onChange={e => setField('location', e.target.value)}
-              hint="Used for matching · updated with GPS if allowed"
-            />
           </Section>
 
           <Section style={{ marginBottom: 24 }}>
