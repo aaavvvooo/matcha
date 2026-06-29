@@ -6,8 +6,6 @@ from application.schema.profile_schemas import (
     SetProfilePicRequest,
     AddPhotosRequest,
     DeletePhotosRequest,
-    AddTagsRequest,
-    DeleteTagsRequest,
     ProfileResponse,
     PhotoResponse,
     TagResponse,
@@ -103,28 +101,3 @@ async def get_tags(request: Request, db: Database = Depends(get_db)):
     rows = await repo.get_all_tags()
     return [TagResponse(**dict(row)) for row in rows]
 
-
-@router.post("/add-tags", response_model=list[int])
-@limiter.limit("20/minute")
-async def add_tags(
-    request: Request,
-    body: AddTagsRequest,
-    db: Database = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
-):
-    user_id = current_user["user"]["id"]
-    service = ProfileService(db)
-    return await service.add_tags(user_id, body.tag_ids)
-
-
-@router.delete("/delete-tags", response_model=list[int])
-@limiter.limit("20/minute")
-async def delete_tags(
-    request: Request,
-    body: DeleteTagsRequest,
-    db: Database = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
-):
-    user_id = current_user["user"]["id"]
-    service = ProfileService(db)
-    return await service.delete_tags(user_id, body.tag_ids)

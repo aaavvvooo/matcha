@@ -66,6 +66,7 @@ export default function ProfileEditPage() {
         bio: form.bio,
         gender: form.gender,
         sexual_orientation: form.sexual_orientation,
+        tags: form.tags ?? [],
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);

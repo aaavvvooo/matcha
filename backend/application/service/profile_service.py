@@ -86,13 +86,32 @@ class ProfileService:
                 )
 
             updates = request.model_dump(exclude_none=True)
-            if not updates:
+            tags = updates.pop("tags", None)
+
+            if not updates and tags is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="No fields to update",
                 )
 
-            await self.profile_repo.update_profile(user_id, updates)
+            if updates:
+                await self.profile_repo.update_profile(user_id, updates)
+
+            if tags is not None:
+                if len(tags) > MAX_TAGS:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Cannot exceed {MAX_TAGS} tags",
+                    )
+                current = set(await self.profile_repo.get_user_tag_ids(user_id))
+                desired = set(tags)
+                to_add = list(desired - current)
+                to_remove = list(current - desired)
+                if to_add:
+                    await self.profile_repo.add_tags(user_id, to_add)
+                if to_remove:
+                    await self.profile_repo.delete_tags(user_id, to_remove)
+
             return await self.get_profile(user_id)
         except HTTPException:
             raise
@@ -167,33 +186,3 @@ class ProfileService:
                 detail=f"Internal server error: {e}",
             )
 
-    async def add_tags(self, user_id: int, tag_ids: list[int]) -> list[int]:
-        try:
-            current_count = await self.profile_repo.count_tags(user_id)
-            if current_count + len(tag_ids) > MAX_TAGS:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Cannot exceed {MAX_TAGS} tags",
-                )
-
-            await self.profile_repo.add_tags(user_id, tag_ids)
-            return await self.profile_repo.get_user_tag_ids(user_id)
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Internal server error: {e}",
-            )
-
-    async def delete_tags(self, user_id: int, tag_ids: list[int]) -> list[int]:
-        try:
-            await self.profile_repo.delete_tags(user_id, tag_ids)
-            return await self.profile_repo.get_user_tag_ids(user_id)
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Internal server error: {e}",
-            )

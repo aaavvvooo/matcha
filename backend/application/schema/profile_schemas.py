@@ -18,6 +18,7 @@ class UpdateProfileRequest(BaseModel):
     birth_date: Optional[datetime] = None
     gender: Optional[str] = Field(None, max_length=20)
     sexual_orientation: Optional[str] = Field(None, max_length=20)
+    tags: Optional[list[int]] = None
 
 
 class SetProfilePicRequest(BaseModel):
@@ -31,13 +32,6 @@ class AddPhotosRequest(BaseModel):
 class DeletePhotosRequest(BaseModel):
     photo_ids: list[int] = Field(..., min_length=1)
 
-
-class AddTagsRequest(BaseModel):
-    tag_ids: list[int] = Field(..., min_length=1)
-
-
-class DeleteTagsRequest(BaseModel):
-    tag_ids: list[int] = Field(..., min_length=1)
 
 
 class ProfileRequest(BaseModel):
