@@ -35,6 +35,7 @@ export function AuthProvider({ children }) {
     setAccessToken(data.access_token);
     const me = await getMe(data.access_token);
     setUser(me);
+    return me;
   }
 
   async function logout() {

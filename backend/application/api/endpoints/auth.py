@@ -109,8 +109,13 @@ async def login(
 
 
 @router.get("/me")
-async def current_user(current_user: dict = Depends(get_current_user)):
-    return dict(current_user["user"])
+async def current_user(current_user: dict = Depends(get_current_user), db: Database = Depends(get_db)):
+    from application.repository.profile_repo import ProfileRepository
+    user = dict(current_user["user"])
+    profile_repo = ProfileRepository(db)
+    profile = await profile_repo.get_profile(user["id"])
+    user["has_profile"] = profile is not None and profile.get("gender") is not None
+    return user
 
 
 @router.post("/forget-password")

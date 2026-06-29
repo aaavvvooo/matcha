@@ -19,8 +19,8 @@ function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(username, password);
-      navigate('/profile/setup');
+      const user = await login(username, password);
+      navigate(user?.has_profile ? '/browse' : '/profile/setup');
     } catch (err) {
       setError(err.message || 'Invalid credentials');
     } finally {
