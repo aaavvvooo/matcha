@@ -39,11 +39,18 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_HOST: ${POSTGRES_HOST}
       POSTGRES_PORT_INNER: ${POSTGRES_PORT_INNER}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
     ports:
       - "${BACKEND_PORT}:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_started
     volumes:
       - ./backend:/app
       - image_upload:/app/images
@@ -53,6 +60,24 @@ services:
         uvicorn application.main:app --host ${BACKEND_HOST} --port 8000 --reload
       "
 
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    env_file:
+      - .env
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
     networks:
       - app-network
     restart: unless-stopped
@@ -84,6 +109,7 @@ services:
 volumes:
   image_upload:
   postgres_data:
+  minio_data:
 
 networks:
   app-network:

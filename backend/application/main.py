@@ -25,6 +25,8 @@ async def _token_cleanup_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await database.connect()
+    from application.clients.minio_client import ensure_bucket
+    ensure_bucket()
     cleanup_task = asyncio.create_task(_token_cleanup_loop())
 
     yield

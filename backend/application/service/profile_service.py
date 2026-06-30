@@ -159,6 +159,13 @@ class ProfileService:
                     detail=f"Cannot exceed {MAX_PHOTOS} photos",
                 )
 
+            existing = await self.profile_repo.get_existing_urls(user_id, urls)
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Photo already uploaded",
+                )
+
             rows = await self.profile_repo.add_photos(user_id, urls, start_order=current_count + 1)
             return [PhotoResponse(**dict(row)) for row in rows]
         except HTTPException:
@@ -171,12 +178,19 @@ class ProfileService:
 
     async def delete_photos(self, user_id: int, photo_ids: list[int]) -> list[int]:
         try:
+            urls = await self.profile_repo.get_photos_urls(user_id, photo_ids)
             deleted_ids = await self.profile_repo.delete_photos(user_id, photo_ids)
             if not deleted_ids:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="No matching photos found",
                 )
+            from application.clients.minio_client import delete_photo
+            for url in urls:
+                try:
+                    delete_photo(url)
+                except Exception:
+                    pass
             return deleted_ids
         except HTTPException:
             raise

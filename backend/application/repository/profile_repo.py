@@ -163,6 +163,16 @@ class ProfileRepository:
         """
         return await self.db.fetch_all(query, *params)
 
+    async def get_existing_urls(self, user_id: int, urls: list[str]) -> list[str]:
+        query = "SELECT url FROM photos WHERE user_id = $1 AND url = ANY($2::text[])"
+        rows = await self.db.fetch_all(query, user_id, urls)
+        return [row["url"] for row in rows]
+
+    async def get_photos_urls(self, user_id: int, photo_ids: list[int]) -> list[str]:
+        query = "SELECT url FROM photos WHERE user_id = $1 AND id = ANY($2::int[])"
+        rows = await self.db.fetch_all(query, user_id, photo_ids)
+        return [row["url"] for row in rows]
+
     async def delete_photos(self, user_id: int, photo_ids: list[int]):
         pool = self.db.require_pool()
         async with pool.acquire() as connection:

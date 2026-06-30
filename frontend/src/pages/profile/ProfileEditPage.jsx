@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { getMyProfile, updateProfile, getAllTags } from '../../api/profilesApi';
+import { getMyProfile, updateProfile, getAllTags, uploadPhoto, deletePhotos, setProfilePic } from '../../api/profilesApi';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
@@ -38,6 +38,9 @@ export default function ProfileEditPage() {
   });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [previewPhoto, setPreviewPhoto] = useState(null);
+  const [photoError, setPhotoError] = useState(null);
 
   useEffect(() => {
     Promise.all([getMyProfile(user.id), getAllTags()])
@@ -59,6 +62,48 @@ export default function ProfileEditPage() {
   }, []);
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  async function handlePhotoUpload(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setPhotoUploading(true);
+    setPhotoError(null);
+    try {
+      const newPhotos = await uploadPhoto(files);
+      const isFirst = (profile?.photos || []).length === 0;
+      setProfile(p => ({ ...p, photos: [...(p.photos || []), ...newPhotos] }));
+      if (isFirst && newPhotos.length > 0) {
+        await setProfilePic(newPhotos[0].id);
+        setProfile(p => ({ ...p, photos: p.photos.map((ph, i) => ({ ...ph, is_main: i === 0 })) }));
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Failed to upload photo';
+      setPhotoError(msg);
+      setTimeout(() => setPhotoError(null), 4000);
+    } finally {
+      setPhotoUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handlePhotoDelete(photoId) {
+    try {
+      await deletePhotos([photoId]);
+      setProfile(p => ({ ...p, photos: p.photos.filter(ph => ph.id !== photoId) }));
+      if (previewPhoto?.id === photoId) setPreviewPhoto(null);
+    } catch {}
+  }
+
+  async function handleSetProfilePic(photo) {
+    try {
+      await setProfilePic(photo.id);
+      setProfile(p => ({
+        ...p,
+        photos: p.photos.map(ph => ({ ...ph, is_main: ph.id === photo.id })),
+      }));
+      setPreviewPhoto(ph => ({ ...ph, is_main: true }));
+    } catch {}
+  }
 
   async function handleSave() {
     try {
@@ -97,7 +142,7 @@ export default function ProfileEditPage() {
         <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px 24px' }}>
 
           <Section style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <Avatar name={name} size={64}/>
+            <Avatar name={name} src={profile?.photos?.find(p => p.is_main)?.url} size={64}/>
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, fontWeight: 600, color: 'var(--ink)' }}>{name}</div>
               <div style={{ fontSize: 13, color: 'var(--ink3)', marginTop: 2 }}>{form.location || 'No location set'}</div>
@@ -109,20 +154,53 @@ export default function ProfileEditPage() {
             <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 12 }}>
               Photos <span style={{ color: 'var(--ink4)', fontWeight: 400 }}>({profile?.photos?.length || 0}/5)</span>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {Array.from({ length: 5 }).map((_, i) => {
                 const photo = profile?.photos?.[i];
-                return (
-                  <div key={i} style={{
-                    width: 52, height: 52, borderRadius: 'var(--r-sm)',
-                    background: photo ? `url(${photo.url}) center/cover` : 'var(--cream)',
-                    border: `1.5px dashed ${photo ? 'var(--clay)' : 'var(--sand)'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 16, color: photo ? 'var(--clay)' : 'var(--sand)',
-                    cursor: 'pointer', overflow: 'hidden',
-                  }}>
-                    {!photo && (i < (profile?.photos?.length || 0) ? '◎' : '+')}
+                return photo ? (
+                  <div key={i} style={{ position: 'relative', width: 64, height: 64 }}>
+                    <div
+                      onClick={() => setPreviewPhoto(photo)}
+                      style={{
+                        width: 64, height: 64, borderRadius: 'var(--r-sm)',
+                        background: `url(${photo.url}) center/cover`,
+                        border: `1.5px solid ${photo.is_main ? 'var(--spice)' : 'var(--clay)'}`,
+                        cursor: 'pointer',
+                      }}
+                    />
+                    {photo.is_main && (
+                      <div style={{
+                        position: 'absolute', bottom: 2, right: 2,
+                        width: 10, height: 10, borderRadius: '50%',
+                        background: 'var(--spice)', border: '1.5px solid #fff',
+                      }}/>
+                    )}
+                    <button
+                      onClick={() => handlePhotoDelete(photo.id)}
+                      style={{
+                        position: 'absolute', top: -6, right: -6,
+                        width: 18, height: 18, borderRadius: '50%',
+                        background: 'var(--rose)', border: 'none', color: '#fff',
+                        fontSize: 10, cursor: 'pointer', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                      }}
+                    >×</button>
                   </div>
+                ) : (profile?.photos?.length || 0) === i ? (
+                  <label key={i} style={{
+                    width: 64, height: 64, borderRadius: 'var(--r-sm)',
+                    background: 'var(--cream)', border: '1.5px dashed var(--sand)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 22, color: 'var(--sand)', cursor: photoUploading ? 'wait' : 'pointer',
+                  }}>
+                    {photoUploading ? '…' : '+'}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handlePhotoUpload} style={{ display: 'none' }} disabled={photoUploading}/>
+                  </label>
+                ) : (
+                  <div key={i} style={{
+                    width: 64, height: 64, borderRadius: 'var(--r-sm)',
+                    background: 'var(--cream)', border: '1.5px dashed var(--cream3)',
+                  }}/>
                 );
               })}
             </div>
@@ -196,6 +274,64 @@ export default function ProfileEditPage() {
           <Btn onClick={handleSave} style={{ width: '100%' }}>
             {saved ? '✓ Saved!' : 'Save changes'}
           </Btn>
+        </div>
+      )}
+
+      {photoError && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--rose)', color: '#fff', padding: '12px 20px',
+          borderRadius: 'var(--r-sm)', fontSize: 14, fontWeight: 500,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.25)', zIndex: 2000,
+          maxWidth: '90vw', textAlign: 'center', pointerEvents: 'none',
+        }}>
+          {photoError}
+        </div>
+      )}
+
+      {previewPhoto && (
+        <div
+          onClick={() => setPreviewPhoto(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+            zIndex: 1000, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 16,
+          }}
+        >
+          <img
+            src={previewPhoto.url}
+            alt=""
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '92vw', maxHeight: '70vh', borderRadius: 'var(--r-md)', objectFit: 'contain' }}
+          />
+          <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 10 }}>
+            {!previewPhoto.is_main && (
+              <button
+                onClick={() => handleSetProfilePic(previewPhoto)}
+                style={{
+                  padding: '10px 20px', borderRadius: 'var(--r-sm)',
+                  background: 'var(--spice)', border: 'none', color: '#fff',
+                  fontSize: 14, fontWeight: 500, cursor: 'pointer',
+                }}
+              >Set as profile picture</button>
+            )}
+            <button
+              onClick={() => handlePhotoDelete(previewPhoto.id)}
+              style={{
+                padding: '10px 20px', borderRadius: 'var(--r-sm)',
+                background: 'var(--rose)', border: 'none', color: '#fff',
+                fontSize: 14, fontWeight: 500, cursor: 'pointer',
+              }}
+            >Delete</button>
+            <button
+              onClick={() => setPreviewPhoto(null)}
+              style={{
+                padding: '10px 20px', borderRadius: 'var(--r-sm)',
+                background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff',
+                fontSize: 14, cursor: 'pointer',
+              }}
+            >Close</button>
+          </div>
         </div>
       )}
     </div>

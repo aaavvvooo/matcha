@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
+from typing import List
 
 from application.schema.profile_schemas import (
     SetProfileRequest,
     UpdateProfileRequest,
     SetProfilePicRequest,
-    AddPhotosRequest,
     DeletePhotosRequest,
     ProfileResponse,
     PhotoResponse,
@@ -68,17 +68,30 @@ async def set_profpic(
     return await service.set_profile_picture(user_id, body.photo_id)
 
 
-@router.post("/add-photos", response_model=list[PhotoResponse])
+@router.post("/upload-photo", response_model=list[PhotoResponse])
 @limiter.limit("20/minute")
-async def add_photos(
+async def upload_photo(
     request: Request,
-    body: AddPhotosRequest,
+    files: List[UploadFile] = File(...),
     db: Database = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    from application.clients.minio_client import upload_photo as minio_upload
     user_id = current_user["user"]["id"]
     service = ProfileService(db)
-    return await service.add_photos(user_id, body.photos)
+    current_count = await service.profile_repo.count_photos(user_id)
+    if current_count + len(files) > 5:
+        raise HTTPException(status_code=400, detail=f"Cannot exceed 5 photos total")
+    urls = []
+    for file in files:
+        if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
+            raise HTTPException(status_code=400, detail=f"{file.filename}: only JPEG, PNG and WebP are allowed")
+        data = await file.read()
+        if len(data) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail=f"{file.filename}: file size must not exceed 5 MB")
+        urls.append(minio_upload(data, file.content_type))
+    return await service.add_photos(user_id, urls)
+
 
 
 @router.delete("/delete-photos", response_model=list[int])

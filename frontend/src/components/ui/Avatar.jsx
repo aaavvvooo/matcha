@@ -7,7 +7,7 @@ const AV_COLORS = [
   ['#d5f5f0', '#3a8a7a'],
 ];
 
-function Avatar({ name, size = 44, online }) {
+function Avatar({ name, src, size = 44, online }) {
   const initials = (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
   const [bg, fg] = AV_COLORS[(name || 'A').charCodeAt(0) % AV_COLORS.length];
 
@@ -17,7 +17,7 @@ function Avatar({ name, size = 44, online }) {
         width: size,
         height: size,
         borderRadius: '50%',
-        background: bg,
+        background: src ? `url(${src}) center/cover` : bg,
         color: fg,
         display: 'flex',
         alignItems: 'center',
@@ -26,11 +26,11 @@ function Avatar({ name, size = 44, online }) {
         fontWeight: 600,
         fontFamily: 'Playfair Display, serif',
         letterSpacing: '0.02em',
-        border: `2px solid ${bg}`,
+        border: `2px solid ${src ? 'var(--sand)' : bg}`,
         boxShadow: '0 2px 8px rgba(44,32,22,0.1)',
         flexShrink: 0,
       }}>
-        {initials}
+        {!src && initials}
       </div>
       {online !== undefined && (
         <div style={{

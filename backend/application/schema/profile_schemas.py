@@ -25,10 +25,6 @@ class SetProfilePicRequest(BaseModel):
     photo_id: int
 
 
-class AddPhotosRequest(BaseModel):
-    photos: list[str] = Field(..., min_length=1, max_length=5)
-
-
 class DeletePhotosRequest(BaseModel):
     photo_ids: list[int] = Field(..., min_length=1)
 
