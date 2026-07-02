@@ -12,6 +12,7 @@ from application.database import Database
 from application.repository.token_repo import TokenRepository
 from application.repository.user_repo import UserRepository
 from application.repository.profile_repo import ProfileRepository
+from application.repository.social_repo import SocialRepository
 
 MAX_PHOTOS = 5
 MAX_TAGS = 20
@@ -23,6 +24,7 @@ class ProfileService:
         self.user_repo = UserRepository(db)
         self.token_repo = TokenRepository(db)
         self.profile_repo = ProfileRepository(db)
+        self.social_repo = SocialRepository(db)
 
     async def set_profile(self, request: SetProfileRequest):
         try:
@@ -52,6 +54,8 @@ class ProfileService:
                 )
             photos_rows = await self.profile_repo.get_user_photos(user_id)
             tag_ids = await self.profile_repo.get_user_tag_ids(user_id)
+            views_count = await self.social_repo.count_viewers(user_id)
+            likes_count = await self.social_repo.count_likers(user_id)
 
             photos = [PhotoResponse(**dict(row)) for row in photos_rows]
             return ProfileResponse(
@@ -67,6 +71,8 @@ class ProfileService:
                 fame_rating=profile["fame_rating"],
                 tags=tag_ids,
                 photos=photos,
+                views_count=views_count,
+                likes_count=likes_count,
             )
         except HTTPException:
             raise

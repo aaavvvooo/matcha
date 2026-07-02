@@ -85,6 +85,17 @@ class ProfileRepository:
         rows = await self.db.fetch_all(query, user_id)
         return [row["tag_id"] for row in rows]
 
+    async def get_user_tag_names(self, user_id: int):
+        query = """
+            SELECT t.name
+            FROM user_tags ut
+            JOIN tags t ON t.id = ut.tag_id
+            WHERE ut.user_id = $1
+            ORDER BY t.name
+        """
+        rows = await self.db.fetch_all(query, user_id)
+        return [row["name"] for row in rows]
+
     async def count_photos(self, user_id: int) -> int:
         query = "SELECT COUNT(*) FROM photos WHERE user_id = $1"
         return await self.db.fetch_val(query, user_id)

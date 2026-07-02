@@ -64,5 +64,7 @@ class ProfileResponse(BaseModel):
     fame_rating: float = 0.0
     tags: list[int] = Field(default_factory=list)
     photos: list[PhotoResponse] = Field(default_factory=list)
+    views_count: int = 0
+    likes_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)

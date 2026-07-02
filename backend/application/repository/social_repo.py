@@ -25,6 +25,11 @@ class SocialRepository:
         query = "SELECT 1 FROM likes WHERE liker_id = $1 AND liked_id = $2"
         return await self.db.fetch_val(query, liker_id, liked_id) is not None
 
+    async def count_likers(self, user_id: int) -> int:
+        return await self.db.fetch_val(
+            "SELECT COUNT(*) FROM likes WHERE liked_id = $1", user_id
+        )
+
     async def get_likers(self, user_id: int):
         query = """
             SELECT u.id, u.username, u.full_name, p.url AS profile_photo_url
@@ -44,6 +49,11 @@ class SocialRepository:
             ON CONFLICT (viewer_id, viewed_id) DO UPDATE SET viewed_at = now()
         """
         await self.db.execute(query, viewer_id, viewed_id)
+
+    async def count_viewers(self, user_id: int) -> int:
+        return await self.db.fetch_val(
+            "SELECT COUNT(*) FROM profile_views WHERE viewed_id = $1", user_id
+        )
 
     async def get_viewers(self, user_id: int):
         query = """

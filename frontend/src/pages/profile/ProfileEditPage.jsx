@@ -42,6 +42,21 @@ export default function ProfileEditPage() {
   const [previewPhoto, setPreviewPhoto] = useState(null);
   const [photoError, setPhotoError] = useState(null);
 
+  const previewPhotos = profile?.photos || [];
+  const previewIdx = previewPhoto ? previewPhotos.findIndex(p => p.id === previewPhoto.id) : -1;
+  const goToPhoto = (i) => setPreviewPhoto(previewPhotos[(i + previewPhotos.length) % previewPhotos.length]);
+
+  useEffect(() => {
+    if (!previewPhoto) return;
+    const onKey = (e) => {
+      if (e.key === 'ArrowRight') goToPhoto(previewIdx + 1);
+      else if (e.key === 'ArrowLeft') goToPhoto(previewIdx - 1);
+      else if (e.key === 'Escape') setPreviewPhoto(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [previewPhoto, previewIdx]);
+
   useEffect(() => {
     Promise.all([getMyProfile(user.id), getAllTags()])
       .then(([data, tags]) => {
@@ -262,8 +277,12 @@ export default function ProfileEditPage() {
           <Section style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 12 }}>Activity</div>
             <div style={{ display: 'flex', gap: 12 }}>
-              {[[profile?.views_count || 0, 'viewed you'], [profile?.likes_count || 0, 'liked you']].map(([n, l]) => (
-                <div key={l} style={{ flex: 1, textAlign: 'center', padding: '12px', background: 'var(--cream)', borderRadius: 'var(--r-sm)' }}>
+              {[[profile?.views_count || 0, 'viewed you', '/profile/viewers'], [profile?.likes_count || 0, 'liked you', '/profile/liked-by']].map(([n, l, path]) => (
+                <div
+                  key={l}
+                  onClick={() => navigate(path)}
+                  style={{ flex: 1, textAlign: 'center', padding: '12px', background: 'var(--cream)', borderRadius: 'var(--r-sm)', cursor: 'pointer' }}
+                >
                   <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 26, fontWeight: 700, color: 'var(--spice)' }}>{n}</div>
                   <div style={{ fontSize: 12, color: 'var(--ink3)', marginTop: 2 }}>{l}</div>
                 </div>
@@ -298,12 +317,45 @@ export default function ProfileEditPage() {
             alignItems: 'center', justifyContent: 'center', gap: 16,
           }}
         >
+          {previewPhotos.length > 1 && (
+            <button
+              onClick={e => { e.stopPropagation(); goToPhoto(previewIdx - 1); }}
+              style={{
+                position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)',
+                background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff',
+                width: 44, height: 44, borderRadius: '50%', fontSize: 20,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >‹</button>
+          )}
           <img
             src={previewPhoto.url}
             alt=""
             onClick={e => e.stopPropagation()}
-            style={{ maxWidth: '92vw', maxHeight: '70vh', borderRadius: 'var(--r-md)', objectFit: 'contain' }}
+            style={{ maxWidth: '80vw', maxHeight: '70vh', borderRadius: 'var(--r-md)', objectFit: 'contain' }}
           />
+          {previewPhotos.length > 1 && (
+            <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6 }}>
+              {previewPhotos.map((p, i) => (
+                <div key={p.id} onClick={() => goToPhoto(i)} style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: i === previewIdx ? '#fff' : 'rgba(255,255,255,0.35)',
+                  cursor: 'pointer', transition: 'background 0.2s',
+                }}/>
+              ))}
+            </div>
+          )}
+          {previewPhotos.length > 1 && (
+            <button
+              onClick={e => { e.stopPropagation(); goToPhoto(previewIdx + 1); }}
+              style={{
+                position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)',
+                background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff',
+                width: 44, height: 44, borderRadius: '50%', fontSize: 20,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >›</button>
+          )}
           <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 10 }}>
             {!previewPhoto.is_main && (
               <button
