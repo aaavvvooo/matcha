@@ -1,3 +1,4 @@
+from datetime import date, timezone
 from fastapi import HTTPException, status
 
 from application.database import Database
@@ -11,6 +12,17 @@ from application.schema.users_schemas import (
     SimpleUserResponse,
 )
 from application.schema.profile_schemas import PhotoResponse
+
+
+def _calculate_age(birth_date) -> int | None:
+    if not birth_date:
+        return None
+    born = birth_date.astimezone(timezone.utc).date() if birth_date.tzinfo else birth_date.date()
+    today = date.today()
+    years = today.year - born.year
+    if (today.month, today.day) < (born.month, born.day):
+        years -= 1
+    return years
 
 
 class SocialService:
@@ -34,6 +46,8 @@ class SocialService:
         tag_names = await self.profile_repo.get_user_tag_names(user_id)
         is_liked_by_me = await self.social_repo.has_liked(viewer_id, user_id)
         liked_me = await self.social_repo.has_liked(user_id, viewer_id)
+        views_count = await self.social_repo.count_viewers(user_id)
+        likes_count = await self.social_repo.count_likers(user_id)
         fresh_fame = await self.db.fetch_val(
             "SELECT COALESCE(fame_rating, 0) FROM user_profiles WHERE user_id = $1", user_id
         )
@@ -43,13 +57,19 @@ class SocialService:
             full_name=profile["full_name"],
             username=profile["username"],
             bio=profile["bio"],
+            age=_calculate_age(profile["birth_date"]),
             gender=profile["gender"],
             sexual_orientation=profile["sexual_orientation"],
             fame_rating=fresh_fame if fresh_fame is not None else profile["fame_rating"],
+            is_online=profile["is_online"] or False,
+            last_seen=profile["last_seen"],
+            location_label=profile["location_label"],
             tags=tag_names,
             photos=photos,
             is_liked_by_me=is_liked_by_me,
             liked_me=liked_me,
+            views_count=views_count,
+            likes_count=likes_count,
         )
 
     async def like(self, liker_id: int, liked_id: int) -> LikeResponse:

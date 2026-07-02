@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Check, Sparkle } from 'lucide-react';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
 import { setProfile, getAllTags } from '../../api/profilesApi';
@@ -64,7 +65,7 @@ function ProfileSetupPage() {
       fontFamily: 'DM Sans, sans-serif',
     }}>
       {children}
-      {selected && <span style={{ fontSize: 16 }}>✓</span>}
+      {selected && <Check size={16}/>}
     </button>
   );
 
@@ -172,8 +173,9 @@ function ProfileSetupPage() {
               fontSize: 12,
               color: 'var(--ink3)',
               border: '1px solid var(--sand)',
+              display: 'flex', alignItems: 'center', gap: 6,
             }}>
-              ✦ Tip: Keep it honest. The best bios are 1–2 sentences that actually sound like you.
+              <Sparkle size={13} style={{ flexShrink: 0 }}/> Tip: Keep it honest. The best bios are 1–2 sentences that actually sound like you.
             </div>
           </div>
         )}

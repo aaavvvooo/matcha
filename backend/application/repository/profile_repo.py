@@ -59,11 +59,14 @@ class ProfileRepository:
                 u.full_name,
                 u.username,
                 u.email,
+                u.is_online,
+                u.last_seen,
                 up.bio,
                 up.birth_date,
                 up.gender,
                 up.sexual_orientation,
                 up.profile_picture_id,
+                up.location_label,
                 COALESCE(up.fame_rating, 0) AS fame_rating
             FROM users u
             LEFT JOIN user_profiles up ON up.user_id = u.id

@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { MessageCircle, Bell, Sparkle, Eye, PartyPopper, HeartCrack } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext';
 import { useChat } from '../../context/ChatContext';
 import Avatar from '../../components/ui/Avatar';
 
 const NOTIF_ICONS = {
-  like:    '✦',
-  view:    '👁',
-  match:   '🎉',
-  message: '💬',
-  unlike:  '💔',
+  like:    <Sparkle size={16} fill="currentColor"/>,
+  view:    <Eye size={16}/>,
+  match:   <PartyPopper size={16}/>,
+  message: <MessageCircle size={16}/>,
+  unlike:  <HeartCrack size={16}/>,
 };
 
 function timeAgo(dateStr) {
@@ -68,9 +69,9 @@ export default function MatchesPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {(conversations || []).length === 0 ? (
               <div style={{ textAlign: 'center', padding: '48px 20px' }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>💬</div>
+                <MessageCircle size={44} strokeWidth={1.5} color="var(--sand)" style={{ marginBottom: 12 }}/>
                 <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, color: 'var(--ink2)', marginBottom: 8 }}>No conversations yet</div>
-                <div style={{ fontSize: 14, color: 'var(--ink4)' }}>Like someone and wait for a match to start chatting ✦</div>
+                <div style={{ fontSize: 14, color: 'var(--ink4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>Like someone and wait for a match to start chatting <Sparkle size={13}/></div>
               </div>
             ) : (
               conversations.map(c => {
@@ -110,12 +111,12 @@ export default function MatchesPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {notifications.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '48px 20px' }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>🔔</div>
+                <Bell size={44} strokeWidth={1.5} color="var(--sand)" style={{ marginBottom: 12 }}/>
                 <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, color: 'var(--ink2)' }}>No notifications yet</div>
               </div>
             ) : (
               notifications.map(n => {
-                const icon = NOTIF_ICONS[n.type] || '✦';
+                const icon = NOTIF_ICONS[n.type] || <Sparkle size={16}/>;
                 const name = n.from_username || 'Someone';
                 const text = n.type === 'like' ? 'liked your profile'
                   : n.type === 'view' ? 'viewed your profile'
@@ -136,7 +137,7 @@ export default function MatchesPage() {
                       width: 40, height: 40, borderRadius: '50%',
                       background: n.is_read ? 'var(--cream3)' : 'var(--spice)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 16, flexShrink: 0,
+                      color: n.is_read ? 'var(--ink3)' : '#fff', flexShrink: 0,
                     }}>{icon}</div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 14, color: 'var(--ink)' }}>

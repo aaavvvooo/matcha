@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { Sparkle } from 'lucide-react';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
 import Avatar from '../../components/ui/Avatar';
@@ -70,11 +71,11 @@ function HomePage() {
         {/* Left: text */}
         <div className="anim-up" style={{ flex: 1, maxWidth: 480 }}>
           <div style={{
-            display: 'inline-block', padding: '5px 14px', borderRadius: 'var(--r-full)',
+            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 14px', borderRadius: 'var(--r-full)',
             background: 'var(--cream2)', border: '1.5px solid var(--sand)',
             fontSize: 12, color: 'var(--ink3)', marginBottom: 20, fontStyle: 'italic',
           }}>
-            Because love, too, can be industrialized. ✦
+            Because love, too, can be industrialized. <Sparkle size={12} fill="var(--ink3)"/>
           </div>
 
           <div style={{
@@ -130,8 +131,8 @@ function HomePage() {
               <div style={{ fontSize: 12, color: 'var(--ink3)', lineHeight: 1.5, marginBottom: 10 }}>{c.bio}</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <FameMeter score={c.fame}/>
-                <div style={{ padding: '5px 12px', borderRadius: 'var(--r-full)', background: 'var(--spice)', color: '#fff', fontSize: 11, fontWeight: 500 }}>
-                  Like ✦
+                <div style={{ padding: '5px 12px', borderRadius: 'var(--r-full)', background: 'var(--spice)', color: '#fff', fontSize: 11, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  Like <Sparkle size={11} fill="#fff"/>
                 </div>
               </div>
             </div>

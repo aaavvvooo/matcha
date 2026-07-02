@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Search as SearchIcon } from 'lucide-react';
 import { search } from '../../api/profilesApi';
 import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
@@ -120,7 +121,7 @@ export default function SearchPage() {
 
             {results.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>🔍</div>
+                <SearchIcon size={36} strokeWidth={1.5} color="var(--sand)" style={{ marginBottom: 12 }}/>
                 <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, color: 'var(--ink2)' }}>No matches found</div>
                 <div style={{ fontSize: 14, color: 'var(--ink4)', marginTop: 8 }}>Try broadening your filters</div>
               </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Sparkle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import MatchaCup from '../../components/ui/MatchaCup';
@@ -41,8 +42,8 @@ function ChatListView({ conversations, onSelect, loading }) {
         {conversations.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, paddingTop: 48 }}>
             <MatchaCup size={56} mood="shy" animate={true}/>
-            <div style={{ fontSize: 13, color: 'var(--ink4)', fontStyle: 'italic' }}>
-              Like someone and wait for a match to start chatting ✦
+            <div style={{ fontSize: 13, color: 'var(--ink4)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 4 }}>
+              Like someone and wait for a match to start chatting <Sparkle size={12}/>
             </div>
           </div>
         ) : (

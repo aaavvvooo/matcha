@@ -10,14 +10,19 @@ class UserProfileResponse(BaseModel):
     full_name: str
     username: str
     bio: Optional[str] = None
+    age: Optional[int] = None
     gender: Optional[str] = None
     sexual_orientation: Optional[str] = None
     fame_rating: float = 0.0
     is_online: bool = False
+    last_seen: Optional[datetime] = None
+    location_label: Optional[str] = None
     tags: list[str] = []
     photos: list[PhotoResponse] = []
     is_liked_by_me: bool = False
     liked_me: bool = False
+    views_count: int = 0
+    likes_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 

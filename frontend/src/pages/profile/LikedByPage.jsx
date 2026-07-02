@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Sparkle } from 'lucide-react';
 import { getLikes } from '../../api/usersApi';
 import { useAuth } from '../../context/AuthContext';
 import Avatar from '../../components/ui/Avatar';
@@ -52,7 +53,7 @@ export default function LikedByPage() {
                 <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{l.full_name || l.username}</div>
                 <div style={{ fontSize: 12, color: 'var(--ink4)' }}>@{l.username}</div>
               </div>
-              <div style={{ fontSize: 18 }}>✦</div>
+              <Sparkle size={18} color="var(--spice)" fill="var(--spice)"/>
             </div>
           ))}
         </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getMyProfile, updateProfile, getAllTags, uploadPhoto, deletePhotos, setProfilePic } from '../../api/profilesApi';
 import { updateMe } from '../../api/usersApi';
@@ -156,10 +157,13 @@ export default function ProfileEditPage() {
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '16px 20px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, fontWeight: 700, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <MatchaCup size={28} mood="happy" animate={false}/> My profile
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={() => navigate(`/profile/${user.id}`)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink3)', lineHeight: 1 }}>←</button>
+          <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, fontWeight: 700, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <MatchaCup size={28} mood="happy" animate={false}/> Edit profile
+          </div>
         </div>
-        <Btn variant="ghost" onClick={handleLogout} style={{ fontSize: 13, color: 'var(--ink4)' }}>Sign out</Btn>
+        <Btn variant="ghost" onClick={handleLogout} className="mobile-only" style={{ fontSize: 13, color: 'var(--ink4)' }}>Sign out</Btn>
       </div>
 
       {loading ? (
@@ -312,7 +316,7 @@ export default function ProfileEditPage() {
           )}
 
           <Btn onClick={handleSave} style={{ width: '100%' }}>
-            {saved ? '✓ Saved!' : 'Save changes'}
+            {saved ? <><Check size={16}/> Saved!</> : 'Save changes'}
           </Btn>
         </div>
       )}

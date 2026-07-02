@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Sparkle, Bell } from 'lucide-react';
 import { browse } from '../../api/profilesApi';
 import { likeUser, unlikeUser } from '../../api/usersApi';
 import { useNotifications } from '../../context/NotificationContext';
@@ -66,7 +67,8 @@ function ProfileCard({ profile, onLike, onPreview, isPreview, drag, isDragging, 
             border: '2.5px solid var(--matcha)', color: 'var(--matcha)',
             fontSize: 18, fontWeight: 700, fontFamily: 'Playfair Display, serif', fontStyle: 'italic',
             transform: 'rotate(-8deg)', background: 'rgba(255,255,255,.85)',
-          }}>Like ✦</div>
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>Like <Sparkle size={16} fill="var(--matcha)"/></div>
         )}
         {drag.x < -40 && (
           <div style={{
@@ -124,7 +126,7 @@ function ProfileCard({ profile, onLike, onPreview, isPreview, drag, isDragging, 
           color: 'var(--ink3)', fontSize: 13, cursor: 'pointer',
           fontFamily: 'DM Sans, sans-serif',
         }}>···</button>
-        <Btn variant="matcha" onClick={e => { e.stopPropagation(); onLike(true); }} style={{ flex: 1, padding: '10px', fontSize: 13 }}>Like ✦</Btn>
+        <Btn variant="matcha" onClick={e => { e.stopPropagation(); onLike(true); }} style={{ flex: 1, padding: '10px', fontSize: 13 }}>Like <Sparkle size={13} fill="currentColor"/></Btn>
       </div>
     </div>
   );
@@ -199,15 +201,15 @@ function RightPanel({ profile, onProfile, onLike, myTags = [] }) {
 
         {shared.length > 0 && (
           <div style={{ padding: '11px 14px', borderRadius: 'var(--r-md)', background: '#f0f7ee', border: '1.5px solid #c8dfc4', marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: 'var(--matcha2)', fontWeight: 500 }}>
-              ✦ {shared.length} shared interest{shared.length > 1 ? 's' : ''}: {shared.map(t => `#${t}`).join(', ')}
+            <div style={{ fontSize: 12, color: 'var(--matcha2)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Sparkle size={12} fill="var(--matcha2)"/> {shared.length} shared interest{shared.length > 1 ? 's' : ''}: {shared.map(t => `#${t}`).join(', ')}
             </div>
           </div>
         )}
 
         <div style={{ display: 'flex', gap: 10, marginTop: 'auto' }}>
           <Btn variant="secondary" onClick={() => onProfile(profile)} style={{ flex: 1 }}>Full profile</Btn>
-          <Btn variant="matcha" onClick={() => onLike(true)} style={{ flex: 1 }}>Like ✦</Btn>
+          <Btn variant="matcha" onClick={() => onLike(true)} style={{ flex: 1 }}>Like <Sparkle size={14} fill="currentColor"/></Btn>
         </div>
       </div>
     </div>
@@ -332,8 +334,8 @@ export default function BrowsePage() {
             <Chip key={s} label={s} active={sortBy === s} onClick={() => setSortBy(s)}/>
           ))}
         </div>
-        <button onClick={() => navigate('/matches')} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-          <span style={{ fontSize: 22, lineHeight: 1 }}>🔔</span>
+        <button onClick={() => navigate('/matches')} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
+          <Bell size={22} strokeWidth={1.75} color="var(--ink3)"/>
           {unreadCount > 0 && (
             <div style={{
               position: 'absolute', top: 0, right: 0,

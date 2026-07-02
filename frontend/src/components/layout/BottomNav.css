@@ -1,0 +1,79 @@
+.bottom-nav {
+  display: flex;
+  border-top: 1.5px solid var(--sand);
+  background: var(--white);
+  flex-shrink: 0;
+}
+
+.side-nav {
+  display: none;
+}
+
+@media (min-width: 860px) {
+  .bottom-nav {
+    display: none;
+  }
+
+  .side-nav {
+    display: flex;
+    flex-direction: column;
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--white);
+    border-right: 1.5px solid var(--sand);
+    padding: 20px 12px;
+    gap: 4px;
+  }
+
+  .side-nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ink);
+    padding: 4px 10px 24px;
+  }
+
+  .side-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    border-radius: var(--r-sm);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--ink3);
+    text-align: left;
+    position: relative;
+    transition: background .15s, color .15s;
+  }
+
+  .side-nav-item:hover {
+    background: var(--cream);
+  }
+
+  .side-nav-item.active {
+    background: var(--cream2);
+    color: var(--spice);
+    font-weight: 600;
+  }
+
+  .side-nav-item .icon {
+    flex-shrink: 0;
+  }
+
+  .side-nav-signout {
+    margin-top: auto;
+    color: var(--ink4);
+  }
+
+  .side-nav-signout:hover {
+    background: var(--cream);
+    color: var(--rose);
+  }
+}
