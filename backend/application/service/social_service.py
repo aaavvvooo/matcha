@@ -4,7 +4,13 @@ from application.database import Database
 from application.repository.social_repo import SocialRepository
 from application.repository.profile_repo import ProfileRepository
 from application.repository.user_repo import UserRepository
-from application.schema.users_schemas import UserProfileResponse, LikeResponse
+from application.schema.users_schemas import (
+    UserProfileResponse,
+    LikeResponse,
+    ViewerResponse,
+    SimpleUserResponse,
+)
+from application.schema.profile_schemas import PhotoResponse
 
 
 class SocialService:
@@ -24,6 +30,7 @@ class SocialService:
             await self.social_repo.recalculate_fame(user_id)
 
         photos_rows = await self.profile_repo.get_user_photos(user_id)
+        photos = [PhotoResponse(**dict(row)) for row in photos_rows]
         tag_names = await self.profile_repo.get_user_tag_names(user_id)
         is_liked_by_me = await self.social_repo.has_liked(viewer_id, user_id)
         liked_me = await self.social_repo.has_liked(user_id, viewer_id)
@@ -40,7 +47,7 @@ class SocialService:
             sexual_orientation=profile["sexual_orientation"],
             fame_rating=fresh_fame if fresh_fame is not None else profile["fame_rating"],
             tags=tag_names,
-            photos=photos_rows,
+            photos=photos,
             is_liked_by_me=is_liked_by_me,
             liked_me=liked_me,
         )
@@ -82,9 +89,11 @@ class SocialService:
     async def get_viewers(self, requester_id: int, user_id: int):
         if requester_id != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
-        return await self.social_repo.get_viewers(user_id)
+        rows = await self.social_repo.get_viewers(user_id)
+        return [ViewerResponse(**dict(row)) for row in rows]
 
     async def get_likers(self, requester_id: int, user_id: int):
         if requester_id != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
-        return await self.social_repo.get_likers(user_id)
+        rows = await self.social_repo.get_likers(user_id)
+        return [SimpleUserResponse(**dict(row)) for row in rows]

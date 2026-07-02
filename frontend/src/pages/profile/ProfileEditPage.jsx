@@ -232,7 +232,6 @@ export default function ProfileEditPage() {
                 );
               })}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--ink4)', marginTop: 8 }}>First photo is your profile picture</div>
           </Section>
 
           <Section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
