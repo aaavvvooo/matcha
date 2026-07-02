@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 
@@ -38,3 +38,20 @@ class SimpleUserResponse(BaseModel):
 
 class ViewerResponse(SimpleUserResponse):
     viewed_at: datetime
+
+
+class UpdateMeRequest(BaseModel):
+    full_name: Optional[str] = Field(None, max_length=100)
+    username: Optional[str] = Field(None, max_length=50)
+    email: Optional[EmailStr] = None
+
+
+class MeResponse(BaseModel):
+    id: int
+    full_name: str
+    username: str
+    email: EmailStr
+    is_validated: bool
+    email_verification_sent: bool = False
+
+    model_config = ConfigDict(from_attributes=True)

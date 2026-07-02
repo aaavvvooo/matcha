@@ -1,6 +1,5 @@
 import client from './client'
 
-export const getMe = () => client.get('/users/me').then(r => r.data)
 export const updateMe = (data) => client.patch('/users/me', data).then(r => r.data)
 export const getUser = (id) => client.get(`/users/${id}`).then(r => r.data)
 export const getViews = (id) => client.get(`/users/${id}/views`).then(r => r.data)

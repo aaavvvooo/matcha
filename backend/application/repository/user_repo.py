@@ -44,20 +44,22 @@ class UserRepository:
         user = await self.db.fetch_one(query, username)
         return user
 
-    async def update_user(self, data: dict, transaction: Optional[Connection] = None):
-        set_clauses = [f"{column} = ${i + 1}" for i, column in enumerate(data.keys())]
+    async def update_user(
+        self, user_id: int, data: dict, transaction: Optional[Connection] = None
+    ):
+        set_clauses = [f"{column} = ${i + 2}" for i, column in enumerate(data.keys())]
         set_clause = ", ".join(set_clauses)
         query = f"""
             UPDATE users
             SET {set_clause}
             WHERE id = $1
-            RETURNING id, full_name, username, email, created_at
+            RETURNING id, full_name, username, email, created_at, is_validated
         """
         try:
             if not transaction:
-                user = await self.db.execute(query, *data.values())
+                user = await self.db.fetch_one(query, user_id, *data.values())
             else:
-                user = await transaction.fetchrow(query, *data.values())
+                user = await transaction.fetchrow(query, user_id, *data.values())
             return user
         except Exception as e:
             print(e)

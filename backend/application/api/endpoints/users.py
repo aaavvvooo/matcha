@@ -1,18 +1,46 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
 from application.schema.users_schemas import (
     UserProfileResponse,
     LikeResponse,
     SimpleUserResponse,
     ViewerResponse,
+    UpdateMeRequest,
+    MeResponse,
 )
 from application.database import get_db, Database
 from application.service.social_service import SocialService
+from application.service.auth_service import AuthService
 from application.utils import get_current_user
 from application.limiter import limiter
 
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+@router.patch("/me", response_model=MeResponse)
+@limiter.limit("10/minute")
+async def update_me(
+    request: Request,
+    body: UpdateMeRequest,
+    background_tasks: BackgroundTasks,
+    db: Database = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    from application.api.endpoints.auth import _get_email_client, _send_with_retry
+
+    user_id = current_user["user"]["id"]
+    service = AuthService(db)
+    response, verification_token = await service.update_me(user_id, body)
+    if verification_token:
+        background_tasks.add_task(
+            _send_with_retry,
+            _get_email_client().send_verification_email,
+            response.email,
+            response.username,
+            verification_token,
+        )
+    return response
 
 
 @router.get("/{user_id}", response_model=UserProfileResponse)

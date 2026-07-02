@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getMyProfile, updateProfile, getAllTags, uploadPhoto, deletePhotos, setProfilePic } from '../../api/profilesApi';
+import { updateMe } from '../../api/usersApi';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
@@ -37,6 +38,7 @@ export default function ProfileEditPage() {
     gender: '', sexual_orientation: '', bio: '', tags: [],
   });
   const [saved, setSaved] = useState(false);
+  const [emailChangeNotice, setEmailChangeNotice] = useState(false);
   const [loading, setLoading] = useState(true);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState(null);
@@ -128,6 +130,17 @@ export default function ProfileEditPage() {
         sexual_orientation: form.sexual_orientation,
         tags: form.tags ?? [],
       });
+
+      const accountUpdates = {};
+      if (form.full_name !== (profile?.full_name || '')) accountUpdates.full_name = form.full_name;
+      if (form.email !== (profile?.email || '')) accountUpdates.email = form.email;
+      if (Object.keys(accountUpdates).length > 0) {
+        const updated = await updateMe(accountUpdates);
+        if (updated.email_verification_sent) {
+          setEmailChangeNotice(true);
+        }
+      }
+
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {}
@@ -289,6 +302,15 @@ export default function ProfileEditPage() {
               ))}
             </div>
           </Section>
+
+          {emailChangeNotice && (
+            <div style={{
+              fontSize: 12, color: 'var(--ink3)', fontStyle: 'italic',
+              textAlign: 'center', marginBottom: 10,
+            }}>
+              A verification link was sent to your new email. Please confirm it to keep using your account.
+            </div>
+          )}
 
           <Btn onClick={handleSave} style={{ width: '100%' }}>
             {saved ? '✓ Saved!' : 'Save changes'}
