@@ -5,7 +5,6 @@ import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
 import LocationPicker from '../../components/ui/LocationPicker';
 import { setProfile, getAllTags, uploadPhoto, setProfilePic } from '../../api/profilesApi';
-import { useAuth } from '../../context/AuthContext';
 
 const STEPS = [
   { title: 'When were you born?', subtitle: 'You must be 18 or older to use Matcha.' },
@@ -29,7 +28,6 @@ function ProfileSetupPage() {
   const [photoUploaded, setPhotoUploaded] = useState(false);
   const [photoError, setPhotoError] = useState(null);
   const navigate = useNavigate();
-  const { user } = useAuth();
 
   const locationStep = STEPS.length - 2;
   const photoStep = STEPS.length - 1;

@@ -61,6 +61,7 @@ export default function ProfileEditPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewPhoto, previewIdx]);
 
   useEffect(() => {
@@ -80,6 +81,7 @@ export default function ProfileEditPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));

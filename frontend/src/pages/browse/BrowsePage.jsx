@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkle, Bell } from 'lucide-react';
 import { browse } from '../../api/profilesApi';
-import { likeUser, unlikeUser } from '../../api/usersApi';
+import { likeUser } from '../../api/usersApi';
 import { useNotifications } from '../../context/NotificationContext';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
@@ -248,7 +248,6 @@ function MatchOverlay({ profile, onChat, onClose }) {
 }
 
 export default function BrowsePage() {
-  const [profiles, setProfiles] = useState([]);
   const [queue, setQueue] = useState([]);
   const [sortBy, setSortBy] = useState('proximity');
   const [previewProfile, setPreviewProfile] = useState(null);
@@ -264,7 +263,6 @@ export default function BrowsePage() {
   useEffect(() => {
     browse({ limit: 20, offset: 0 })
       .then(data => {
-        setProfiles(data);
         setQueue(data);
       })
       .catch(() => {})

@@ -66,6 +66,7 @@ export default function ProfileViewPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewOpen, photoIdx, sortedPhotos.length]);
 
   async function toggleLike() {

@@ -26,7 +26,7 @@ function timeAgo(dateStr) {
 
 export default function MatchesPage() {
   const [tab, setTab] = useState('chats');
-  const { notifications, unreadCount, clearUnread } = useNotifications();
+  const { notifications, clearUnread } = useNotifications();
   const { conversations, loadConversations } = useChat();
   const navigate = useNavigate();
 

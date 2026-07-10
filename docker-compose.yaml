@@ -88,7 +88,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: react_frontend
     env_file:
       - .env
@@ -96,8 +96,9 @@ services:
       REACT_APP_API_URL: ${REACT_APP_API_URL}
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
+      FAST_REFRESH: "true"
     ports:
-      - "3000:80"
+      - "3000:3000"
     depends_on:
       - backend
     volumes:
