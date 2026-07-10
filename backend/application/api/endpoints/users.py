@@ -7,6 +7,7 @@ from application.schema.users_schemas import (
     ViewerResponse,
     UpdateMeRequest,
     MeResponse,
+    BlockResponse,
 )
 from application.database import get_db, Database
 from application.service.social_service import SocialService
@@ -41,6 +42,17 @@ async def update_me(
             verification_token,
         )
     return response
+
+
+@router.get("/me/blocks", response_model=list[SimpleUserResponse])
+@limiter.limit("30/minute")
+async def get_blocked_users(
+    request: Request,
+    db: Database = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    service = SocialService(db)
+    return await service.get_blocked_users(current_user["user"]["id"])
 
 
 @router.get("/{user_id}", response_model=UserProfileResponse)
@@ -82,7 +94,7 @@ async def unlike_user(
     return await service.unlike(liker_id, user_id)
 
 
-@router.post("/{user_id}/block")
+@router.post("/{user_id}/block", response_model=BlockResponse)
 @limiter.limit("30/minute")
 async def block_user(
     request: Request,
@@ -93,6 +105,19 @@ async def block_user(
     blocker_id = current_user["user"]["id"]
     service = SocialService(db)
     return await service.block(blocker_id, user_id)
+
+
+@router.delete("/{user_id}/block", response_model=BlockResponse)
+@limiter.limit("30/minute")
+async def unblock_user(
+    request: Request,
+    user_id: int,
+    db: Database = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    blocker_id = current_user["user"]["id"]
+    service = SocialService(db)
+    return await service.unblock(blocker_id, user_id)
 
 
 @router.post("/{user_id}/report")

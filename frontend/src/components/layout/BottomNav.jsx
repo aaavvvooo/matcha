@@ -21,12 +21,12 @@ function BottomNav() {
     { path: '/search',                icon: Search, label: 'Search' },
     { path: '/matches',               icon: Heart, label: 'Matches' },
     { path: '/chat',                  icon: MessageCircle, label: 'Chat' },
-    { path: user ? `/profile/${user.id}` : '/profile/edit', icon: CircleUser, label: 'Profile' },
+    { path: user ? `/profile/${user.id}` : '/profile/settings', icon: CircleUser, label: 'Profile' },
   ];
 
   const isActive = (item) => location.pathname === item.path ||
     (item.path === '/chat' && location.pathname.startsWith('/chat')) ||
-    (item.label === 'Profile' && location.pathname === '/profile/edit');
+    (item.label === 'Profile' && location.pathname === '/profile/settings');
 
   return (
     <>

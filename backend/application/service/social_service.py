@@ -37,9 +37,16 @@ class SocialService:
         if not profile:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+        is_blocked_by_viewer = False
+        is_blocking_viewer = False
         if viewer_id != user_id:
-            await self.social_repo.record_view(viewer_id, user_id)
-            await self.social_repo.recalculate_fame(user_id)
+            is_blocked_by_viewer = await self.social_repo.is_blocked(viewer_id, user_id)
+            is_blocking_viewer = await self.social_repo.is_blocked(user_id, viewer_id)
+            if is_blocking_viewer:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not found")
+            if not is_blocked_by_viewer:
+                await self.social_repo.record_view(viewer_id, user_id)
+                await self.social_repo.recalculate_fame(user_id)
 
         photos_rows = await self.profile_repo.get_user_photos(user_id)
         photos = [PhotoResponse(**dict(row)) for row in photos_rows]
@@ -70,6 +77,7 @@ class SocialService:
             liked_me=liked_me,
             views_count=views_count,
             likes_count=likes_count,
+            is_blocked_by_me=is_blocked_by_viewer,
         )
 
     async def like(self, liker_id: int, liked_id: int) -> LikeResponse:
@@ -78,6 +86,14 @@ class SocialService:
         target = await self.profile_repo.get_profile(liked_id)
         if not target:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        if await self.social_repo.is_blocked_either_way(liker_id, liked_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not found")
+        photo_count = await self.profile_repo.count_photos(liker_id)
+        if photo_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Add a profile picture before liking other users",
+            )
 
         await self.social_repo.like_user(liker_id, liked_id)
         await self.social_repo.recalculate_fame(liked_id)
@@ -98,7 +114,20 @@ class SocialService:
         if blocker_id == blocked_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot block yourself")
         await self.social_repo.block_user(blocker_id, blocked_id)
+        await self.social_repo.unlike_user(blocker_id, blocked_id)
+        await self.social_repo.unlike_user(blocked_id, blocker_id)
+        await self.social_repo.remove_connection(blocker_id, blocked_id)
+        await self.social_repo.recalculate_fame(blocker_id)
+        await self.social_repo.recalculate_fame(blocked_id)
         return {"blocked": True}
+
+    async def unblock(self, blocker_id: int, blocked_id: int):
+        await self.social_repo.unblock_user(blocker_id, blocked_id)
+        return {"blocked": False}
+
+    async def get_blocked_users(self, user_id: int):
+        rows = await self.social_repo.get_blocked_users(user_id)
+        return [SimpleUserResponse(**dict(row)) for row in rows]
 
     async def report(self, reporter_id: int, reported_id: int):
         if reporter_id == reported_id:

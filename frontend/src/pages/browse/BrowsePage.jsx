@@ -256,6 +256,7 @@ export default function BrowsePage() {
   const [drag, setDrag] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [likeError, setLikeError] = useState(null);
   const dragRef = useRef(null);
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
@@ -289,7 +290,14 @@ export default function BrowsePage() {
           setMatchProfile(currentProfile);
           setTimeout(() => setMatchProfile(null), 3000);
         }
-      } catch {}
+      } catch (err) {
+        const msg = err?.response?.data?.detail;
+        if (msg) {
+          setLikeError(msg);
+          setTimeout(() => setLikeError(null), 4000);
+        }
+        return;
+      }
     }
     setQueue(q => q.filter(p => p.user_id !== currentProfile.user_id));
     setDrag({ x: 0, y: 0 });
@@ -457,6 +465,18 @@ export default function BrowsePage() {
           />
         </div>
       </div>
+
+      {likeError && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--rose)', color: '#fff', padding: '12px 20px',
+          borderRadius: 'var(--r-sm)', fontSize: 14, fontWeight: 500,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.25)', zIndex: 2000,
+          maxWidth: '90vw', textAlign: 'center', pointerEvents: 'none',
+        }}>
+          {likeError}
+        </div>
+      )}
     </div>
   );
 }

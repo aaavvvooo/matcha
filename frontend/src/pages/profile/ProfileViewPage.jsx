@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Ban, Sparkle } from 'lucide-react';
-import { getUser, likeUser, unlikeUser, blockUser, reportUser } from '../../api/usersApi';
+import { Ban, Sparkle, UserX, Flag } from 'lucide-react';
+import { getUser, likeUser, unlikeUser, blockUser, unblockUser, reportUser } from '../../api/usersApi';
 import { useAuth } from '../../context/AuthContext';
 import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
@@ -24,19 +24,31 @@ export default function ProfileViewPage() {
   const [profile, setProfile] = useState(null);
   const [liked, setLiked] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [blockedByThem, setBlockedByThem] = useState(false);
   const [loading, setLoading] = useState(true);
   const [photoIdx, setPhotoIdx] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [confirmBlockOpen, setConfirmBlockOpen] = useState(false);
+  const [confirmUnblockOpen, setConfirmUnblockOpen] = useState(false);
+  const [confirmReportOpen, setConfirmReportOpen] = useState(false);
+  const [reportAlsoBlock, setReportAlsoBlock] = useState(true);
+  const [reported, setReported] = useState(false);
+  const [likeError, setLikeError] = useState(null);
 
   useEffect(() => {
     setLoading(true);
     setPhotoIdx(0);
+    setBlockedByThem(false);
+    setReported(false);
     getUser(id)
       .then(data => {
         setProfile(data);
         setLiked(data.is_liked_by_me || false);
+        setBlocked(data.is_blocked_by_me || false);
       })
-      .catch(() => {})
+      .catch(err => {
+        if (err?.response?.status === 403) setBlockedByThem(true);
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -64,28 +76,56 @@ export default function ProfileViewPage() {
         await likeUser(id);
         setLiked(true);
       }
-    } catch {}
-  }
-
-  async function handleBlock() {
-    if (window.confirm('Block this user?')) {
-      await blockUser(id).catch(() => {});
-      setBlocked(true);
+    } catch (err) {
+      const msg = err?.response?.data?.detail;
+      if (msg) {
+        setLikeError(msg);
+        setTimeout(() => setLikeError(null), 4000);
+      }
     }
   }
 
-  async function handleReport() {
-    await reportUser(id).catch(() => {});
+  async function confirmBlock() {
+    setConfirmBlockOpen(false);
+    try {
+      await blockUser(id);
+      setBlocked(true);
+      setLiked(false);
+    } catch {}
   }
 
-  if (blocked) {
+  async function confirmUnblock() {
+    setConfirmUnblockOpen(false);
+    try {
+      await unblockUser(id);
+      setBlocked(false);
+      setReported(false);
+    } catch {}
+  }
+
+  async function confirmReport() {
+    setConfirmReportOpen(false);
+    try {
+      await reportUser(id);
+      if (reportAlsoBlock) {
+        await blockUser(id);
+        setLiked(false);
+        setBlocked(true);
+        setReported(true);
+      } else {
+        setReported(true);
+        setTimeout(() => setReported(false), 4000);
+      }
+    } catch {}
+  }
+
+  if (blockedByThem) {
     return (
       <div style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 40 }}>
-        <Ban size={48} strokeWidth={1.5} color="var(--rose)"/>
+        <UserX size={48} strokeWidth={1.5} color="var(--ink4)"/>
         <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, color: 'var(--ink2)', textAlign: 'center' }}>
-          You've blocked {profile?.full_name || profile?.username || 'this user'}
+          This profile isn't available
         </div>
-        <div style={{ fontSize: 14, color: 'var(--ink4)', textAlign: 'center' }}>They won't appear in search or send you notifications.</div>
         <Btn variant="secondary" onClick={() => navigate(-1)}>← Go back</Btn>
       </div>
     );
@@ -100,6 +140,63 @@ export default function ProfileViewPage() {
   }
 
   const name = profile.full_name || profile.username || 'Unknown';
+
+  if (blocked) {
+    return (
+      <div style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 40 }}>
+        <Ban size={48} strokeWidth={1.5} color="var(--rose)"/>
+        <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, color: 'var(--ink2)', textAlign: 'center' }}>
+          You've blocked {name}
+        </div>
+        <div style={{ fontSize: 14, color: 'var(--ink4)', textAlign: 'center' }}>They won't appear in search or send you notifications.</div>
+        {reported && (
+          <div style={{
+            fontSize: 13, color: 'var(--matcha2)', textAlign: 'center',
+            background: '#f0f7ee', border: '1.5px solid #c8dfc4',
+            borderRadius: 'var(--r-sm)', padding: '8px 14px',
+          }}>
+            Thanks — this profile was also reported for review.
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Btn variant="secondary" onClick={() => navigate(-1)}>← Go back</Btn>
+          <Btn variant="ghost" onClick={() => setConfirmUnblockOpen(true)}>Unblock</Btn>
+        </div>
+
+        {confirmUnblockOpen && (
+          <div
+            onClick={() => setConfirmUnblockOpen(false)}
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+              zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: 'var(--white)', borderRadius: 'var(--r-md)', padding: '24px 22px',
+                maxWidth: 320, width: '100%', display: 'flex', flexDirection: 'column',
+                alignItems: 'center', gap: 14, textAlign: 'center', boxShadow: 'var(--shadow-lg)',
+              }}
+            >
+              <UserX size={36} strokeWidth={1.5} color="var(--ink3)"/>
+              <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 19, fontWeight: 700, color: 'var(--ink)' }}>
+                Unblock {name}?
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--ink4)' }}>
+                They'll be able to view your profile, like you, and message you again.
+              </div>
+              <div style={{ display: 'flex', gap: 10, width: '100%', marginTop: 4 }}>
+                <Btn variant="secondary" onClick={() => setConfirmUnblockOpen(false)} style={{ flex: 1 }}>Cancel</Btn>
+                <Btn variant="primary" onClick={confirmUnblock} style={{ flex: 1 }}>Unblock</Btn>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const tags = profile.tags || [];
   const currentPhoto = sortedPhotos[photoIdx];
   const infoLine = [profile.age ? `${profile.age}` : null, profile.location_label || null, profile.distance_km ? `${profile.distance_km.toFixed(1)}km away` : null].filter(Boolean).join(' · ');
@@ -112,11 +209,11 @@ export default function ProfileViewPage() {
         <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink3)', lineHeight: 1 }}>←</button>
         <div style={{ display: 'flex', gap: 8 }}>
           {isMe ? (
-            <Btn variant="secondary" onClick={() => navigate('/profile/edit')} style={{ fontSize: 12, padding: '6px 12px' }}>Edit profile</Btn>
+            <Btn variant="secondary" onClick={() => navigate('/profile/settings')} style={{ fontSize: 12, padding: '6px 12px' }}>Settings</Btn>
           ) : (
             <>
-              <Btn variant="ghost" onClick={handleReport} style={{ fontSize: 12, padding: '6px 12px' }}>Report</Btn>
-              <Btn variant="danger" onClick={handleBlock} style={{ fontSize: 12, padding: '6px 12px' }}>Block</Btn>
+              <Btn variant="ghost" onClick={() => setConfirmReportOpen(true)} style={{ fontSize: 12, padding: '6px 12px' }}>Report</Btn>
+              <Btn variant="danger" onClick={() => setConfirmBlockOpen(true)} style={{ fontSize: 12, padding: '6px 12px' }}>Block</Btn>
             </>
           )}
         </div>
@@ -325,6 +422,101 @@ export default function ProfileViewPage() {
               fontSize: 14, cursor: 'pointer',
             }}
           >Close</button>
+        </div>
+      )}
+
+      {confirmBlockOpen && (
+        <div
+          onClick={() => setConfirmBlockOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+            zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--white)', borderRadius: 'var(--r-md)', padding: '24px 22px',
+              maxWidth: 320, width: '100%', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', gap: 14, textAlign: 'center', boxShadow: 'var(--shadow-lg)',
+            }}
+          >
+            <Ban size={36} strokeWidth={1.5} color="var(--rose)"/>
+            <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 19, fontWeight: 700, color: 'var(--ink)' }}>
+              Block {name}?
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--ink4)' }}>
+              They won't be able to view your profile, like you, or message you until you unblock them.
+            </div>
+            <div style={{ display: 'flex', gap: 10, width: '100%', marginTop: 4 }}>
+              <Btn variant="secondary" onClick={() => setConfirmBlockOpen(false)} style={{ flex: 1 }}>Cancel</Btn>
+              <Btn variant="danger" onClick={confirmBlock} style={{ flex: 1 }}>Block</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {likeError && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--rose)', color: '#fff', padding: '12px 20px',
+          borderRadius: 'var(--r-sm)', fontSize: 14, fontWeight: 500,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.25)', zIndex: 2000,
+          maxWidth: '90vw', textAlign: 'center', pointerEvents: 'none',
+        }}>
+          {likeError}
+        </div>
+      )}
+
+      {reported && !blocked && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--ink2)', color: '#fff', padding: '12px 20px',
+          borderRadius: 'var(--r-sm)', fontSize: 14, fontWeight: 500,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.25)', zIndex: 2000,
+          maxWidth: '90vw', textAlign: 'center', pointerEvents: 'none',
+        }}>
+          Thanks — {name} has been reported.
+        </div>
+      )}
+
+      {confirmReportOpen && (
+        <div
+          onClick={() => setConfirmReportOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+            zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--white)', borderRadius: 'var(--r-md)', padding: '24px 22px',
+              maxWidth: 340, width: '100%', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', gap: 14, textAlign: 'center', boxShadow: 'var(--shadow-lg)',
+            }}
+          >
+            <Flag size={36} strokeWidth={1.5} color="var(--rose)"/>
+            <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 19, fontWeight: 700, color: 'var(--ink)' }}>
+              Report {name} as a fake account?
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--ink4)' }}>
+              Our team will review this profile. This can't be undone.
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink2)', cursor: 'pointer', width: '100%' }}>
+              <input
+                type="checkbox"
+                checked={reportAlsoBlock}
+                onChange={e => setReportAlsoBlock(e.target.checked)}
+                style={{ width: 16, height: 16, cursor: 'pointer' }}
+              />
+              Also block this user
+            </label>
+            <div style={{ display: 'flex', gap: 10, width: '100%', marginTop: 4 }}>
+              <Btn variant="secondary" onClick={() => setConfirmReportOpen(false)} style={{ flex: 1 }}>Cancel</Btn>
+              <Btn variant="danger" onClick={confirmReport} style={{ flex: 1 }}>Report</Btn>
+            </div>
+          </div>
         </div>
       )}
     </div>

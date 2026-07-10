@@ -23,6 +23,7 @@ class UserProfileResponse(BaseModel):
     liked_me: bool = False
     views_count: int = 0
     likes_count: int = 0
+    is_blocked_by_me: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -49,6 +50,10 @@ class UpdateMeRequest(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
     username: Optional[str] = Field(None, max_length=50)
     email: Optional[EmailStr] = None
+
+
+class BlockResponse(BaseModel):
+    blocked: bool
 
 
 class MeResponse(BaseModel):

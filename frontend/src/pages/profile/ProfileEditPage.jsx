@@ -14,16 +14,18 @@ import FormInput from '../../components/ui/FormInput';
 const GENDERS = ['Man', 'Woman', 'Non-binary', 'Other'];
 const ORIENTATIONS = ['Heterosexual', 'Homosexual', 'Bisexual', 'Other'];
 
-function Section({ children, style }) {
+function Section({ children, style, onClick }) {
   return (
-    <div style={{
-      background: 'var(--white)',
-      borderRadius: 'var(--r-md)',
-      padding: 16,
-      marginBottom: 14,
-      border: '1.5px solid var(--cream3)',
-      ...style,
-    }}>
+    <div
+      onClick={onClick}
+      style={{
+        background: 'var(--white)',
+        borderRadius: 'var(--r-md)',
+        padding: 16,
+        marginBottom: 14,
+        border: '1.5px solid var(--cream3)',
+        ...style,
+      }}>
       {children}
     </div>
   );
@@ -135,15 +137,21 @@ export default function ProfileEditPage() {
       const accountUpdates = {};
       if (form.full_name !== (profile?.full_name || '')) accountUpdates.full_name = form.full_name;
       if (form.email !== (profile?.email || '')) accountUpdates.email = form.email;
+      let emailVerificationSent = false;
       if (Object.keys(accountUpdates).length > 0) {
         const updated = await updateMe(accountUpdates);
         if (updated.email_verification_sent) {
+          emailVerificationSent = true;
           setEmailChangeNotice(true);
         }
       }
 
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      if (emailVerificationSent) {
+        setTimeout(() => setSaved(false), 2000);
+      } else {
+        setTimeout(() => navigate(`/profile/${user.id}`), 800);
+      }
     } catch {}
   }
 
@@ -160,7 +168,7 @@ export default function ProfileEditPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={() => navigate(`/profile/${user.id}`)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink3)', lineHeight: 1 }}>←</button>
           <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, fontWeight: 700, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <MatchaCup size={28} mood="happy" animate={false}/> Edit profile
+            <MatchaCup size={28} mood="happy" animate={false}/> Settings
           </div>
         </div>
         <Btn variant="ghost" onClick={handleLogout} className="mobile-only" style={{ fontSize: 13, color: 'var(--ink4)' }}>Sign out</Btn>
@@ -290,20 +298,12 @@ export default function ProfileEditPage() {
             </div>
           </Section>
 
-          <Section style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 12 }}>Activity</div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              {[[profile?.views_count || 0, 'viewed you', '/profile/viewers'], [profile?.likes_count || 0, 'liked you', '/profile/liked-by']].map(([n, l, path]) => (
-                <div
-                  key={l}
-                  onClick={() => navigate(path)}
-                  style={{ flex: 1, textAlign: 'center', padding: '12px', background: 'var(--cream)', borderRadius: 'var(--r-sm)', cursor: 'pointer' }}
-                >
-                  <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 26, fontWeight: 700, color: 'var(--spice)' }}>{n}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ink3)', marginTop: 2 }}>{l}</div>
-                </div>
-              ))}
-            </div>
+          <Section
+            onClick={() => navigate('/profile/blocked')}
+            style={{ marginBottom: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)' }}>Blocked users</div>
+            <div style={{ fontSize: 13, color: 'var(--ink4)' }}>Manage →</div>
           </Section>
 
           {emailChangeNotice && (
