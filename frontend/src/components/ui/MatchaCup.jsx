@@ -8,6 +8,7 @@ function MatchaCup({ size = 80, mood = 'happy', animate = true, style: extraStyl
     excited: { type: 'dot',   lx: 28, ly: 65, rx: 52, ry: 65 },
     sleepy:  { type: 'line',  lx: 28, ly: 66, rx: 52, ry: 66, zzz: true },
     love:    { type: 'heart', lx: 28, ly: 64, rx: 52, ry: 64 },
+    match:   { type: 'heart', lx: 28, ly: 62, rx: 52, ry: 62, blush: true, floaties: true },
   };
   const e = eyes[mood] || eyes.happy;
 
@@ -83,9 +84,20 @@ function MatchaCup({ size = 80, mood = 'happy', animate = true, style: extraStyl
         </>
       )}
       {e.type === 'heart' && (
-        [e.lx, e.rx].map(cx => (
-          <path key={cx} d={`M${cx} ${e.ly+2} Q${cx-4} ${e.ly-4} ${cx} ${e.ly-2} Q${cx+4} ${e.ly-4} ${cx} ${e.ly+2} Z`} fill="#e07a7a"/>
-        ))
+        [e.lx, e.rx].map(cx => {
+          const r = mood === 'match' ? 6.5 : 4;
+          const cy = e.ly;
+          return (
+            <path key={cx} fill="#e07a7a" d={`
+              M${cx} ${cy + r * 1.1}
+              C${cx - r * 1.6} ${cy + r * 0.2} ${cx - r * 1.4} ${cy - r * 0.9} ${cx - r * 0.55} ${cy - r * 0.9}
+              C${cx - r * 0.15} ${cy - r * 0.9} ${cx} ${cy - r * 0.5} ${cx} ${cy - r * 0.2}
+              C${cx} ${cy - r * 0.5} ${cx + r * 0.15} ${cy - r * 0.9} ${cx + r * 0.55} ${cy - r * 0.9}
+              C${cx + r * 1.4} ${cy - r * 0.9} ${cx + r * 1.6} ${cy + r * 0.2} ${cx} ${cy + r * 1.1}
+              Z
+            `}/>
+          );
+        })
       )}
 
       {/* blush */}
@@ -99,7 +111,7 @@ function MatchaCup({ size = 80, mood = 'happy', animate = true, style: extraStyl
       {/* mouth */}
       {mood === 'sleepy'
         ? <path d="M35 74 Q40 75.5 45 74" fill="none" stroke="#3a2818" strokeWidth="1.8" strokeLinecap="round"/>
-        : mood === 'excited'
+        : mood === 'excited' || mood === 'match'
         ? <path d="M33 74 Q40 82 47 74" fill="#3a2818"/>
         : <path d="M34 74 Q40 80 46 74" fill="none" stroke="#3a2818" strokeWidth="2" strokeLinecap="round"/>
       }
@@ -113,6 +125,18 @@ function MatchaCup({ size = 80, mood = 'happy', animate = true, style: extraStyl
             style={{ animation: 'steam1 2s .6s ease-in-out infinite', transformOrigin: '71px 46px' }}>z</text>
           <text x="76" y="34" fontSize="11" fill="#7ab568" fontWeight="bold" opacity=".4"
             style={{ animation: 'steam1 2s 1s ease-in-out infinite', transformOrigin: '76px 34px' }}>z</text>
+        </>
+      )}
+
+      {/* floating hearts */}
+      {e.floaties && (
+        <>
+          <path d="M64 52 Q64 48 67 48 Q70 48 70 51 Q70 55 64 60 Q58 55 58 51 Q58 48 61 48 Q64 48 64 52 Z"
+            fill="#e07a7a" opacity=".9"
+            style={{ animation: 'steam1 2.2s .1s ease-in-out infinite', transformOrigin: '64px 54px' }}/>
+          <path d="M14 46 Q14 43 16.2 43 Q18.5 43 18.5 45.5 Q18.5 48.5 14 52.5 Q9.5 48.5 9.5 45.5 Q9.5 43 11.8 43 Q14 43 14 46 Z"
+            fill="#e07a7a" opacity=".7"
+            style={{ animation: 'steam1 2.2s .5s ease-in-out infinite', transformOrigin: '14px 47px' }}/>
         </>
       )}
     </svg>

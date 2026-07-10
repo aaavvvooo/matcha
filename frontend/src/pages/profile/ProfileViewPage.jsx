@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
 import Btn from '../../components/ui/Btn';
+import MatchaCup from '../../components/ui/MatchaCup';
 import './ProfileViewPage.css';
 
 function timeAgo(dateStr) {
@@ -339,6 +340,32 @@ export default function ProfileViewPage() {
                 <div style={{ fontSize: 12, color: 'var(--ink4)', fontStyle: 'italic', marginBottom: 20 }}>
                   Viewing this profile has been recorded in their visit history.
                 </div>
+
+                {/* Connected banner */}
+                {liked && profile.liked_me && (
+                  <div style={{
+                    position: 'relative',
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '14px 16px 14px 70px', borderRadius: 'var(--r-md)',
+                    background: '#fff5f5', border: '1.5px solid #f0c8c8',
+                    marginBottom: 28, marginTop: 20,
+                  }}>
+                    <MatchaCup
+                      size={72}
+                      mood="match"
+                      animate
+                      style={{
+                        position: 'absolute', left: -6, bottom: -16,
+                        animation: 'float 3s ease-in-out infinite',
+                        filter: 'drop-shadow(0 4px 8px rgba(224,122,122,0.25))',
+                      }}
+                    />
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--spice2)' }}>You're connected!</div>
+                      <div style={{ fontSize: 12, color: 'var(--ink3)', marginTop: 2 }}>You and {name} liked each other.</div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: 10 }}>
