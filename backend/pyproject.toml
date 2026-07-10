@@ -30,4 +30,5 @@ dependencies = [
     "asyncpg-stubs>=0.31.1",
     "flake8>=7.3.0",
     "boto3>=1.35.0",
+    "httpx>=0.28.1",
 ]

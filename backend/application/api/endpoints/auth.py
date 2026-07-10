@@ -109,8 +109,13 @@ async def login(
 
 
 @router.get("/me")
-async def current_user(current_user: dict = Depends(get_current_user), db: Database = Depends(get_db)):
+async def current_user(
+    response: Response,
+    current_user: dict = Depends(get_current_user),
+    db: Database = Depends(get_db),
+):
     from application.repository.profile_repo import ProfileRepository
+    response.headers["Cache-Control"] = "no-store"
     user = dict(current_user["user"])
     profile_repo = ProfileRepository(db)
     profile = await profile_repo.get_profile(user["id"])

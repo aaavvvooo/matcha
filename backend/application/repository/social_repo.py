@@ -29,6 +29,7 @@ class SocialRepository:
         return await self.db.fetch_val(
             """
             SELECT COUNT(*) FROM likes l
+            JOIN user_profiles up ON up.user_id = l.liker_id AND up.gender IS NOT NULL
             WHERE l.liked_id = $1
               AND NOT EXISTS (
                   SELECT 1 FROM blocks b
@@ -44,6 +45,7 @@ class SocialRepository:
             SELECT u.id, u.username, u.full_name, p.url AS profile_photo_url
             FROM likes l
             JOIN users u ON u.id = l.liker_id
+            JOIN user_profiles up ON up.user_id = u.id AND up.gender IS NOT NULL
             LEFT JOIN photos p ON p.is_main = true AND p.user_id = u.id
             WHERE l.liked_id = $1
               AND NOT EXISTS (
@@ -68,6 +70,7 @@ class SocialRepository:
         return await self.db.fetch_val(
             """
             SELECT COUNT(*) FROM profile_views pv
+            JOIN user_profiles up ON up.user_id = pv.viewer_id AND up.gender IS NOT NULL
             WHERE pv.viewed_id = $1
               AND NOT EXISTS (
                   SELECT 1 FROM blocks b
@@ -83,6 +86,7 @@ class SocialRepository:
             SELECT u.id, u.username, u.full_name, p.url AS profile_photo_url, pv.viewed_at
             FROM profile_views pv
             JOIN users u ON u.id = pv.viewer_id
+            JOIN user_profiles up ON up.user_id = u.id AND up.gender IS NOT NULL
             LEFT JOIN photos p ON p.is_main = true AND p.user_id = u.id
             WHERE pv.viewed_id = $1
               AND NOT EXISTS (

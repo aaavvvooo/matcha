@@ -4,11 +4,13 @@ from typing import List
 from application.schema.profile_schemas import (
     SetProfileRequest,
     UpdateProfileRequest,
+    SetLocationRequest,
     SetProfilePicRequest,
     DeletePhotosRequest,
     ProfileResponse,
     PhotoResponse,
     TagResponse,
+    LocationResponse,
 )
 from application.database import get_db, Database
 from application.service import ProfileService
@@ -53,6 +55,19 @@ async def update(
     user_id = current_user["user"]["id"]
     service = ProfileService(db)
     return await service.update_profile(user_id, body)
+
+
+@router.patch("/location", response_model=LocationResponse)
+@limiter.limit("10/minute")
+async def set_location(
+    request: Request,
+    body: SetLocationRequest,
+    db: Database = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user["user"]["id"]
+    service = ProfileService(db)
+    return await service.set_location(user_id, body)
 
 
 @router.post("/set-profpic", response_model=PhotoResponse)

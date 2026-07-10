@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Check, Sparkle } from 'lucide-react';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
-import { setProfile, getAllTags } from '../../api/profilesApi';
+import LocationPicker from '../../components/ui/LocationPicker';
+import { setProfile, getAllTags, uploadPhoto, setProfilePic } from '../../api/profilesApi';
 import { useAuth } from '../../context/AuthContext';
 
 const STEPS = [
@@ -12,6 +13,8 @@ const STEPS = [
   { title: 'Who interests you?', subtitle: 'You can always change this later.' },
   { title: 'Your story.', subtitle: 'Make it yours. Keep it real.' },
   { title: 'Your interests.', subtitle: 'Pick at least 3 to get better matches.' },
+  { title: 'Where are you?', subtitle: 'Needed to show you people nearby — with your consent.' },
+  { title: 'Add a photo.', subtitle: "You won't be able to like anyone without one — but you can skip this for now." },
 ];
 
 function ProfileSetupPage() {
@@ -20,30 +23,74 @@ function ProfileSetupPage() {
   const [availableTags, setAvailableTags] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [profileCreated, setProfileCreated] = useState(false);
+  const [locationSet, setLocationSet] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoUploaded, setPhotoUploaded] = useState(false);
+  const [photoError, setPhotoError] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  const locationStep = STEPS.length - 2;
+  const photoStep = STEPS.length - 1;
+  const profileCreationStep = STEPS.length - 3;
 
   useEffect(() => {
     getAllTags().then(setAvailableTags).catch(() => {});
   }, []);
 
-  async function handleComplete() {
-    setLoading(true);
-    setError(null);
+  async function handlePhotoUpload(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setPhotoUploading(true);
+    setPhotoError(null);
     try {
-      await setProfile({
-        bio: data.bio,
-        gender: data.gender,
-        birth_date: data.birth_date ? new Date(data.birth_date).toISOString() : null,
-        sexual_orientation: data.sexual_orientation,
-        tags: data.tags,
-      });
-      navigate('/browse');
-    } catch (e) {
-      setError(e?.response?.data?.detail || 'Something went wrong. Please try again.');
+      const newPhotos = await uploadPhoto(files);
+      if (newPhotos.length > 0) {
+        await setProfilePic(newPhotos[0].id);
+      }
+      setPhotoUploaded(true);
+    } catch (err) {
+      setPhotoError(err?.response?.data?.detail || 'Failed to upload photo');
     } finally {
-      setLoading(false);
+      setPhotoUploading(false);
+      e.target.value = '';
     }
+  }
+
+  async function handleContinue() {
+    if (step === photoStep) {
+      navigate('/browse');
+      return;
+    }
+
+    if (step === locationStep) {
+      setStep(s => s + 1);
+      return;
+    }
+
+    if (step === profileCreationStep) {
+      setLoading(true);
+      setError(null);
+      try {
+        await setProfile({
+          bio: data.bio,
+          gender: data.gender,
+          birth_date: data.birth_date ? new Date(data.birth_date).toISOString() : null,
+          sexual_orientation: data.sexual_orientation,
+          tags: data.tags,
+        });
+        setProfileCreated(true);
+        setStep(s => s + 1);
+      } catch (e) {
+        setError(e?.response?.data?.detail || 'Something went wrong. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    setStep(s => s + 1);
   }
 
   const OptionBtn = ({ selected, onClick, children }) => (
@@ -210,6 +257,44 @@ function ProfileSetupPage() {
           </div>
         )}
 
+        {step === locationStep && profileCreated && (
+          <LocationPicker onSaved={() => setLocationSet(true)}/>
+        )}
+
+        {step === photoStep && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+            {photoUploaded ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--matcha2)' }}>
+                <Check size={16}/> Photo added!
+              </div>
+            ) : (
+              <>
+                <label style={{
+                  width: 140, height: 140, borderRadius: 'var(--r-md)',
+                  background: 'var(--white)', border: '1.5px dashed var(--sand)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 32, color: 'var(--sand)', cursor: photoUploading ? 'wait' : 'pointer',
+                }}>
+                  {photoUploading ? '…' : '+'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handlePhotoUpload}
+                    style={{ display: 'none' }}
+                    disabled={photoUploading}
+                  />
+                </label>
+                <div style={{ fontSize: 12, color: 'var(--ink4)', textAlign: 'center' }}>
+                  Tap to upload a photo of yourself.
+                </div>
+              </>
+            )}
+            {photoError && (
+              <div style={{ fontSize: 12, color: 'var(--rose)', textAlign: 'center' }}>{photoError}</div>
+            )}
+          </div>
+        )}
+
         {error && (
           <div style={{ marginTop: 12, padding: '10px 14px', background: '#fff0f0', border: '1px solid var(--rose)', borderRadius: 'var(--r-sm)', fontSize: 13, color: 'var(--rose)' }}>
             {error}
@@ -218,21 +303,26 @@ function ProfileSetupPage() {
       </div>
 
       <div style={{ padding: '12px 24px 28px', display: 'flex', gap: 12, alignItems: 'center' }}>
-        {step > 0 && (
+        {step > 0 && !profileCreated && (
           <Btn variant="secondary" onClick={() => setStep(s => s - 1)} style={{ flex: 1 }}>← Back</Btn>
         )}
         <Btn
-          onClick={() => step < STEPS.length - 1 ? setStep(s => s + 1) : handleComplete()}
+          onClick={handleContinue}
           style={{ flex: 2 }}
           disabled={
             loading ||
             (step === 0 && !data.birth_date) ||
             (step === 1 && !data.gender) ||
             (step === 2 && !data.sexual_orientation) ||
-            (step === 4 && data.tags.length < 3)
+            (step === 4 && data.tags.length < 3) ||
+            (step === locationStep && !locationSet)
           }
         >
-          {loading ? 'Saving...' : step < STEPS.length - 1 ? 'Continue →' : 'Finish setup →'}
+          {loading
+            ? 'Saving...'
+            : step === photoStep
+              ? (photoUploaded ? 'Finish setup →' : 'Skip for now →')
+              : 'Continue →'}
         </Btn>
       </div>
     </div>

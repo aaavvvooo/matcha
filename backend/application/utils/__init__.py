@@ -6,7 +6,7 @@ from .tokens import (
     create_verification_token,
     create_password_reset_token,
 )
-from .deps import get_current_user
+from .deps import get_current_user, require_profile
 
 
 __all__ = [
@@ -19,4 +19,5 @@ __all__ = [
     "create_verification_token",
     "create_password_reset_token",
     "get_current_user",
+    "require_profile",
 ]

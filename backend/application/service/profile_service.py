@@ -5,9 +5,12 @@ from asyncpg.connection import Connection
 from application.schema.profile_schemas import (
     SetProfileRequest,
     UpdateProfileRequest,
+    SetLocationRequest,
     ProfileResponse,
     PhotoResponse,
+    LocationResponse,
 )
+from application.clients import geocoding_client as geocoding
 from application.database import Database
 from application.repository.token_repo import TokenRepository
 from application.repository.user_repo import UserRepository
@@ -73,6 +76,9 @@ class ProfileService:
                 photos=photos,
                 views_count=views_count,
                 likes_count=likes_count,
+                latitude=profile["latitude"],
+                longitude=profile["longitude"],
+                location_label=profile["location_label"],
             )
         except HTTPException:
             raise
@@ -119,6 +125,48 @@ class ProfileService:
                     await self.profile_repo.delete_tags(user_id, to_remove)
 
             return await self.get_profile(user_id)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Internal server error: {e}",
+            )
+
+    async def set_location(self, user_id: int, request: SetLocationRequest) -> LocationResponse:
+        try:
+            has_coords = request.latitude is not None and request.longitude is not None
+            if not has_coords and not request.city:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Provide either GPS coordinates or a city",
+                )
+
+            if has_coords:
+                latitude, longitude = request.latitude, request.longitude
+                try:
+                    location_label = await geocoding.reverse_geocode(latitude, longitude)
+                except Exception:
+                    location_label = None
+            else:
+                try:
+                    geocoded = await geocoding.geocode_city(request.city)
+                except Exception:
+                    geocoded = None
+                if not geocoded:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Could not find that location — try a different city",
+                    )
+                latitude, longitude, location_label = geocoded
+
+            updated = await self.profile_repo.set_location(user_id, latitude, longitude, location_label)
+            if not updated:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Profile not found — complete profile setup first",
+                )
+            return LocationResponse(**dict(updated))
         except HTTPException:
             raise
         except Exception as e:

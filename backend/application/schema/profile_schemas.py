@@ -21,6 +21,19 @@ class UpdateProfileRequest(BaseModel):
     tags: Optional[list[int]] = None
 
 
+class SetLocationRequest(BaseModel):
+    """Either (latitude, longitude) for GPS consent, or city for manual entry."""
+    latitude: Optional[float] = Field(None, ge=-90, le=90)
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
+    city: Optional[str] = Field(None, min_length=1, max_length=255)
+
+
+class LocationResponse(BaseModel):
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_label: Optional[str] = None
+
+
 class SetProfilePicRequest(BaseModel):
     photo_id: int
 
@@ -66,5 +79,8 @@ class ProfileResponse(BaseModel):
     photos: list[PhotoResponse] = Field(default_factory=list)
     views_count: int = 0
     likes_count: int = 0
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_label: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

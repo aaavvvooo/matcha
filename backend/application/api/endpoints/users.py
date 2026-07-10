@@ -12,7 +12,7 @@ from application.schema.users_schemas import (
 from application.database import get_db, Database
 from application.service.social_service import SocialService
 from application.service.auth_service import AuthService
-from application.utils import get_current_user
+from application.utils import get_current_user, require_profile
 from application.limiter import limiter
 
 
@@ -49,7 +49,7 @@ async def update_me(
 async def get_blocked_users(
     request: Request,
     db: Database = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_profile),
 ):
     service = SocialService(db)
     return await service.get_blocked_users(current_user["user"]["id"])
@@ -61,7 +61,7 @@ async def get_user(
     request: Request,
     user_id: int,
     db: Database = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_profile),
 ):
     viewer_id = current_user["user"]["id"]
     service = SocialService(db)
@@ -74,7 +74,7 @@ async def like_user(
     request: Request,
     user_id: int,
     db: Database = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_profile),
 ):
     liker_id = current_user["user"]["id"]
     service = SocialService(db)
@@ -87,7 +87,7 @@ async def unlike_user(
     request: Request,
     user_id: int,
     db: Database = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_profile),
 ):
     liker_id = current_user["user"]["id"]
     service = SocialService(db)
@@ -100,7 +100,7 @@ async def block_user(
     request: Request,
     user_id: int,
     db: Database = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_profile),
 ):
     blocker_id = current_user["user"]["id"]
     service = SocialService(db)
@@ -113,7 +113,7 @@ async def unblock_user(
     request: Request,
     user_id: int,
     db: Database = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_profile),
 ):
     blocker_id = current_user["user"]["id"]
     service = SocialService(db)
@@ -126,7 +126,7 @@ async def report_user(
     request: Request,
     user_id: int,
     db: Database = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_profile),
 ):
     reporter_id = current_user["user"]["id"]
     service = SocialService(db)
@@ -139,7 +139,7 @@ async def get_views(
     request: Request,
     user_id: int,
     db: Database = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_profile),
 ):
     service = SocialService(db)
     return await service.get_viewers(current_user["user"]["id"], user_id)
@@ -151,7 +151,7 @@ async def get_likes(
     request: Request,
     user_id: int,
     db: Database = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_profile),
 ):
     service = SocialService(db)
     return await service.get_likers(current_user["user"]["id"], user_id)

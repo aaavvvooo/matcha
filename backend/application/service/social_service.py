@@ -34,7 +34,7 @@ class SocialService:
 
     async def get_user_profile(self, viewer_id: int, user_id: int) -> UserProfileResponse:
         profile = await self.profile_repo.get_profile(user_id)
-        if not profile:
+        if not profile or profile["gender"] is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
         is_blocked_by_viewer = False
@@ -53,8 +53,13 @@ class SocialService:
         tag_names = await self.profile_repo.get_user_tag_names(user_id)
         is_liked_by_me = await self.social_repo.has_liked(viewer_id, user_id)
         liked_me = await self.social_repo.has_liked(user_id, viewer_id)
-        views_count = await self.social_repo.count_viewers(user_id)
-        likes_count = await self.social_repo.count_likers(user_id)
+        # views_count/likes_count are private stats — only the profile owner may see them.
+        if viewer_id == user_id:
+            views_count = await self.social_repo.count_viewers(user_id)
+            likes_count = await self.social_repo.count_likers(user_id)
+        else:
+            views_count = 0
+            likes_count = 0
         fresh_fame = await self.db.fetch_val(
             "SELECT COALESCE(fame_rating, 0) FROM user_profiles WHERE user_id = $1", user_id
         )
@@ -84,7 +89,7 @@ class SocialService:
         if liker_id == liked_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot like yourself")
         target = await self.profile_repo.get_profile(liked_id)
-        if not target:
+        if not target or target["gender"] is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         if await self.social_repo.is_blocked_either_way(liker_id, liked_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not found")

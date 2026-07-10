@@ -30,3 +30,18 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return {"user": user, "token": token}
+
+
+async def require_profile(
+    current_user: dict = Depends(get_current_user), db: Database = Depends(get_db)
+):
+    from application.repository.profile_repo import ProfileRepository
+
+    profile_repo = ProfileRepository(db)
+    profile = await profile_repo.get_profile(current_user["user"]["id"])
+    if profile is None or profile.get("gender") is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Complete your profile setup to access this feature",
+        )
+    return current_user

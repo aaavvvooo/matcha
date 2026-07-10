@@ -86,6 +86,7 @@ export async function getMe(accessToken) {
   const res = await fetch(`${BASE_URL}/auth/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     credentials: 'include',
+    cache: 'no-store',
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.detail || 'Unauthorized');

@@ -59,6 +59,7 @@ services:
         alembic upgrade head &&
         (python scripts/seed_tags.py || echo 'Tag seeding failed, continuing anyway') &&
         (python scripts/seed_profiles.py --target 500 || echo 'Profile seeding failed, continuing anyway') &&
+        (python scripts/seed_armenia_profiles.py --count 50 || echo 'Armenia profile seeding failed, continuing anyway') &&
         uvicorn application.main:app --host ${BACKEND_HOST} --port 8000 --reload
       "
 

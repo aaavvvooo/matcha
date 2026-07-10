@@ -10,6 +10,7 @@ import FameMeter from '../../components/ui/FameMeter';
 import Btn from '../../components/ui/Btn';
 import Chip from '../../components/ui/Chip';
 import FormInput from '../../components/ui/FormInput';
+import LocationPicker from '../../components/ui/LocationPicker';
 
 const GENDERS = ['Man', 'Woman', 'Non-binary', 'Other'];
 const ORIENTATIONS = ['Heterosexual', 'Homosexual', 'Bisexual', 'Other'];
@@ -185,7 +186,7 @@ export default function ProfileEditPage() {
             <Avatar name={name} src={profile?.photos?.find(p => p.is_main)?.url} size={64}/>
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, fontWeight: 600, color: 'var(--ink)' }}>{name}</div>
-              <div style={{ fontSize: 13, color: 'var(--ink3)', marginTop: 2 }}>{form.location || 'No location set'}</div>
+              <div style={{ fontSize: 13, color: 'var(--ink3)', marginTop: 2 }}>{profile?.location_label || 'No location set'}</div>
             </div>
             <FameMeter score={profile?.fame_rating || 0} size="lg"/>
           </Section>
@@ -244,6 +245,14 @@ export default function ProfileEditPage() {
                 );
               })}
             </div>
+          </Section>
+
+          <Section>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 12 }}>Location</div>
+            <LocationPicker
+              locationLabel={profile?.location_label}
+              onSaved={(result) => setProfile(p => ({ ...p, ...result }))}
+            />
           </Section>
 
           <Section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

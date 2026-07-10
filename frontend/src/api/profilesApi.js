@@ -14,3 +14,4 @@ export const uploadPhoto = (files) => {
 }
 export const deletePhotos = (photo_ids) => client.delete('/profile/delete-photos', { data: { photo_ids } }).then(r => r.data)
 export const setProfilePic = (photo_id) => client.post('/profile/set-profpic', { photo_id }).then(r => r.data)
+export const setLocation = (data) => client.patch('/profile/location', data).then(r => r.data)

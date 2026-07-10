@@ -66,6 +66,8 @@ class ProfileRepository:
                 up.gender,
                 up.sexual_orientation,
                 up.profile_picture_id,
+                up.latitude,
+                up.longitude,
                 up.location_label,
                 COALESCE(up.fame_rating, 0) AS fame_rating
             FROM users u
@@ -130,6 +132,17 @@ class ProfileRepository:
         if transaction:
             return await transaction.fetchrow(query, *params)
         return await self.db.fetch_one(query, *params)
+
+    async def set_location(
+        self, user_id: int, latitude: Optional[float], longitude: Optional[float], location_label: Optional[str]
+    ):
+        query = """
+            UPDATE user_profiles
+            SET latitude = $2, longitude = $3, location_label = $4, updated_at = NOW()
+            WHERE user_id = $1
+            RETURNING user_id, latitude, longitude, location_label
+        """
+        return await self.db.fetch_one(query, user_id, latitude, longitude, location_label)
 
     async def set_profile_picture(self, user_id: int, photo_id: int):
         pool = self.db.require_pool()
