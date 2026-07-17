@@ -8,7 +8,6 @@ ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
 ACCESS_KEY = os.getenv("MINIO_ROOT_USER", "minioadmin")
 SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin123")
 BUCKET = os.getenv("MINIO_BUCKET", "photos")
-PUBLIC_URL = os.getenv("MINIO_PUBLIC_URL", "http://localhost:9000")
 
 _client = None
 
@@ -32,18 +31,16 @@ def ensure_bucket():
     existing = [b["Name"] for b in s3.list_buckets().get("Buckets", [])]
     if BUCKET not in existing:
         s3.create_bucket(Bucket=BUCKET)
-        s3.put_bucket_policy(
-            Bucket=BUCKET,
-            Policy=f"""{{
-                "Version": "2012-10-17",
-                "Statement": [{{
-                    "Effect": "Allow",
-                    "Principal": {{"AWS": ["*"]}},
-                    "Action": ["s3:GetObject"],
-                    "Resource": ["arn:aws:s3:::{BUCKET}/*"]
-                }}]
-            }}""",
-        )
+    try:
+        s3.delete_bucket_policy(Bucket=BUCKET)
+    except ClientError:
+        pass
+
+
+def _normalize_key(key: str) -> str:
+    if f"/{BUCKET}/" in key:
+        return key.split(f"/{BUCKET}/")[-1]
+    return key
 
 
 def upload_photo(file_bytes: bytes, content_type: str) -> str:
@@ -62,9 +59,12 @@ def upload_photo(file_bytes: bytes, content_type: str) -> str:
             )
         else:
             raise
-    return f"{PUBLIC_URL}/{BUCKET}/{key}"
+    return key
 
 
-def delete_photo(url: str):
-    key = url.split(f"/{BUCKET}/")[-1]
-    get_s3().delete_object(Bucket=BUCKET, Key=key)
+def get_photo_object(key: str):
+    return get_s3().get_object(Bucket=BUCKET, Key=_normalize_key(key))
+
+
+def delete_photo(key: str):
+    get_s3().delete_object(Bucket=BUCKET, Key=_normalize_key(key))

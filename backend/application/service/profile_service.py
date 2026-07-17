@@ -11,6 +11,7 @@ from application.schema.profile_schemas import (
     LocationResponse,
 )
 from application.clients import geocoding_client as geocoding
+from application.utils.photo_url import to_photo_url
 from application.database import Database
 from application.repository.token_repo import TokenRepository
 from application.repository.user_repo import UserRepository
@@ -60,7 +61,11 @@ class ProfileService:
             views_count = await self.social_repo.count_viewers(user_id)
             likes_count = await self.social_repo.count_likers(user_id)
 
-            photos = [PhotoResponse(**dict(row)) for row in photos_rows]
+            photos = []
+            for row in photos_rows:
+                data = dict(row)
+                data["url"] = to_photo_url(data["url"])
+                photos.append(PhotoResponse(**data))
             return ProfileResponse(
                 user_id=profile["user_id"],
                 full_name=profile["full_name"],
@@ -195,7 +200,9 @@ class ProfileService:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Photo not found",
                 )
-            return PhotoResponse(**dict(photo))
+            data = dict(photo)
+            data["url"] = to_photo_url(data["url"])
+            return PhotoResponse(**data)
         except HTTPException:
             raise
         except Exception as e:
@@ -221,7 +228,12 @@ class ProfileService:
                 )
 
             rows = await self.profile_repo.add_photos(user_id, urls, start_order=current_count + 1)
-            return [PhotoResponse(**dict(row)) for row in rows]
+            photos = []
+            for row in rows:
+                data = dict(row)
+                data["url"] = to_photo_url(data["url"])
+                photos.append(PhotoResponse(**data))
+            return photos
         except HTTPException:
             raise
         except Exception as e:

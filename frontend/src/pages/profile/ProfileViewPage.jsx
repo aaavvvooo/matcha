@@ -48,7 +48,8 @@ export default function ProfileViewPage() {
         setBlocked(data.is_blocked_by_me || false);
       })
       .catch(err => {
-        if (err?.response?.status === 403) setBlockedByThem(true);
+        const status = err?.response?.status;
+        if (status === 403 || status === 404) setBlockedByThem(true);
       })
       .finally(() => setLoading(false));
   }, [id]);

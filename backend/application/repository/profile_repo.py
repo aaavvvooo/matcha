@@ -113,6 +113,10 @@ class ProfileRepository:
         query = "SELECT user_id FROM photos WHERE id = $1"
         return await self.db.fetch_val(query, photo_id)
 
+    async def get_photo_owner_by_key(self, key: str) -> Optional[int]:
+        query = "SELECT user_id FROM photos WHERE url = $1 OR url LIKE '%/' || $1"
+        return await self.db.fetch_val(query, key)
+
     async def update_profile(
         self, user_id: int, data: dict, transaction: Optional[Connection] = None
     ):

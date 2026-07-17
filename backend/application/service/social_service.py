@@ -12,6 +12,13 @@ from application.schema.users_schemas import (
     SimpleUserResponse,
 )
 from application.schema.profile_schemas import PhotoResponse
+from application.utils.photo_url import to_photo_url
+
+
+def _with_photo_url(row, field: str, model):
+    data = dict(row)
+    data[field] = to_photo_url(data.get(field))
+    return model(**data)
 
 
 def _calculate_age(birth_date) -> int | None:
@@ -49,7 +56,7 @@ class SocialService:
                 await self.social_repo.recalculate_fame(user_id)
 
         photos_rows = await self.profile_repo.get_user_photos(user_id)
-        photos = [PhotoResponse(**dict(row)) for row in photos_rows]
+        photos = [_with_photo_url(row, "url", PhotoResponse) for row in photos_rows]
         tag_names = await self.profile_repo.get_user_tag_names(user_id)
         is_liked_by_me = await self.social_repo.has_liked(viewer_id, user_id)
         liked_me = await self.social_repo.has_liked(user_id, viewer_id)
@@ -132,7 +139,7 @@ class SocialService:
 
     async def get_blocked_users(self, user_id: int):
         rows = await self.social_repo.get_blocked_users(user_id)
-        return [SimpleUserResponse(**dict(row)) for row in rows]
+        return [_with_photo_url(row, "profile_photo_url", SimpleUserResponse) for row in rows]
 
     async def report(self, reporter_id: int, reported_id: int):
         if reporter_id == reported_id:
@@ -144,10 +151,10 @@ class SocialService:
         if requester_id != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
         rows = await self.social_repo.get_viewers(user_id)
-        return [ViewerResponse(**dict(row)) for row in rows]
+        return [_with_photo_url(row, "profile_photo_url", ViewerResponse) for row in rows]
 
     async def get_likers(self, requester_id: int, user_id: int):
         if requester_id != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
         rows = await self.social_repo.get_likers(user_id)
-        return [SimpleUserResponse(**dict(row)) for row in rows]
+        return [_with_photo_url(row, "profile_photo_url", SimpleUserResponse) for row in rows]
