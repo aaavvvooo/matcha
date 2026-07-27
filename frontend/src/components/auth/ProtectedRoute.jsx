@@ -13,12 +13,14 @@ function Spinner() {
 }
 
 function ProtectedRoute({ children }) {
-  const { accessToken, loading, refreshUser } = useAuth();
+  const { accessToken, user, loading, refreshUser } = useAuth();
   const location = useLocation();
   const exempt = PROFILE_EXEMPT_PATHS.includes(location.pathname);
   const [checkingProfile, setCheckingProfile] = useState(!exempt);
   const [hasProfile, setHasProfile] = useState(true);
 
+  // Revalidate has_profile when the authenticated user changes (login/logout),
+  // not on every route navigation — profile edits update `user` directly.
   useEffect(() => {
     if (exempt || !accessToken) {
       setCheckingProfile(false);
@@ -29,7 +31,7 @@ function ProtectedRoute({ children }) {
       .then(me => setHasProfile(Boolean(me?.has_profile)))
       .catch(() => setHasProfile(true)) // network hiccup — don't lock the user out
       .finally(() => setCheckingProfile(false));
-  }, [location.pathname, accessToken, exempt, refreshUser]);
+  }, [accessToken, user?.id, exempt, refreshUser]);
 
   if (loading || checkingProfile) return <Spinner />;
   if (!accessToken) return <Navigate to="/login" />;

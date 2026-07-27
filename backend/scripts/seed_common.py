@@ -18,21 +18,20 @@ BIO_TEMPLATES = [
 ]
 DEFAULT_PASSWORD = "Seed1234!"
 
-_photo_cache: dict[str, str] = {}
+_photo_bytes_cache: dict[str, bytes] = {}
 
 
 def random_bio(tag_name: str) -> str:
     return random.choice(BIO_TEMPLATES).format(tag=tag_name)
 
 
-def fetch_and_upload_photo(picture_url: str) -> str:
-    if picture_url in _photo_cache:
-        return _photo_cache[picture_url]
-    with urllib.request.urlopen(picture_url, timeout=15) as resp:
-        data = resp.read()
-    minio_url = upload_photo(data, "image/jpeg")
-    _photo_cache[picture_url] = minio_url
-    return minio_url
+def fetch_and_upload_photo(user_id: int, picture_url: str) -> str:
+    data = _photo_bytes_cache.get(picture_url)
+    if data is None:
+        with urllib.request.urlopen(picture_url, timeout=15) as resp:
+            data = resp.read()
+        _photo_bytes_cache[picture_url] = data
+    return upload_photo(user_id, data, "image/jpeg")
 
 
 async def load_existing_tags(profile_repo: ProfileRepository) -> list[dict]:

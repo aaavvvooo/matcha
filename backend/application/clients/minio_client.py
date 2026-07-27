@@ -43,10 +43,10 @@ def _normalize_key(key: str) -> str:
     return key
 
 
-def upload_photo(file_bytes: bytes, content_type: str) -> str:
+def upload_photo(user_id: int, file_bytes: bytes, content_type: str) -> str:
     s3 = get_s3()
     digest = hashlib.sha256(file_bytes).hexdigest()
-    key = digest
+    key = f"{user_id}/{digest}"
     try:
         s3.head_object(Bucket=BUCKET, Key=key)
     except ClientError as e:

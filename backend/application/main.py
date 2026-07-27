@@ -26,7 +26,7 @@ async def _token_cleanup_loop() -> None:
 async def lifespan(app: FastAPI):
     await database.connect()
     from application.clients.minio_client import ensure_bucket
-    ensure_bucket()
+    await asyncio.to_thread(ensure_bucket)
     await database.execute(
         "UPDATE users SET is_online = false WHERE is_online = true"
     )

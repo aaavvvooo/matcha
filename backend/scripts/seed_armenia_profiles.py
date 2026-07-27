@@ -136,7 +136,7 @@ async def seed_gender(
             )
 
             try:
-                photo_url = fetch_and_upload_photo(person["picture"]["large"])
+                photo_url = fetch_and_upload_photo(user_id, person["picture"]["large"])
                 photo_rows = await profile_repo.add_photos(user_id, [photo_url], start_order=1)
                 if photo_rows:
                     await profile_repo.set_profile_picture(user_id, photo_rows[0]["id"])

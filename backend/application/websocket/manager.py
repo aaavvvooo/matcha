@@ -15,7 +15,7 @@ class PresenceManager:
         self._connections: dict[int, set[WebSocket]] = {}
 
     async def connect(self, user_id: int, websocket: WebSocket) -> None:
-        await websocket.accept()
+        """Registers an already-accepted websocket. Callers must accept() before calling this."""
         is_first_connection = user_id not in self._connections
         self._connections.setdefault(user_id, set()).add(websocket)
         if is_first_connection:

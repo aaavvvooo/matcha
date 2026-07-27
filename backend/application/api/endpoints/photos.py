@@ -11,7 +11,7 @@ from application.limiter import limiter
 router = APIRouter()
 
 
-@router.get("/photo/{key}")
+@router.get("/photo/{key:path}")
 @limiter.limit("120/minute")
 async def get_photo(
     request: Request,

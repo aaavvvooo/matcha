@@ -65,7 +65,7 @@ export default function ProfileEditPage() {
   }, [previewPhoto, previewIdx]);
 
   useEffect(() => {
-    Promise.all([getMyProfile(user.id), getAllTags()])
+    Promise.all([getMyProfile(), getAllTags()])
       .then(([data, tags]) => {
         setProfile(data);
         setAvailableTags(tags);

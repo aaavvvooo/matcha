@@ -37,7 +37,7 @@ class ProfileService:
                 async with connection.transaction():
                     conn = cast(Connection, connection)
                     photos_record = await self.profile_repo.set_photos(request.user_id, request.photos, conn)
-                    tags_record = await self.profile_repo.add_tags(request.user_id, request.tags)
+                    tags_record = await self.profile_repo.add_tags(request.user_id, request.tags, conn)
                     profile_record = await self.profile_repo.set_profile(request, conn)
             return profile_record, tags_record, photos_record
         except HTTPException:
@@ -214,20 +214,27 @@ class ProfileService:
     async def add_photos(self, user_id: int, urls: list[str]) -> list[PhotoResponse]:
         try:
             current_count = await self.profile_repo.count_photos(user_id)
-            if current_count + len(urls) > MAX_PHOTOS:
+
+            existing = set(await self.profile_repo.get_existing_urls(user_id, urls))
+            new_urls = [url for url in urls if url not in existing]
+            # de-dupe within the batch itself too, keeping first occurrence
+            seen: set[str] = set()
+            deduped_urls = []
+            for url in new_urls:
+                if url not in seen:
+                    seen.add(url)
+                    deduped_urls.append(url)
+
+            if current_count + len(deduped_urls) > MAX_PHOTOS:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Cannot exceed {MAX_PHOTOS} photos",
                 )
 
-            existing = await self.profile_repo.get_existing_urls(user_id, urls)
-            if existing:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Photo already uploaded",
-                )
+            if not deduped_urls:
+                return []
 
-            rows = await self.profile_repo.add_photos(user_id, urls, start_order=current_count + 1)
+            rows = await self.profile_repo.add_photos(user_id, deduped_urls, start_order=current_count + 1)
             photos = []
             for row in rows:
                 data = dict(row)

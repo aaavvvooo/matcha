@@ -38,8 +38,11 @@ async def set(
 @router.get("/get", response_model=ProfileResponse)
 @limiter.limit("30/minute")
 async def get(
-    request: Request, user_id: int, db: Database = Depends(get_db)
+    request: Request,
+    db: Database = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
+    user_id = current_user["user"]["id"]
     service = ProfileService(db)
     return await service.get_profile(user_id)
 
@@ -104,7 +107,7 @@ async def upload_photo(
         data = await file.read()
         if len(data) > 5 * 1024 * 1024:
             raise HTTPException(status_code=400, detail=f"{file.filename}: file size must not exceed 5 MB")
-        urls.append(minio_upload(data, file.content_type))
+        urls.append(minio_upload(user_id, data, file.content_type))
     return await service.add_photos(user_id, urls)
 
 

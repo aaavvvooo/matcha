@@ -114,7 +114,7 @@ class ProfileRepository:
         return await self.db.fetch_val(query, photo_id)
 
     async def get_photo_owner_by_key(self, key: str) -> Optional[int]:
-        query = "SELECT user_id FROM photos WHERE url = $1 OR url LIKE '%/' || $1"
+        query = "SELECT user_id FROM photos WHERE url = $1"
         return await self.db.fetch_val(query, key)
 
     async def update_profile(
@@ -238,7 +238,9 @@ class ProfileRepository:
                 )
         return [row["id"] for row in deleted]
 
-    async def add_tags(self, user_id: int, tag_ids: list[int]):
+    async def add_tags(
+        self, user_id: int, tag_ids: list[int], transaction: Optional[Connection] = None
+    ):
         if not tag_ids:
             return
 
@@ -255,7 +257,10 @@ class ProfileRepository:
             VALUES {", ".join(values_parts)}
             ON CONFLICT DO NOTHING
         """
-        await self.db.execute(query, *params)
+        if transaction:
+            await transaction.execute(query, *params)
+        else:
+            await self.db.execute(query, *params)
 
     async def get_all_tags(self):
         query = "SELECT id, name FROM tags ORDER BY name"

@@ -88,13 +88,22 @@ export default function ProfileViewPage() {
     }
   }
 
+  function showError(err, fallback) {
+    const msg = err?.response?.data?.detail || fallback;
+    setLikeError(msg);
+    setTimeout(() => setLikeError(null), 4000);
+  }
+
   async function confirmBlock() {
     setConfirmBlockOpen(false);
     try {
       await blockUser(id);
       setBlocked(true);
       setLiked(false);
-    } catch {}
+    } catch (err) {
+      console.error('Failed to block user', err);
+      showError(err, 'Could not block this user');
+    }
   }
 
   async function confirmUnblock() {
@@ -103,7 +112,10 @@ export default function ProfileViewPage() {
       await unblockUser(id);
       setBlocked(false);
       setReported(false);
-    } catch {}
+    } catch (err) {
+      console.error('Failed to unblock user', err);
+      showError(err, 'Could not unblock this user');
+    }
   }
 
   async function confirmReport() {
@@ -119,7 +131,10 @@ export default function ProfileViewPage() {
         setReported(true);
         setTimeout(() => setReported(false), 4000);
       }
-    } catch {}
+    } catch (err) {
+      console.error('Failed to report user', err);
+      showError(err, 'Could not report this user');
+    }
   }
 
   if (blockedByThem) {

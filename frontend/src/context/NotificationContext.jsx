@@ -36,8 +36,12 @@ export function NotificationProvider({ children }) {
   useEffect(() => {
     if (!accessToken || !user) return
 
-    const ws = new WebSocket(`${WS_BASE}/chat/ws/${accessToken}`)
+    const ws = new WebSocket(`${WS_BASE}/chat/ws`)
     wsRef.current = ws
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'auth', token: accessToken }))
+    }
 
     ws.onmessage = (event) => {
       try {
