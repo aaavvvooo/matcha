@@ -4,7 +4,7 @@ from typing import Optional
 
 
 class SetProfileRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None
     bio: str = Field(None, max_length=500)
     birth_date: datetime = Field(None)
     gender: str = Field(None, max_length=20)
@@ -18,26 +18,29 @@ class UpdateProfileRequest(BaseModel):
     birth_date: Optional[datetime] = None
     gender: Optional[str] = Field(None, max_length=20)
     sexual_orientation: Optional[str] = Field(None, max_length=20)
+    tags: Optional[list[int]] = None
+
+
+class SetLocationRequest(BaseModel):
+    """Either (latitude, longitude) for GPS consent, or city for manual entry."""
+    latitude: Optional[float] = Field(None, ge=-90, le=90)
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
+    city: Optional[str] = Field(None, min_length=1, max_length=255)
+
+
+class LocationResponse(BaseModel):
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_label: Optional[str] = None
 
 
 class SetProfilePicRequest(BaseModel):
     photo_id: int
 
 
-class AddPhotosRequest(BaseModel):
-    photos: list[str] = Field(..., min_length=1, max_length=5)
-
-
 class DeletePhotosRequest(BaseModel):
     photo_ids: list[int] = Field(..., min_length=1)
 
-
-class AddTagsRequest(BaseModel):
-    tag_ids: list[int] = Field(..., min_length=1)
-
-
-class DeleteTagsRequest(BaseModel):
-    tag_ids: list[int] = Field(..., min_length=1)
 
 
 class ProfileRequest(BaseModel):
@@ -74,5 +77,10 @@ class ProfileResponse(BaseModel):
     fame_rating: float = 0.0
     tags: list[int] = Field(default_factory=list)
     photos: list[PhotoResponse] = Field(default_factory=list)
+    views_count: int = 0
+    likes_count: int = 0
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    location_label: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

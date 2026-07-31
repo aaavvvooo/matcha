@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Sparkle, Bell } from 'lucide-react';
 import { browse } from '../../api/profilesApi';
-import { likeUser, unlikeUser } from '../../api/usersApi';
+import { likeUser } from '../../api/usersApi';
 import { useNotifications } from '../../context/NotificationContext';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
@@ -66,7 +67,8 @@ function ProfileCard({ profile, onLike, onPreview, isPreview, drag, isDragging, 
             border: '2.5px solid var(--matcha)', color: 'var(--matcha)',
             fontSize: 18, fontWeight: 700, fontFamily: 'Playfair Display, serif', fontStyle: 'italic',
             transform: 'rotate(-8deg)', background: 'rgba(255,255,255,.85)',
-          }}>Like ✦</div>
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>Like <Sparkle size={16} fill="var(--matcha)"/></div>
         )}
         {drag.x < -40 && (
           <div style={{
@@ -124,7 +126,7 @@ function ProfileCard({ profile, onLike, onPreview, isPreview, drag, isDragging, 
           color: 'var(--ink3)', fontSize: 13, cursor: 'pointer',
           fontFamily: 'DM Sans, sans-serif',
         }}>···</button>
-        <Btn variant="matcha" onClick={e => { e.stopPropagation(); onLike(true); }} style={{ flex: 1, padding: '10px', fontSize: 13 }}>Like ✦</Btn>
+        <Btn variant="matcha" onClick={e => { e.stopPropagation(); onLike(true); }} style={{ flex: 1, padding: '10px', fontSize: 13 }}>Like <Sparkle size={13} fill="currentColor"/></Btn>
       </div>
     </div>
   );
@@ -199,15 +201,15 @@ function RightPanel({ profile, onProfile, onLike, myTags = [] }) {
 
         {shared.length > 0 && (
           <div style={{ padding: '11px 14px', borderRadius: 'var(--r-md)', background: '#f0f7ee', border: '1.5px solid #c8dfc4', marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: 'var(--matcha2)', fontWeight: 500 }}>
-              ✦ {shared.length} shared interest{shared.length > 1 ? 's' : ''}: {shared.map(t => `#${t}`).join(', ')}
+            <div style={{ fontSize: 12, color: 'var(--matcha2)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Sparkle size={12} fill="var(--matcha2)"/> {shared.length} shared interest{shared.length > 1 ? 's' : ''}: {shared.map(t => `#${t}`).join(', ')}
             </div>
           </div>
         )}
 
         <div style={{ display: 'flex', gap: 10, marginTop: 'auto' }}>
           <Btn variant="secondary" onClick={() => onProfile(profile)} style={{ flex: 1 }}>Full profile</Btn>
-          <Btn variant="matcha" onClick={() => onLike(true)} style={{ flex: 1 }}>Like ✦</Btn>
+          <Btn variant="matcha" onClick={() => onLike(true)} style={{ flex: 1 }}>Like <Sparkle size={14} fill="currentColor"/></Btn>
         </div>
       </div>
     </div>
@@ -246,7 +248,6 @@ function MatchOverlay({ profile, onChat, onClose }) {
 }
 
 export default function BrowsePage() {
-  const [profiles, setProfiles] = useState([]);
   const [queue, setQueue] = useState([]);
   const [sortBy, setSortBy] = useState('proximity');
   const [previewProfile, setPreviewProfile] = useState(null);
@@ -254,6 +255,7 @@ export default function BrowsePage() {
   const [drag, setDrag] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [likeError, setLikeError] = useState(null);
   const dragRef = useRef(null);
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
@@ -261,7 +263,6 @@ export default function BrowsePage() {
   useEffect(() => {
     browse({ limit: 20, offset: 0 })
       .then(data => {
-        setProfiles(data);
         setQueue(data);
       })
       .catch(() => {})
@@ -287,7 +288,14 @@ export default function BrowsePage() {
           setMatchProfile(currentProfile);
           setTimeout(() => setMatchProfile(null), 3000);
         }
-      } catch {}
+      } catch (err) {
+        const msg = err?.response?.data?.detail;
+        if (msg) {
+          setLikeError(msg);
+          setTimeout(() => setLikeError(null), 4000);
+        }
+        return;
+      }
     }
     setQueue(q => q.filter(p => p.user_id !== currentProfile.user_id));
     setDrag({ x: 0, y: 0 });
@@ -332,8 +340,8 @@ export default function BrowsePage() {
             <Chip key={s} label={s} active={sortBy === s} onClick={() => setSortBy(s)}/>
           ))}
         </div>
-        <button onClick={() => navigate('/matches')} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
-          <span style={{ fontSize: 22, lineHeight: 1 }}>🔔</span>
+        <button onClick={() => navigate('/matches')} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
+          <Bell size={22} strokeWidth={1.75} color="var(--ink3)"/>
           {unreadCount > 0 && (
             <div style={{
               position: 'absolute', top: 0, right: 0,
@@ -455,6 +463,18 @@ export default function BrowsePage() {
           />
         </div>
       </div>
+
+      {likeError && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--rose)', color: '#fff', padding: '12px 20px',
+          borderRadius: 'var(--r-sm)', fontSize: 14, fontWeight: 500,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.25)', zIndex: 2000,
+          maxWidth: '90vw', textAlign: 'center', pointerEvents: 'none',
+        }}>
+          {likeError}
+        </div>
+      )}
     </div>
   );
 }

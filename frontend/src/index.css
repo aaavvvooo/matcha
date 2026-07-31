@@ -133,3 +133,8 @@ input:focus, textarea:focus {
 .anim-scale { animation: scaleIn  0.3s ease both; }
 .anim-float { animation: float    3s ease-in-out infinite; }
 .screen     { animation: fadeIn   0.25s ease; }
+
+/* ── Responsive utility classes ──────────────────────────────── */
+@media (min-width: 860px) {
+  .mobile-only { display: none !important; }
+}

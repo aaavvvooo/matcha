@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Sparkle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
 import MatchaCup from '../../components/ui/MatchaCup';
@@ -23,7 +24,6 @@ function formatTime(dateStr) {
 }
 
 function ChatListView({ conversations, onSelect, loading }) {
-  const navigate = useNavigate();
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
@@ -41,8 +41,8 @@ function ChatListView({ conversations, onSelect, loading }) {
         {conversations.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, paddingTop: 48 }}>
             <MatchaCup size={56} mood="shy" animate={true}/>
-            <div style={{ fontSize: 13, color: 'var(--ink4)', fontStyle: 'italic' }}>
-              Like someone and wait for a match to start chatting ✦
+            <div style={{ fontSize: 13, color: 'var(--ink4)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 4 }}>
+              Like someone and wait for a match to start chatting <Sparkle size={12}/>
             </div>
           </div>
         ) : (
@@ -80,7 +80,7 @@ function ChatListView({ conversations, onSelect, loading }) {
 
 function ChatThreadView({ partner, messages, onSend, onBack, myId }) {
   const [input, setInput] = useState('');
-  const [typing, setTyping] = useState(false);
+  const [typing] = useState(false);
   const endRef = useRef(null);
   const name = partner?.full_name || partner?.username || 'Unknown';
 
@@ -201,6 +201,13 @@ export default function ChatPage() {
     loadConversations().finally(() => setLoading(false));
   }, [loadConversations]);
 
+  const handleSelect = useCallback(async (userId, partner) => {
+    setActivePartner(partner);
+    if (!messages[userId]) {
+      await loadMessages(userId).catch(() => {});
+    }
+  }, [messages, loadMessages]);
+
   useEffect(() => {
     if (routeUserId) {
       const convo = conversations.find(c => String(c.user_id) === String(routeUserId));
@@ -210,14 +217,7 @@ export default function ChatPage() {
         handleSelect(routeUserId, { user_id: routeUserId });
       }
     }
-  }, [routeUserId, conversations, loading]);
-
-  async function handleSelect(userId, partner) {
-    setActivePartner(partner);
-    if (!messages[userId]) {
-      await loadMessages(userId).catch(() => {});
-    }
-  }
+  }, [routeUserId, conversations, loading, handleSelect]);
 
   function handleBack() {
     setActivePartner(null);

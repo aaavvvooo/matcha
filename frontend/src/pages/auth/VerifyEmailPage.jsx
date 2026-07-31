@@ -12,6 +12,7 @@ function VerifyEmailPage() {
     verifyEmail(token)
       .then(() => setStatus('success'))
       .catch(() => setStatus('error'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (status === 'verifying') {

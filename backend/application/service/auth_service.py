@@ -7,6 +7,7 @@ from asyncpg.connection import Connection
 
 from application.repository import UserRepository, TokenRepository
 from application.schema import RegisterRequest, RegisterUserResponse, TokenInfo
+from application.schema.users_schemas import UpdateMeRequest, MeResponse
 from application.utils import (
     get_password_hash,
     validate_password,
@@ -110,7 +111,7 @@ class AuthService:
                     conn = cast(Connection, connection)
                     await self.token_repo.mark_token_as_used(token_info.id, conn)
                     user_record = await self.user_repo.update_user(
-                        {"id": token_info.user_id, "is_validated": True}, conn
+                        token_info.user_id, {"is_validated": True}, conn
                     )
             user = RegisterUserResponse(**user_record)
             return user
@@ -292,7 +293,8 @@ class AuthService:
                 async with connection.transaction():
                     conn = cast(Connection, connection)
                     user_record = await self.user_repo.update_user(
-                        {"id": token_info.user_id, "hashed_password": hashed_password},
+                        token_info.user_id,
+                        {"hashed_password": hashed_password},
                         conn,
                     )
                     await self.token_repo.mark_token_as_used(token_info.id, conn)
@@ -300,3 +302,53 @@ class AuthService:
 
         except Exception:
             raise
+
+    async def update_me(self, user_id: int, request: UpdateMeRequest):
+        try:
+            updates = request.model_dump(exclude_none=True)
+            if not updates:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update"
+                )
+
+            if "username" in updates:
+                existing = await self.user_repo.get_user_by_username(updates["username"])
+                if existing and existing["id"] != user_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
+                    )
+
+            email_changed = "email" in updates
+            verification_token = None
+            if email_changed:
+                existing = await self.user_repo.get_user_by_email(updates["email"])
+                if existing and existing["id"] != user_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+                    )
+                updates["is_validated"] = False
+                verification_token = create_verification_token()
+                hashed_verification_token = hashlib.sha256(
+                    verification_token.encode()
+                ).hexdigest()
+                expiration_date = datetime.now(timezone.utc) + timedelta(days=1)
+
+            pool = self.db.require_pool()
+            async with pool.acquire() as connection:
+                async with connection.transaction():
+                    conn = cast(Connection, connection)
+                    user_record = await self.user_repo.update_user(user_id, updates, conn)
+                    if email_changed:
+                        await self.token_repo.create_verification_token(
+                            user_id, hashed_verification_token, "email", expiration_date, conn
+                        )
+
+            response = MeResponse(**dict(user_record), email_verification_sent=email_changed)
+            return response, verification_token
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Internal server error: {e}",
+            )

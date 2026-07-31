@@ -16,6 +16,7 @@ from application.service import AuthService
 from application.clients.email_client import EmailClient
 from application.config import BREVO_API_KEY
 from application.utils import get_current_user
+from application.utils.tokens import ACCESS_TOKEN_EXPIRE_MINUTES
 from application.limiter import limiter
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,14 @@ async def login(
         samesite="strict",
         max_age=7 * 24 * 60 * 60,
     )
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,
+        samesite="strict",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -109,8 +118,18 @@ async def login(
 
 
 @router.get("/me")
-async def current_user(current_user: dict = Depends(get_current_user)):
-    return {"user": current_user}
+async def current_user(
+    response: Response,
+    current_user: dict = Depends(get_current_user),
+    db: Database = Depends(get_db),
+):
+    from application.repository.profile_repo import ProfileRepository
+    response.headers["Cache-Control"] = "no-store"
+    user = dict(current_user["user"])
+    profile_repo = ProfileRepository(db)
+    profile = await profile_repo.get_profile(user["id"])
+    user["has_profile"] = profile is not None and profile.get("gender") is not None
+    return user
 
 
 @router.post("/forget-password")
@@ -146,6 +165,7 @@ async def logout(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid token")
     response.delete_cookie("refresh_token")
+    response.delete_cookie("access_token")
     return {"message": "Successfully logged out"}
 
 
@@ -164,6 +184,14 @@ async def refresh(request: Request, response: Response, db=Depends(get_db)):
         secure=False,
         samesite="strict",
         max_age=7 * 24 * 60 * 60,
+    )
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,
+        samesite="strict",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
     return {
         "access_token": access_token,

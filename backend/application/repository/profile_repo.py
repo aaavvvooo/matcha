@@ -59,11 +59,16 @@ class ProfileRepository:
                 u.full_name,
                 u.username,
                 u.email,
+                u.is_online,
+                u.last_seen,
                 up.bio,
                 up.birth_date,
                 up.gender,
                 up.sexual_orientation,
                 up.profile_picture_id,
+                up.latitude,
+                up.longitude,
+                up.location_label,
                 COALESCE(up.fame_rating, 0) AS fame_rating
             FROM users u
             LEFT JOIN user_profiles up ON up.user_id = u.id
@@ -85,6 +90,17 @@ class ProfileRepository:
         rows = await self.db.fetch_all(query, user_id)
         return [row["tag_id"] for row in rows]
 
+    async def get_user_tag_names(self, user_id: int):
+        query = """
+            SELECT t.name
+            FROM user_tags ut
+            JOIN tags t ON t.id = ut.tag_id
+            WHERE ut.user_id = $1
+            ORDER BY t.name
+        """
+        rows = await self.db.fetch_all(query, user_id)
+        return [row["name"] for row in rows]
+
     async def count_photos(self, user_id: int) -> int:
         query = "SELECT COUNT(*) FROM photos WHERE user_id = $1"
         return await self.db.fetch_val(query, user_id)
@@ -96,6 +112,10 @@ class ProfileRepository:
     async def get_photo_owner(self, photo_id: int) -> Optional[int]:
         query = "SELECT user_id FROM photos WHERE id = $1"
         return await self.db.fetch_val(query, photo_id)
+
+    async def get_photo_owner_by_key(self, key: str) -> Optional[int]:
+        query = "SELECT user_id FROM photos WHERE url = $1"
+        return await self.db.fetch_val(query, key)
 
     async def update_profile(
         self, user_id: int, data: dict, transaction: Optional[Connection] = None
@@ -116,6 +136,17 @@ class ProfileRepository:
         if transaction:
             return await transaction.fetchrow(query, *params)
         return await self.db.fetch_one(query, *params)
+
+    async def set_location(
+        self, user_id: int, latitude: Optional[float], longitude: Optional[float], location_label: Optional[str]
+    ):
+        query = """
+            UPDATE user_profiles
+            SET latitude = $2, longitude = $3, location_label = $4, updated_at = NOW()
+            WHERE user_id = $1
+            RETURNING user_id, latitude, longitude, location_label
+        """
+        return await self.db.fetch_one(query, user_id, latitude, longitude, location_label)
 
     async def set_profile_picture(self, user_id: int, photo_id: int):
         pool = self.db.require_pool()
@@ -163,6 +194,16 @@ class ProfileRepository:
         """
         return await self.db.fetch_all(query, *params)
 
+    async def get_existing_urls(self, user_id: int, urls: list[str]) -> list[str]:
+        query = "SELECT url FROM photos WHERE user_id = $1 AND url = ANY($2::text[])"
+        rows = await self.db.fetch_all(query, user_id, urls)
+        return [row["url"] for row in rows]
+
+    async def get_photos_urls(self, user_id: int, photo_ids: list[int]) -> list[str]:
+        query = "SELECT url FROM photos WHERE user_id = $1 AND id = ANY($2::int[])"
+        rows = await self.db.fetch_all(query, user_id, photo_ids)
+        return [row["url"] for row in rows]
+
     async def delete_photos(self, user_id: int, photo_ids: list[int]):
         pool = self.db.require_pool()
         async with pool.acquire() as connection:
@@ -197,7 +238,9 @@ class ProfileRepository:
                 )
         return [row["id"] for row in deleted]
 
-    async def add_tags(self, user_id: int, tag_ids: list[int]):
+    async def add_tags(
+        self, user_id: int, tag_ids: list[int], transaction: Optional[Connection] = None
+    ):
         if not tag_ids:
             return
 
@@ -214,7 +257,10 @@ class ProfileRepository:
             VALUES {", ".join(values_parts)}
             ON CONFLICT DO NOTHING
         """
-        await self.db.execute(query, *params)
+        if transaction:
+            await transaction.execute(query, *params)
+        else:
+            await self.db.execute(query, *params)
 
     async def get_all_tags(self):
         query = "SELECT id, name FROM tags ORDER BY name"

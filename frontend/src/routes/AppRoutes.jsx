@@ -12,6 +12,9 @@ import ResetPasswordPage  from '../pages/auth/ResetPasswordPage';
 import ProfileSetupPage   from '../pages/profile/ProfileSetupPage';
 import ProfileEditPage    from '../pages/profile/ProfileEditPage';
 import ProfileViewPage    from '../pages/profile/ProfileViewPage';
+import ProfileViewersPage from '../pages/profile/ProfileViewersPage';
+import LikedByPage        from '../pages/profile/LikedByPage';
+import BlockedUsersPage   from '../pages/profile/BlockedUsersPage';
 
 import BrowsePage         from '../pages/browse/BrowsePage';
 import SearchPage         from '../pages/search/SearchPage';
@@ -30,9 +33,12 @@ function AppRoutes() {
       <Route path="/reset-password"  element={<ResetPasswordPage />} />
 
       {/* Protected */}
-      <Route path="/profile/setup"  element={<ProtectedRoute><ProfileSetupPage /></ProtectedRoute>} />
-      <Route path="/profile/edit"   element={<ProtectedRoute><ProfileEditPage /></ProtectedRoute>} />
-      <Route path="/profile/:id"    element={<ProtectedRoute><ProfileViewPage /></ProtectedRoute>} />
+      <Route path="/profile/setup"    element={<ProtectedRoute><ProfileSetupPage /></ProtectedRoute>} />
+      <Route path="/profile/settings" element={<ProtectedRoute><ProfileEditPage /></ProtectedRoute>} />
+      <Route path="/profile/viewers"  element={<ProtectedRoute><ProfileViewersPage /></ProtectedRoute>} />
+      <Route path="/profile/liked-by" element={<ProtectedRoute><LikedByPage /></ProtectedRoute>} />
+      <Route path="/profile/blocked"  element={<ProtectedRoute><BlockedUsersPage /></ProtectedRoute>} />
+      <Route path="/profile/:id"      element={<ProtectedRoute><ProfileViewPage /></ProtectedRoute>} />
 
       <Route path="/browse"         element={<ProtectedRoute><BrowsePage /></ProtectedRoute>} />
       <Route path="/search"         element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />

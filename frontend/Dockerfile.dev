@@ -1,0 +1,14 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+
+ENV DISABLE_ESLINT_PLUGIN=true
+
+EXPOSE 3000
+
+CMD ["npm", "start"]

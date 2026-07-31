@@ -6,7 +6,7 @@ const VARIANTS = {
   matcha:    { background: 'var(--matcha)', color: '#fff', boxShadow: '0 4px 16px rgba(107,143,94,.35)', border: 'none' },
 };
 
-function Btn({ children, variant = 'primary', onClick, style = {}, disabled = false, type = 'button' }) {
+function Btn({ children, variant = 'primary', onClick, style = {}, disabled = false, type = 'button', className }) {
   const base = {
     padding: '13px 28px',
     borderRadius: 'var(--r-full)',
@@ -26,6 +26,7 @@ function Btn({ children, variant = 'primary', onClick, style = {}, disabled = fa
       type={type}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
+      className={className}
       style={{ ...base, ...VARIANTS[variant], ...style }}
     >
       {children}

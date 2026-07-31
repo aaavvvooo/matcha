@@ -39,15 +39,48 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_HOST: ${POSTGRES_HOST}
       POSTGRES_PORT_INNER: ${POSTGRES_PORT_INNER}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
     ports:
       - "${BACKEND_PORT}:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_started
     volumes:
       - ./backend:/app
       - image_upload:/app/images
-    command: uvicorn application.main:app --host ${BACKEND_HOST} --port 8000 --reload
+    command: >
+      sh -c "
+        alembic upgrade head &&
+        (python scripts/seed_tags.py || echo 'Tag seeding failed, continuing anyway') &&
+        (python scripts/seed_profiles.py --target 500 || echo 'Profile seeding failed, continuing anyway') &&
+        (python scripts/seed_armenia_profiles.py --count 50 || echo 'Armenia profile seeding failed, continuing anyway') &&
+        uvicorn application.main:app --host ${BACKEND_HOST} --port 8000 --reload
+      "
+
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    env_file:
+      - .env
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
     networks:
       - app-network
     restart: unless-stopped
@@ -55,7 +88,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: react_frontend
     env_file:
       - .env
@@ -63,8 +96,9 @@ services:
       REACT_APP_API_URL: ${REACT_APP_API_URL}
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
+      FAST_REFRESH: "true"
     ports:
-      - "3000:80"
+      - "3000:3000"
     depends_on:
       - backend
     volumes:
@@ -79,6 +113,7 @@ services:
 volumes:
   image_upload:
   postgres_data:
+  minio_data:
 
 networks:
   app-network:

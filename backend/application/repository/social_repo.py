@@ -25,13 +25,34 @@ class SocialRepository:
         query = "SELECT 1 FROM likes WHERE liker_id = $1 AND liked_id = $2"
         return await self.db.fetch_val(query, liker_id, liked_id) is not None
 
+    async def count_likers(self, user_id: int) -> int:
+        return await self.db.fetch_val(
+            """
+            SELECT COUNT(*) FROM likes l
+            JOIN user_profiles up ON up.user_id = l.liker_id AND up.gender IS NOT NULL
+            WHERE l.liked_id = $1
+              AND NOT EXISTS (
+                  SELECT 1 FROM blocks b
+                  WHERE (b.blocker_id = $1 AND b.blocked_id = l.liker_id)
+                     OR (b.blocker_id = l.liker_id AND b.blocked_id = $1)
+              )
+            """,
+            user_id,
+        )
+
     async def get_likers(self, user_id: int):
         query = """
             SELECT u.id, u.username, u.full_name, p.url AS profile_photo_url
             FROM likes l
             JOIN users u ON u.id = l.liker_id
+            JOIN user_profiles up ON up.user_id = u.id AND up.gender IS NOT NULL
             LEFT JOIN photos p ON p.is_main = true AND p.user_id = u.id
             WHERE l.liked_id = $1
+              AND NOT EXISTS (
+                  SELECT 1 FROM blocks b
+                  WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+                     OR (b.blocker_id = u.id AND b.blocked_id = $1)
+              )
             ORDER BY l.created_at DESC
         """
         return await self.db.fetch_all(query, user_id)
@@ -45,13 +66,34 @@ class SocialRepository:
         """
         await self.db.execute(query, viewer_id, viewed_id)
 
+    async def count_viewers(self, user_id: int) -> int:
+        return await self.db.fetch_val(
+            """
+            SELECT COUNT(*) FROM profile_views pv
+            JOIN user_profiles up ON up.user_id = pv.viewer_id AND up.gender IS NOT NULL
+            WHERE pv.viewed_id = $1
+              AND NOT EXISTS (
+                  SELECT 1 FROM blocks b
+                  WHERE (b.blocker_id = $1 AND b.blocked_id = pv.viewer_id)
+                     OR (b.blocker_id = pv.viewer_id AND b.blocked_id = $1)
+              )
+            """,
+            user_id,
+        )
+
     async def get_viewers(self, user_id: int):
         query = """
             SELECT u.id, u.username, u.full_name, p.url AS profile_photo_url, pv.viewed_at
             FROM profile_views pv
             JOIN users u ON u.id = pv.viewer_id
+            JOIN user_profiles up ON up.user_id = u.id AND up.gender IS NOT NULL
             LEFT JOIN photos p ON p.is_main = true AND p.user_id = u.id
             WHERE pv.viewed_id = $1
+              AND NOT EXISTS (
+                  SELECT 1 FROM blocks b
+                  WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
+                     OR (b.blocker_id = u.id AND b.blocked_id = $1)
+              )
             ORDER BY pv.viewed_at DESC
         """
         return await self.db.fetch_all(query, user_id)
@@ -92,10 +134,28 @@ class SocialRepository:
             blocker_id, blocked_id,
         )
 
+    async def unblock_user(self, blocker_id: int, blocked_id: int) -> bool:
+        row = await self.db.fetch_one(
+            "DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2 RETURNING blocker_id",
+            blocker_id, blocked_id,
+        )
+        return row is not None
+
     async def is_blocked(self, blocker_id: int, blocked_id: int) -> bool:
         result = await self.db.fetch_val(
             "SELECT 1 FROM blocks WHERE blocker_id = $1 AND blocked_id = $2",
             blocker_id, blocked_id,
+        )
+        return result is not None
+
+    async def is_blocked_either_way(self, a: int, b: int) -> bool:
+        result = await self.db.fetch_val(
+            """
+            SELECT 1 FROM blocks
+            WHERE (blocker_id = $1 AND blocked_id = $2)
+               OR (blocker_id = $2 AND blocked_id = $1)
+            """,
+            a, b,
         )
         return result is not None
 
@@ -104,6 +164,17 @@ class SocialRepository:
             "SELECT blocked_id FROM blocks WHERE blocker_id = $1", user_id
         )
         return [r["blocked_id"] for r in rows]
+
+    async def get_blocked_users(self, user_id: int):
+        query = """
+            SELECT u.id, u.username, u.full_name, p.url AS profile_photo_url
+            FROM blocks b
+            JOIN users u ON u.id = b.blocked_id
+            LEFT JOIN photos p ON p.is_main = true AND p.user_id = u.id
+            WHERE b.blocker_id = $1
+            ORDER BY u.username
+        """
+        return await self.db.fetch_all(query, user_id)
 
     # ── reports ────────────────────────────────────────────────────────────
     async def report_user(self, reporter_id: int, reported_id: int):

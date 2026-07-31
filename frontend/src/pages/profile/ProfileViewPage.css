@@ -1,0 +1,40 @@
+.profile-view-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-view-hero {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--cream2), var(--cream3));
+  flex-shrink: 0;
+}
+
+.profile-view-content {
+  padding: 20px 20px 32px;
+}
+
+@media (min-width: 860px) {
+  .profile-view-body {
+    flex-direction: row;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    gap: 32px;
+    align-items: flex-start;
+  }
+
+  .profile-view-hero {
+    width: 380px;
+    flex-shrink: 0;
+    aspect-ratio: 3 / 4;
+    border-radius: var(--r-md);
+  }
+
+  .profile-view-content {
+    flex: 1;
+    padding: 0;
+  }
+}
