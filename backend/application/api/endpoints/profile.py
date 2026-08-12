@@ -94,7 +94,7 @@ async def upload_photo(
     db: Database = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    from application.clients.minio_client import upload_photo as minio_upload
+    from application.clients.storage import upload_photo as storage_upload
     user_id = current_user["user"]["id"]
     service = ProfileService(db)
     current_count = await service.profile_repo.count_photos(user_id)
@@ -107,7 +107,7 @@ async def upload_photo(
         data = await file.read()
         if len(data) > 5 * 1024 * 1024:
             raise HTTPException(status_code=400, detail=f"{file.filename}: file size must not exceed 5 MB")
-        urls.append(minio_upload(user_id, data, file.content_type))
+        urls.append(storage_upload(user_id, data, file.content_type))
     return await service.add_photos(user_id, urls)
 
 
