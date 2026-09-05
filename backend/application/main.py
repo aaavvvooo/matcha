@@ -5,12 +5,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 import asyncpg
+import logging
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from application.api.router import router
 from application.limiter import limiter
 from application.repository.token_repo import TokenRepository
 from typing import Any, cast
+
+logger = logging.getLogger(__name__)
 
 _CLEANUP_INTERVAL_SECONDS = 3600  # run every hour
 
@@ -25,8 +28,13 @@ async def _token_cleanup_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await database.connect()
-    from application.clients.minio_client import ensure_bucket
-    await asyncio.to_thread(ensure_bucket)
+    from application.clients.storage import ensure_bucket
+    try:
+        await asyncio.to_thread(ensure_bucket)
+    except Exception:
+        # Unreachable storage must not stop the app from listening -- that
+        # turns a broken photo feature into a container that never starts.
+        logger.exception("Photo storage unavailable; photo routes will fail")
     await database.execute(
         "UPDATE users SET is_online = false WHERE is_online = true"
     )

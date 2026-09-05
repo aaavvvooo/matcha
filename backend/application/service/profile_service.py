@@ -258,7 +258,7 @@ class ProfileService:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="No matching photos found",
                 )
-            from application.clients.minio_client import delete_photo
+            from application.clients.storage import delete_photo
             for url in urls:
                 try:
                     delete_photo(url)

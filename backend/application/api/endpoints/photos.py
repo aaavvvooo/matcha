@@ -19,8 +19,7 @@ async def get_photo(
     db: Database = Depends(get_db),
     current_user: dict = Depends(get_current_user_from_cookie),
 ):
-    from application.clients.minio_client import get_photo_object
-    from botocore.exceptions import ClientError
+    from application.clients.storage import PhotoNotFound, get_photo_object
 
     profile_repo = ProfileRepository(db)
     social_repo = SocialRepository(db)
@@ -35,11 +34,8 @@ async def get_photo(
             raise HTTPException(status_code=404, detail="Photo not found")
 
     try:
-        obj = get_photo_object(key)
-    except ClientError:
+        photo = get_photo_object(key)
+    except PhotoNotFound:
         raise HTTPException(status_code=404, detail="Photo not found")
 
-    return StreamingResponse(
-        obj["Body"].iter_chunks(),
-        media_type=obj.get("ContentType", "application/octet-stream"),
-    )
+    return StreamingResponse(photo.chunks, media_type=photo.content_type)
