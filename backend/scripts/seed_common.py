@@ -4,7 +4,7 @@ import urllib.request
 
 from application.repository.user_repo import UserRepository
 from application.repository.profile_repo import ProfileRepository
-from application.clients.minio_client import upload_photo
+from application.clients.storage import upload_photo
 
 GENDER_MAP = {"male": "Man", "female": "Woman"}
 ORIENTATIONS = ["Heterosexual", "Homosexual", "Bisexual", "Other"]

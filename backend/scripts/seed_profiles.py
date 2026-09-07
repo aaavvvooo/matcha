@@ -2,7 +2,7 @@
 
 Pulls generated people from randomuser.me (name, gender, dob, city, GPS, photo)
 and writes them straight into the DB via the existing repositories, uploading
-photos to MinIO through the existing minio_client.
+photos to storage through the existing storage client.
 
 randomuser.me only knows male/female — Non-binary/Other profiles borrow a
 random male or female source profile (name/photo/dob) but keep their own
@@ -29,7 +29,7 @@ from application.database import Database  # noqa: E402
 from application.repository.user_repo import UserRepository  # noqa: E402
 from application.repository.profile_repo import ProfileRepository  # noqa: E402
 from application.utils.password import get_password_hash  # noqa: E402
-from application.clients.minio_client import ensure_bucket  # noqa: E402
+from application.clients.storage import ensure_bucket  # noqa: E402
 from scripts.seed_common import (  # noqa: E402
     ORIENTATIONS,
     DEFAULT_PASSWORD,

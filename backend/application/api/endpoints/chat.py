@@ -58,21 +58,30 @@ async def _await_token(websocket: WebSocket) -> str | None:
     return token if isinstance(token, str) and token else None
 
 
+async def _safe_close(websocket: WebSocket) -> None:
+    """Closes the socket, tolerating a client that already disconnected.
+
+    The underlying `websockets` library can raise AttributeError (not just
+    RuntimeError) when closing a connection whose reader task already exited.
+    """
+    try:
+        await websocket.close(code=_POLICY_VIOLATION)
+    except (RuntimeError, AttributeError):
+        pass
+
+
 @router.websocket("/ws")
 async def presence_socket(websocket: WebSocket):
     await websocket.accept()
 
     token = await _await_token(websocket)
     if token is None:
-        try:
-            await websocket.close(code=_POLICY_VIOLATION)
-        except RuntimeError:
-            pass  # client already disconnected
+        await _safe_close(websocket)
         return
 
     user_id = await _authenticate(token)
     if user_id is None:
-        await websocket.close(code=_POLICY_VIOLATION)
+        await _safe_close(websocket)
         return
 
     await presence_manager.connect(user_id, websocket)

@@ -28,7 +28,7 @@ from application.database import Database  # noqa: E402
 from application.repository.user_repo import UserRepository  # noqa: E402
 from application.repository.profile_repo import ProfileRepository  # noqa: E402
 from application.utils.password import get_password_hash  # noqa: E402
-from application.clients.minio_client import ensure_bucket  # noqa: E402
+from application.clients.storage import ensure_bucket  # noqa: E402
 from scripts.seed_common import (  # noqa: E402
     ORIENTATIONS,
     DEFAULT_PASSWORD,
