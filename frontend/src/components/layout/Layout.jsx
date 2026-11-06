@@ -7,16 +7,14 @@ import './Layout.css';
 
 const PUBLIC_PATHS = ['/', '/login', '/register', '/verify-email', '/forgot-password', '/reset-password'];
 
-// The landing page draws its own <header> and <footer>.
-const OWN_CHROME_PATHS = ['/'];
-
 function Layout({ children }) {
   const location = useLocation();
   const { user } = useAuth();
 
   const isPublic = PUBLIC_PATHS.includes(location.pathname);
   const showNav = user && !isPublic;
-  const showChrome = !OWN_CHROME_PATHS.includes(location.pathname);
+  // The landing page draws its own <header>, <main> and <footer>.
+  const showChrome = location.pathname !== '/';
   // Pages with their own chrome also provide their own <main>; nesting landmarks breaks them.
   const Content = showChrome ? 'main' : 'div';
 

@@ -86,15 +86,11 @@ async def read_root():
 @app.get("/health")
 async def health_check():
     """Public liveness check: reports only whether the database answers."""
+    if not database.pool:
+        raise HTTPException(status_code=503, detail="Database pool not initialized")
     try:
-        if not database.pool:
-            raise HTTPException(status_code=503, detail="Database pool not initialized")
-
         result = await database.fetch_val("SELECT 1")
         return {"status": "healthy", "database": {"connected": result == 1}}
-
-    except HTTPException:
-        raise
     except Exception:
         logger.exception("Health check failed")
         raise HTTPException(

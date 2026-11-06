@@ -35,9 +35,8 @@ class ProfileService:
         async with pool.acquire() as connection:
             async with connection.transaction():
                 conn = cast(Connection, connection)
-                tags_record = await self.profile_repo.add_tags(request.user_id, request.tags, conn)
-                profile_record = await self.profile_repo.set_profile(request, conn)
-        return profile_record, tags_record
+                await self.profile_repo.add_tags(request.user_id, request.tags, conn)
+                await self.profile_repo.set_profile(request, conn)
 
     async def get_profile(self, user_id: int) -> ProfileResponse:
         profile = await self.profile_repo.get_profile(user_id)
