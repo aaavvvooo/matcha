@@ -25,7 +25,7 @@ Prerequisites: Docker with the Compose plugin.
    | API + OpenAPI docs | http://localhost:8000/docs |
    | MinIO console | http://localhost:9001 |
 
-Seeded accounts use emails ending in `@matcha-seed.dev` and the password defined as `DEFAULT_PASSWORD` in
+Seeded accounts use emails ending in `@matcha-seed.dev` or `@matcha-seed-am.dev` and the password defined as `DEFAULT_PASSWORD` in
 `backend/scripts/seed_common.py`.
 
 ## Environment variables
@@ -40,8 +40,8 @@ Seeded accounts use emails ending in `@matcha-seed.dev` and the password defined
 | `FRONTEND_URL` | Allowed CORS origin and base for email links |
 | `REACT_APP_API_URL` | API base URL used by the frontend |
 | `BREVO_API_KEY`, `FROM_EMAIL` | Transactional email (verification, password reset) |
-| `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_BUCKET`, `MINIO_PUBLIC_URL` | Local photo storage |
-| `STORAGE_BACKEND` | `minio` (default in Compose) or `gcs` |
+| `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_BUCKET` | Local photo storage |
+| `STORAGE_BACKEND` | `minio` or `gcs`; Compose hardcodes `minio` for the backend, so set it only outside Compose |
 | `GCP_PROJECT_ID`, `GCS_BUCKET_NAME` | Only when `STORAGE_BACKEND=gcs` |
 | `NOMINATIM_URL`, `NOMINATIM_USER_AGENT`, `NOMINATIM_ACCEPT_LANGUAGE` | Optional geocoding overrides |
 

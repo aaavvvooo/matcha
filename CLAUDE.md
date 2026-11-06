@@ -23,12 +23,13 @@ FastAPI (Python 3.13, uv) + asyncpg + PostgreSQL 17 · React 19 (CRA) · MinIO/G
 - **Blocks** hide users everywhere: browse, search, profile view, notifications, chat.
 - **Real-time**: one WebSocket per tab at `/chat/ws`, owned by `NotificationContext` on the frontend and
   `PresenceManager` on the backend. Extend these; don't open a second socket.
-- **Frontend**: API calls go through `src/api/*` (axios `client.js`); no `dangerouslySetInnerHTML`; use design
+- **Frontend**: API calls go through `src/api/*` (axios `client.js`; `authApi.js` uses `fetch`); no `dangerouslySetInnerHTML`; use design
   tokens from `src/index.css` and components in `src/components/ui/`.
 - **Secrets** only in `.env` (gitignored). Never commit credentials.
 
 ## Checks
-Run from `backend/` unless noted. Baseline on 2026-11-07: ruff 1 issue, mypy 13 errors — add no new ones.
+Run from `backend/` unless noted (`uv sync` installs ruff from the dev group; rule set pinned in `pyproject.toml`).
+Baseline on 2026-11-07: ruff clean, mypy 13 errors — add no new ones.
 ```bash
 uv run ruff check application
 uv run mypy --config-file application/mypy.ini application

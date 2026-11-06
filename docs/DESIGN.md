@@ -57,9 +57,14 @@ backend/application/
 ├── limiter.py, config.py, main.py
 ```
 
-Rules: endpoint → service → repository. SQL never appears outside `repository/` (one existing exception:
-`SocialService.get_user_profile` reads `fame_rating` directly — move it when touched). New domains get their own
-repo/service/endpoint file rather than growing an unrelated one.
+Rules: endpoint → service → repository, with SQL in `repository/`. New domains get their own
+repo/service/endpoint file rather than growing an unrelated one. Existing exceptions (move them when touched):
+- SQL outside `repository/`: `main.py` (startup presence reset, `/health`), `websocket/manager.py` (presence),
+  `SocialService.get_user_profile` (`fame_rating` read).
+- Endpoints calling repositories directly: `auth.py` `/auth/me`, `photos.py` `/profile/photo/{key}`,
+  `profile.py` upload photo-count check.
+- Dynamic `SET` clauses (`user_repo`, `profile_repo`) build column names with f-strings from code-defined keys;
+  values are always `$n` parameters. Never let request field names reach those keys unfiltered.
 
 ## 4. Database schema (current)
 
@@ -93,8 +98,10 @@ A profile counts as **complete** when `user_profiles.gender IS NOT NULL`; incomp
 
 ## 5. HTTP API
 
-No `/api` prefix. All routes except `/auth/*` require `Authorization: Bearer <access>`; `/profile/photo/*` is
-authenticated by cookie instead (so `<img src>` works).
+No `/api` prefix. Public routes: `/auth/register`, `/verify-email`, `/login`, `/forget-password`, `/refresh`,
+`/reset-password`. `/auth/logout` takes an optional Bearer token plus the refresh cookie and works even with an
+expired token. `/profile/photo/*` is authenticated by the `access_token` cookie (so `<img src>` works). Everything
+else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 
 ### Auth — `/auth`
 | Method | Path | Notes |
@@ -104,7 +111,7 @@ authenticated by cookie instead (so `<img src>` works).
 | POST | `/login` | Form body (username or email + password) · returns access token, sets refresh cookie · 5/min |
 | GET | `/me` | Current user |
 | POST | `/forget-password` | Always same message (no user enumeration) · 3/min |
-| POST | `/logout` | Blacklists access token, clears refresh cookie |
+| POST | `/logout` | Idempotent: blacklists a live access token, revokes the refresh token (username from access or refresh token), always clears both cookies |
 | POST | `/refresh` | Rotates refresh token (httpOnly, SameSite=Strict cookie) |
 | POST | `/reset-password` | Token + new password in body · 5/min |
 
@@ -227,14 +234,14 @@ Stored in `user_profiles.fame_rating`. `profile_viewers` counts distinct viewers
 
 | Threat | Mitigation | Status |
 |---|---|---|
-| SQL injection | asyncpg `$n` parameters only; never f-string SQL | ✅ |
+| SQL injection | All values are asyncpg `$n` parameters; f-strings only for code-defined column names (§3) | ✅ |
 | XSS | React escapes output; no `dangerouslySetInnerHTML` | ✅ |
 | Weak passwords | Argon2; zxcvbn score ≥ 2 + length/charset rules | ✅ |
 | CSRF | Refresh cookie httpOnly + SameSite=Strict; CORS whitelist | ✅ |
 | Brute force | SlowAPI limits on auth routes | ✅ |
 | Token replay | Access blacklist on logout; refresh rotation | ✅ |
-| Malicious upload | Type + size check; **magic-byte check** | ⚠️ magic bytes = E7 / F2 |
-| Info leakage | No stack traces / exception text in responses | ⚠️ 14 leaks = E7 / F1 |
+| Malicious upload | Type detected from magic bytes (`utils/image.py`), never client `content_type`; ≤5 MB read cap; all files validated before any is stored; served with `nosniff` | ✅ (request-size limit: R2) |
+| Info leakage | `main.py` middleware logs unhandled errors and returns `{"detail":"Internal server error"}`; `/health` reports only connectivity | ✅ |
 | Secrets | `.env` gitignored | ✅ |
 
 **Micro-framework rule (subject §III).** Decision 2026-11-07: keep FastAPI + Pydantic. Defense position: FastAPI is
@@ -247,8 +254,11 @@ library (auth, tokens, verification, reset are hand-written).
   `ChatContext` (conversations/messages; sends over `NotificationContext`'s socket).
 - **API modules** in `src/api/`: `authApi` (fetch), the rest via `client.js` (axios + 401 → refresh).
 - **Routing:** `ProtectedRoute` redirects to `/login`; `/profile/setup` for incomplete profiles.
-- **Layout:** `Layout.jsx` currently renders only `BottomNav`; header + main + footer required by the subject
-  (E8 / F3).
+- **Layout:** `Layout.jsx` renders `[BottomNav (side menu ≥860 px / tab bar below) + Header + <main>]` then
+  `Footer` as the last row (under the tab bar on mobile, full width on desktop). The landing page `/` draws its
+  own header/main/footer; signed-in users visiting `/` are redirected to `/browse`.
+- **Errors:** `components/ErrorBoundary.jsx` wraps the whole app (render errors only — async errors must be
+  handled where they occur).
 - **Design system:** tokens in `src/index.css` (cream / matcha palette, Playfair Display + DM Sans);
   shared UI in `src/components/ui/`.
 
