@@ -38,4 +38,8 @@ async def get_photo(
     except PhotoNotFound:
         raise HTTPException(status_code=404, detail="Photo not found")
 
-    return StreamingResponse(photo.chunks, media_type=photo.content_type)
+    return StreamingResponse(
+        photo.chunks,
+        media_type=photo.content_type,
+        headers={"X-Content-Type-Options": "nosniff"},
+    )

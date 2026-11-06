@@ -1,10 +1,10 @@
 from .database import database
 from .config import FRONTEND_URL
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import asyncio
-import asyncpg
 import logging
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -51,6 +51,18 @@ app = FastAPI(title="Matcha", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+# Registered before CORSMiddleware so CORS wraps it: the browser receives a readable
+# JSON 500 instead of an opaque CORS failure, and no exception text ever leaves the server.
+@app.middleware("http")
+async def unhandled_error_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception:
+        logger.exception("Unhandled error on %s %r", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
 app.add_middleware(
     cast(Any, CORSMiddleware),
     allow_origins=["http://localhost:3000", FRONTEND_URL],
@@ -73,49 +85,21 @@ async def read_root():
 
 @app.get("/health")
 async def health_check():
-    """
-    Comprehensive health check endpoint
-    Checks database connection and returns pool stats
-    """
+    """Public liveness check: reports only whether the database answers."""
     try:
         if not database.pool:
             raise HTTPException(status_code=503, detail="Database pool not initialized")
 
         result = await database.fetch_val("SELECT 1")
+        return {"status": "healthy", "database": {"connected": result == 1}}
 
-        pool_size = database.pool.get_size()
-        pool_free = database.pool.get_idle_size()
-        pool_used = pool_size - pool_free
-
-        db_version = await database.fetch_val("SELECT version()")
-
-        return {
-            "status": "healthy",
-            "database": {
-                "connected": True,
-                "test_query": result == 1,
-                "version": db_version.split(",")[0] if db_version else "unknown",
-            },
-            "connection_pool": {
-                "size": pool_size,
-                "used": pool_used,
-                "free": pool_free,
-                "max_size": database.pool.get_max_size(),
-                "min_size": database.pool.get_min_size(),
-            },
-        }
-
-    except asyncpg.PostgresError as e:
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Health check failed")
         raise HTTPException(
             status_code=503,
-            detail={
-                "status": "unhealthy",
-                "database": {"connected": False, "error": str(e)},
-            },
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=503, detail={"status": "unhealthy", "error": str(e)}
+            detail={"status": "unhealthy", "database": {"connected": False}},
         )
 
 

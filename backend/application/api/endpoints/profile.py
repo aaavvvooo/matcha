@@ -16,6 +16,7 @@ from application.database import get_db, Database
 from application.service import ProfileService
 from application.repository.profile_repo import ProfileRepository
 from application.utils import get_current_user
+from application.utils.image import MAX_IMAGE_BYTES, detect_image_type
 from application.limiter import limiter
 
 
@@ -100,14 +101,17 @@ async def upload_photo(
     current_count = await service.profile_repo.count_photos(user_id)
     if current_count + len(files) > 5:
         raise HTTPException(status_code=400, detail=f"Cannot exceed 5 photos total")
-    urls = []
+    # Validate every file before storing any, so a bad file never leaves orphans in storage.
+    validated: list[tuple[bytes, str]] = []
     for file in files:
-        if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
-            raise HTTPException(status_code=400, detail=f"{file.filename}: only JPEG, PNG and WebP are allowed")
-        data = await file.read()
-        if len(data) > 5 * 1024 * 1024:
+        data = await file.read(MAX_IMAGE_BYTES + 1)
+        if len(data) > MAX_IMAGE_BYTES:
             raise HTTPException(status_code=400, detail=f"{file.filename}: file size must not exceed 5 MB")
-        urls.append(storage_upload(user_id, data, file.content_type))
+        image_type = detect_image_type(data)
+        if image_type is None:
+            raise HTTPException(status_code=400, detail=f"{file.filename}: only JPEG, PNG and WebP images are allowed")
+        validated.append((data, image_type))
+    urls = [storage_upload(user_id, data, image_type) for data, image_type in validated]
     return await service.add_photos(user_id, urls)
 
 

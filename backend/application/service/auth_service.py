@@ -40,236 +40,186 @@ class AuthService:
         self.token_repo = TokenRepository(db)
 
     async def register(self, request: RegisterRequest):
-        try:
-            user = await self.user_repo.get_user_by_email(request.email)
-            if user:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email already registered",
-                )
-
-            user = await self.user_repo.get_user_by_username(request.username)
-            if user:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Username already taken",
-                )
-
-            validate_password(request.password)
-            hashed_password = get_password_hash(request.password)
-            verification_token = create_verification_token()
-            hashed_verification_token = hashlib.sha256(
-                verification_token.encode()
-            ).hexdigest()
-            expiration_date = datetime.now(timezone.utc) + timedelta(days=1)
-
-            pool = self.db.require_pool()
-            async with pool.acquire() as connection:
-                async with connection.transaction():
-                    conn = cast(Connection, connection)
-                    user_record = await self.user_repo.create_user(
-                        request.full_name,
-                        request.username,
-                        request.email,
-                        hashed_password,
-                        conn,
-                    )
-                    user = RegisterUserResponse(**user_record)
-                    await self.token_repo.create_verification_token(
-                        user.id,
-                        hashed_verification_token,
-                        "email",
-                        expiration_date,
-                        conn,
-                    )
-            return user, verification_token
-        except HTTPException:
-            raise
-        except Exception as e:
+        user = await self.user_repo.get_user_by_email(request.email)
+        if user:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Internal server error: {e}",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
             )
+
+        user = await self.user_repo.get_user_by_username(request.username)
+        if user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken",
+            )
+
+        validate_password(request.password)
+        hashed_password = get_password_hash(request.password)
+        verification_token = create_verification_token()
+        hashed_verification_token = hashlib.sha256(
+            verification_token.encode()
+        ).hexdigest()
+        expiration_date = datetime.now(timezone.utc) + timedelta(days=1)
+
+        pool = self.db.require_pool()
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                conn = cast(Connection, connection)
+                user_record = await self.user_repo.create_user(
+                    request.full_name,
+                    request.username,
+                    request.email,
+                    hashed_password,
+                    conn,
+                )
+                user = RegisterUserResponse(**user_record)
+                await self.token_repo.create_verification_token(
+                    user.id,
+                    hashed_verification_token,
+                    "email",
+                    expiration_date,
+                    conn,
+                )
+        return user, verification_token
 
     async def verify_email(self, token: str):
-        try:
-            hashed_token = hashlib.sha256(token.encode()).hexdigest()
-            token_record = await self.token_repo.get_verification_token(hashed_token)
-            if not token_record:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
-                )
-            token_info = TokenInfo(**token_record)
-            if token_info.used or token_info.expires_at < datetime.now(timezone.utc):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Token expired"
-                )
-
-            pool = self.db.require_pool()
-            async with pool.acquire() as connection:
-                async with connection.transaction():
-                    conn = cast(Connection, connection)
-                    await self.token_repo.mark_token_as_used(token_info.id, conn)
-                    user_record = await self.user_repo.update_user(
-                        token_info.user_id, {"is_validated": True}, conn
-                    )
-            user = RegisterUserResponse(**user_record)
-            return user
-        except HTTPException:
-            raise
-        except Exception as e:
+        hashed_token = hashlib.sha256(token.encode()).hexdigest()
+        token_record = await self.token_repo.get_verification_token(hashed_token)
+        if not token_record:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Internal server error: {e}",
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
             )
+        token_info = TokenInfo(**token_record)
+        if token_info.used or token_info.expires_at < datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Token expired"
+            )
+
+        pool = self.db.require_pool()
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                conn = cast(Connection, connection)
+                await self.token_repo.mark_token_as_used(token_info.id, conn)
+                user_record = await self.user_repo.update_user(
+                    token_info.user_id, {"is_validated": True}, conn
+                )
+        user = RegisterUserResponse(**user_record)
+        return user
 
     async def login(self, username: str, password: str):
-        try:
-            user = await self.user_repo.get_user_by_username(username)
-            if not user:
-                user = await self.user_repo.get_user_by_email(username)
-            if not user:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid credentials",
-                )
-            if not verify_password(password, user["hashed_password"]):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid credentials",
-                )
-            if not user["is_validated"]:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Email not verified"
-                )
-            access_token = create_access_token(data={"sub": user["username"]})
-            refresh_token = create_refresh_token(data={"sub": user["username"]})
-            refresh_token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-            expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-            await self.token_repo.upsert_refresh_token(user["username"], refresh_token_hash, expires_at)
-            return access_token, refresh_token
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise (
-                HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Internal server error: {e}",
-                )
+        user = await self.user_repo.get_user_by_username(username)
+        if not user:
+            user = await self.user_repo.get_user_by_email(username)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid credentials",
             )
+        if not verify_password(password, user["hashed_password"]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid credentials",
+            )
+        if not user["is_validated"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Email not verified"
+            )
+        access_token = create_access_token(data={"sub": user["username"]})
+        refresh_token = create_refresh_token(data={"sub": user["username"]})
+        refresh_token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        await self.token_repo.upsert_refresh_token(user["username"], refresh_token_hash, expires_at)
+        return access_token, refresh_token
 
     async def logout(self, token: str):
-        try:
-            payload = decode_token(token)
-            if not payload:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
-                )
-
-            exp = payload.get("exp")
-            if not exp:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Token missing expiration",
-                )
-
-            if isinstance(exp, (int, float)):
-                exp_time = datetime.fromtimestamp(exp, tz=timezone.utc)
-            elif isinstance(exp, datetime):
-                exp_time = exp
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid token expiration",
-                )
-
-            if exp_time < datetime.now(timezone.utc):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Token expired"
-                )
-
-            username = payload.get("sub")
-            token_hash = hashlib.sha256(token.encode()).hexdigest()
-            await self.token_repo.blacklist_token(token_hash, exp_time)
-            if username:
-                await self.token_repo.delete_refresh_token(username)
-        except HTTPException:
-            raise
-        except Exception as e:
+        payload = decode_token(token)
+        if not payload:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Internal server error: {e}",
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
             )
+
+        exp = payload.get("exp")
+        if not exp:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token missing expiration",
+            )
+
+        if isinstance(exp, (int, float)):
+            exp_time = datetime.fromtimestamp(exp, tz=timezone.utc)
+        elif isinstance(exp, datetime):
+            exp_time = exp
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token expiration",
+            )
+
+        if exp_time < datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Token expired"
+            )
+
+        username = payload.get("sub")
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        await self.token_repo.blacklist_token(token_hash, exp_time)
+        if username:
+            await self.token_repo.delete_refresh_token(username)
 
     async def refresh(self, refresh_token: str):
-        try:
-            payload = decode_token(refresh_token)
-            if not payload or payload.get("type") != "refresh":
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid refresh token",
-                )
-
-            username = payload.get("sub")
-            if not username:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid refresh token",
-                )
-
-            incoming_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-            record = await self.token_repo.get_refresh_token(username)
-
-            if not record or record["token_hash"] != incoming_hash:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Refresh token revoked",
-                )
-
-            new_access_token = create_access_token(data={"sub": username})
-            new_refresh_token = create_refresh_token(data={"sub": username})
-            new_refresh_hash = hashlib.sha256(new_refresh_token.encode()).hexdigest()
-            new_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-            await self.token_repo.upsert_refresh_token(username, new_refresh_hash, new_expires_at)
-
-            return new_access_token, new_refresh_token
-        except HTTPException:
-            raise
-        except Exception as e:
+        payload = decode_token(refresh_token)
+        if not payload or payload.get("type") != "refresh":
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Internal server error: {e}",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
             )
+
+        username = payload.get("sub")
+        if not username:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+            )
+
+        incoming_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+        record = await self.token_repo.get_refresh_token(username)
+
+        if not record or record["token_hash"] != incoming_hash:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token revoked",
+            )
+
+        new_access_token = create_access_token(data={"sub": username})
+        new_refresh_token = create_refresh_token(data={"sub": username})
+        new_refresh_hash = hashlib.sha256(new_refresh_token.encode()).hexdigest()
+        new_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        await self.token_repo.upsert_refresh_token(username, new_refresh_hash, new_expires_at)
+
+        return new_access_token, new_refresh_token
 
     async def forget_password(self, username_or_email: str) -> ForgetPasswordResult:
         msg = "If the account exists, a reset email has been sent"
-        try:
-            user = await self.user_repo.get_user_by_email(username_or_email)
-            if not user:
-                user = await self.user_repo.get_user_by_username(username_or_email)
+        user = await self.user_repo.get_user_by_email(username_or_email)
+        if not user:
+            user = await self.user_repo.get_user_by_username(username_or_email)
 
-            if user:
-                tokens = await create_password_reset_token()
-                await self.token_repo.create_verification_token(
-                    user_id=user["id"],
-                    token=tokens["hashed_token"],
-                    token_type="password_reset",
-                    expires_at=tokens["expiry"],
-                )
-                return ForgetPasswordResult(
-                    message=msg,
-                    email_to=user["email"],
-                    email_username=user["username"],
-                    email_token=tokens["token"],
-                )
-            return ForgetPasswordResult(message=msg)
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Internal server error: {e}",
+        if user:
+            tokens = await create_password_reset_token()
+            await self.token_repo.create_verification_token(
+                user_id=user["id"],
+                token=tokens["hashed_token"],
+                token_type="password_reset",
+                expires_at=tokens["expiry"],
             )
+            return ForgetPasswordResult(
+                message=msg,
+                email_to=user["email"],
+                email_username=user["username"],
+                email_token=tokens["token"],
+            )
+        return ForgetPasswordResult(message=msg)
 
     async def reset_password(self, token: str, password: str):
         hashed_token = hashlib.sha256(token.encode()).hexdigest()
@@ -304,51 +254,43 @@ class AuthService:
             raise
 
     async def update_me(self, user_id: int, request: UpdateMeRequest):
-        try:
-            updates = request.model_dump(exclude_none=True)
-            if not updates:
+        updates = request.model_dump(exclude_none=True)
+        if not updates:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update"
+            )
+
+        if "username" in updates:
+            existing = await self.user_repo.get_user_by_username(updates["username"])
+            if existing and existing["id"] != user_id:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update"
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
                 )
 
-            if "username" in updates:
-                existing = await self.user_repo.get_user_by_username(updates["username"])
-                if existing and existing["id"] != user_id:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
+        email_changed = "email" in updates
+        verification_token = None
+        if email_changed:
+            existing = await self.user_repo.get_user_by_email(updates["email"])
+            if existing and existing["id"] != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+                )
+            updates["is_validated"] = False
+            verification_token = create_verification_token()
+            hashed_verification_token = hashlib.sha256(
+                verification_token.encode()
+            ).hexdigest()
+            expiration_date = datetime.now(timezone.utc) + timedelta(days=1)
+
+        pool = self.db.require_pool()
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                conn = cast(Connection, connection)
+                user_record = await self.user_repo.update_user(user_id, updates, conn)
+                if email_changed:
+                    await self.token_repo.create_verification_token(
+                        user_id, hashed_verification_token, "email", expiration_date, conn
                     )
 
-            email_changed = "email" in updates
-            verification_token = None
-            if email_changed:
-                existing = await self.user_repo.get_user_by_email(updates["email"])
-                if existing and existing["id"] != user_id:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
-                    )
-                updates["is_validated"] = False
-                verification_token = create_verification_token()
-                hashed_verification_token = hashlib.sha256(
-                    verification_token.encode()
-                ).hexdigest()
-                expiration_date = datetime.now(timezone.utc) + timedelta(days=1)
-
-            pool = self.db.require_pool()
-            async with pool.acquire() as connection:
-                async with connection.transaction():
-                    conn = cast(Connection, connection)
-                    user_record = await self.user_repo.update_user(user_id, updates, conn)
-                    if email_changed:
-                        await self.token_repo.create_verification_token(
-                            user_id, hashed_verification_token, "email", expiration_date, conn
-                        )
-
-            response = MeResponse(**dict(user_record), email_verification_sent=email_changed)
-            return response, verification_token
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Internal server error: {e}",
-            )
+        response = MeResponse(**dict(user_record), email_verification_sent=email_changed)
+        return response, verification_token

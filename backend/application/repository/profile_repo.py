@@ -27,31 +27,6 @@ class ProfileRepository:
             print(e)
             raise e
 
-    async def set_photos(self, user_id, data, transaction: Optional[Connection] = None):
-        if not data:
-            return []
-
-        values_parts = []
-        params = []
-        param_index = 1
-        for i, url in enumerate(data, start=1):
-            values_parts.append(f"(${param_index}, ${param_index+1}, ${param_index+2})")
-            params.extend([user_id, url, i])
-            param_index += 3
-
-        query = f"""
-            INSERT INTO photos (user_id, url, "order")
-            VALUES {", ".join(values_parts)}
-            RETURNING id, user_id, url, "order", is_main
-        """
-        try:
-            if transaction:
-                return await transaction.fetch(query, *params)
-            return await self.db.fetch_all(query, *params)
-        except Exception as e:
-            print(e)
-            raise e
-
     async def get_profile(self, user_id: int):
         query = """
             SELECT
