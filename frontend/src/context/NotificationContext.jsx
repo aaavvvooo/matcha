@@ -66,12 +66,13 @@ export function NotificationProvider({ children }) {
     }
   }, [accessToken, user, addNotification])
 
-  async function clearUnread() {
+  // Stable identity: pages call this from useEffect, so a new function per render would loop.
+  const clearUnread = useCallback(async () => {
     if (!accessToken) return
     await markRead().catch(() => {})
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
     setUnreadCount(0)
-  }
+  }, [accessToken])
 
   return (
     <NotificationContext.Provider value={{ notifications, unreadCount, clearUnread, wsRef }}>

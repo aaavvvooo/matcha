@@ -6,11 +6,21 @@
   background: var(--cream);
 }
 
+/* header + main + footer, stacked */
+.app-shell-column {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  order: 1;
+}
+
 .app-shell-content {
   flex: 1;
+  min-height: 0;
   overflow: hidden;
   position: relative;
-  order: 1;
 }
 
 .app-shell > .bottom-nav,
@@ -23,7 +33,7 @@
     flex-direction: row;
   }
 
-  .app-shell-content {
+  .app-shell-column {
     order: 2;
   }
 

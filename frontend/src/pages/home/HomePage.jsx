@@ -1,4 +1,5 @@
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { Sparkle } from 'lucide-react';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
@@ -26,12 +27,17 @@ const STATS = [
 
 function HomePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // The landing page is for visitors; signed-in users belong in the app, where the
+  // header gives them logout and the unread indicator.
+  if (user) return <Navigate to="/browse" replace />;
 
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
 
       {/* Navbar */}
-      <div style={{
+      <header style={{
         padding: '18px 40px',
         display: 'flex',
         alignItems: 'center',
@@ -51,8 +57,10 @@ function HomePage() {
           <Btn variant="ghost" onClick={() => navigate('/login')} style={{ fontSize: 14 }}>Sign in</Btn>
           <Btn onClick={() => navigate('/register')} style={{ fontSize: 14, padding: '10px 24px' }}>Get started</Btn>
         </div>
-      </div>
+      </header>
 
+      {/* display: contents keeps the existing flex layout while giving the page a real <main> landmark */}
+      <main style={{ display: 'contents' }}>
       {/* Hero */}
       <div style={{
         padding: '80px 40px 60px',
@@ -173,14 +181,16 @@ function HomePage() {
         <Btn onClick={() => navigate('/register')} style={{ fontSize: 16, padding: '15px 40px' }}>Create your account →</Btn>
       </div>
 
+      </main>
+
       {/* Footer */}
-      <div style={{ padding: '24px 40px', background: 'var(--white)', borderTop: '1.5px solid var(--cream3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+      <footer style={{ padding: '24px 40px', background: 'var(--white)', borderTop: '1.5px solid var(--cream3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
         <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 18, fontWeight: 700, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <MatchaCup size={24} mood="happy" animate={false}/>
           Matcha
         </div>
         <div style={{ fontSize: 12, color: 'var(--ink4)' }}>© 2026 · Because love, too, can be industrialized.</div>
-      </div>
+      </footer>
     </div>
   );
 }

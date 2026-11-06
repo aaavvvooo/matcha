@@ -30,13 +30,12 @@ export default function NotificationsPage() {
 
   return (
     <div className="notif-page">
-      <div className="container">
+      <div className="notif-inner">
         <h1 className="notif-title">Notifications</h1>
 
-        {notifications.length === 0 && (
+        {notifications.length === 0 ? (
           <p className="notif-empty">You have no notifications yet.</p>
-        )}
-
+        ) : (
         <ul className="notif-list">
           {notifications.map(n => (
             <li key={n.id} className={`notif-item${n.is_read ? '' : ' unread'}`}>
@@ -49,7 +48,7 @@ export default function NotificationsPage() {
               <div className="notif-body">
                 <p className="notif-text">
                   {n.from_username
-                    ? <Link to={`/users/${n.from_user}`}>{n.from_username}</Link>
+                    ? <Link to={`/profile/${n.from_user}`}>{n.from_username}</Link>
                     : 'Someone'
                   }
                   {' '}{TYPE_LABELS[n.type] || n.type}
@@ -60,6 +59,7 @@ export default function NotificationsPage() {
             </li>
           ))}
         </ul>
+        )}
       </div>
     </div>
   )

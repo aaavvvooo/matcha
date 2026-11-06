@@ -40,10 +40,17 @@ export function AuthProvider({ children }) {
     return me;
   }
 
+  // Always end the local session, even if the server call fails (expired token,
+  // network error) — logout must never leave the user stuck or throw to the caller.
   async function logout() {
-    await logoutApi(accessToken);
-    setAccessToken(null);
-    setUser(null);
+    try {
+      await logoutApi(accessToken);
+    } catch {
+      // server-side blacklisting failed; the token still expires on its own
+    } finally {
+      setAccessToken(null);
+      setUser(null);
+    }
   }
 
   // Re-fetches /auth/me — used to revalidate has_profile before entering a
