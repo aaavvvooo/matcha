@@ -155,17 +155,21 @@ async def forget_password(
 
 @router.post("/logout")
 async def logout(
+    request: Request,
     response: Response,
     db: Database = Depends(get_db),
-    current_user=Depends(get_current_user),
 ):
-    auth_service = AuthService(db)
+    # Deliberately no auth dependency: an expired access token must still be able to
+    # log out, otherwise the 7-day refresh cookie survives and the session comes back.
+    auth_header = request.headers.get("Authorization", "")
+    access_token = auth_header[7:] if auth_header.lower().startswith("bearer ") else None
     try:
-        await auth_service.logout(current_user["token"])
+        await AuthService(db).logout(access_token, request.cookies.get("refresh_token"))
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid token")
-    response.delete_cookie("refresh_token")
-    response.delete_cookie("access_token")
+        # Server-side revocation failed; still end the browser session below.
+        logger.exception("Logout: token revocation failed")
+    response.delete_cookie("refresh_token", httponly=True, samesite="strict")
+    response.delete_cookie("access_token", httponly=True, samesite="strict")
     return {"message": "Successfully logged out"}
 
 

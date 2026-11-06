@@ -132,38 +132,30 @@ class AuthService:
         await self.token_repo.upsert_refresh_token(user["username"], refresh_token_hash, expires_at)
         return access_token, refresh_token
 
-    async def logout(self, token: str):
-        payload = decode_token(token)
-        if not payload:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
-            )
+    async def logout(self, access_token: str | None, refresh_token: str | None) -> None:
+        """End the session server-side. Idempotent: never fails on a missing, expired
+        or invalid token, so an expired access token can't keep the refresh token alive.
+        """
+        username = None
 
-        exp = payload.get("exp")
-        if not exp:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Token missing expiration",
-            )
+        # decode_token returns None for expired/invalid tokens, so only a live
+        # access token gets blacklisted (until its own expiry).
+        if access_token:
+            access = decode_token(access_token)
+            if access and access.get("type") == "access" and isinstance(access.get("exp"), (int, float)):
+                username = access.get("sub")
+                token_hash = hashlib.sha256(access_token.encode()).hexdigest()
+                await self.token_repo.blacklist_token(
+                    token_hash, datetime.fromtimestamp(access["exp"], tz=timezone.utc)
+                )
 
-        if isinstance(exp, (int, float)):
-            exp_time = datetime.fromtimestamp(exp, tz=timezone.utc)
-        elif isinstance(exp, datetime):
-            exp_time = exp
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid token expiration",
-            )
+        # The refresh cookie is signed, so it is a trustworthy source of the username
+        # when the access token has already expired.
+        if not username and refresh_token:
+            refresh = decode_token(refresh_token)
+            if refresh and refresh.get("type") == "refresh":
+                username = refresh.get("sub")
 
-        if exp_time < datetime.now(timezone.utc):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Token expired"
-            )
-
-        username = payload.get("sub")
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
-        await self.token_repo.blacklist_token(token_hash, exp_time)
         if username:
             await self.token_repo.delete_refresh_token(username)
 
