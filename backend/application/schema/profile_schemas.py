@@ -9,8 +9,9 @@ class SetProfileRequest(BaseModel):
     birth_date: datetime = Field(None)
     gender: str = Field(None, max_length=20)
     sexual_orientation: str = Field(None, max_length=20)
+    # Photos are added only through /profile/upload-photo, which derives the storage
+    # key server-side; never accept client-supplied keys here.
     tags: list[int] = Field(default_factory=list)
-    photos: list[str] = Field(default_factory=list)
 
 
 class UpdateProfileRequest(BaseModel):

@@ -1,118 +1,131 @@
-.header {
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 100;
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   height: 56px;
-  display: flex;
-  align-items: center;
-}
-
-.navbar {
-  display: flex;
-  align-items: center;
-  gap: 32px;
-  width: 100%;
-}
-
-.nav-logo {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--accent);
-  letter-spacing: -0.5px;
-  text-decoration: none;
+  padding: 0 20px;
   flex-shrink: 0;
+  background: var(--white);
+  border-bottom: 1.5px solid var(--cream3);
 }
 
-.nav-menu {
-  display: flex;
-  list-style: none;
-  gap: 4px;
-  flex: 1;
-}
-
-.nav-menu a {
-  color: var(--text-muted);
-  font-size: 14px;
-  font-weight: 500;
-  text-decoration: none;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  transition: color var(--transition), background var(--transition);
-}
-
-.nav-menu a:hover {
-  color: var(--text);
-  background: var(--surface-2);
-  opacity: 1;
-}
-
-.nav-actions {
+.site-header-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-left: auto;
-}
-
-.nav-btn {
-  padding: 7px 16px;
-  font-size: 13px;
-}
-
-.nav-username {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.btn-notif {
-  background: none;
-  border: none;
-  color: var(--text-muted);
+  gap: 8px;
+  font-family: var(--font-display);
+  font-style: italic;
   font-size: 20px;
-  cursor: pointer;
-  padding: 4px;
-  line-height: 1;
-  transition: color var(--transition);
-  position: relative;
-  display: inline-flex;
-  align-items: center;
+  font-weight: 700;
+  color: var(--ink);
   text-decoration: none;
 }
 
-.btn-notif:hover {
-  color: var(--accent);
-  opacity: 1;
+.site-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
 }
 
-.notif-badge {
+.site-header-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-full);
+  color: var(--ink2);
+  transition: var(--transition-fast);
+}
+
+.site-header-icon:hover {
+  background: var(--cream);
+}
+
+.site-header-badge {
   position: absolute;
-  top: -4px;
-  right: -6px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 10px;
+  top: 2px;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-full);
+  background: var(--rose);
+  color: var(--white);
+  font-size: 9px;
   font-weight: 700;
-  line-height: 1;
-  padding: 2px 5px;
-  border-radius: 99px;
-  pointer-events: none;
+  line-height: 16px;
+  text-align: center;
 }
 
-.nav-btn-logout {
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  padding: 6px 14px;
+.site-header-user {
+  font-size: 14px;
+  color: var(--ink3);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-header-logout {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1.5px solid var(--sand);
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--ink2);
+  font-family: var(--font-body);
   font-size: 13px;
+  cursor: pointer;
+  transition: var(--transition-fast);
 }
 
-.nav-btn-logout:hover {
-  color: var(--text);
-  border-color: var(--text-muted);
+.site-header-logout:hover {
+  background: var(--cream);
 }
 
-@media (max-width: 640px) {
-  .nav-menu { display: none; }
-  .nav-username { display: none; }
+.site-header-link {
+  font-size: 14px;
+  color: var(--ink2);
+  text-decoration: none;
+}
+
+.site-header-cta {
+  padding: 8px 18px;
+  border-radius: var(--r-full);
+  background: var(--spice);
+  color: var(--white);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.site-header-cta:hover {
+  background: var(--spice2);
+}
+
+@media (max-width: 480px) {
+  .site-header {
+    padding: 0 14px;
+  }
+
+  .site-header-user,
+  .site-header-logout span {
+    display: none;
+  }
+
+  .site-header-logout {
+    padding: 8px;
+  }
+}
+
+/* On desktop the side menu already shows the brand. */
+@media (min-width: 860px) {
+  .site-header--app .site-header-brand {
+    visibility: hidden;
+  }
 }

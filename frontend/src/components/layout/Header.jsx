@@ -1,53 +1,54 @@
 import { Link, useNavigate } from 'react-router-dom';
+import { Bell, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
+import MatchaCup from '../ui/MatchaCup';
 import './Header.css';
 
-function Header() {
+function Header({ inApp }) {
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
   const navigate = useNavigate();
 
   async function handleLogout() {
     await logout();
-    navigate('/login');
+    navigate('/');
   }
 
+  const username = user?.username;
+
   return (
-    <header className="header">
-      <div className="container">
-        <nav className="navbar">
-          <Link to="/" className="nav-logo">matcha</Link>
+    <header className={`site-header${inApp ? ' site-header--app' : ''}`}>
+      <Link to={user ? '/browse' : '/'} className="site-header-brand" aria-label="Matcha home">
+        <MatchaCup size={24} mood="happy" animate={false} />
+        Matcha
+      </Link>
 
-          {user && (
-            <ul className="nav-menu">
-              <li><Link to="/browse">Browse</Link></li>
-              <li><Link to="/search">Search</Link></li>
-              <li><Link to="/profile/me">Profile</Link></li>
-              <li><Link to="/chat">Chat</Link></li>
-            </ul>
-          )}
-
-          <div className="nav-actions">
-            {user ? (
-              <>
-                <Link to="/notifications" className="btn-notif" title="Notifications">
-                  &#9825;
-                  {unreadCount > 0 && (
-                    <span className="notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
-                  )}
-                </Link>
-                <span className="nav-username">{user.user?.username ?? user.username}</span>
-                <button className="btn nav-btn-logout" onClick={handleLogout}>Logout</button>
-              </>
-            ) : (
-              <>
-                <Link to="/login" className="btn btn-ghost nav-btn">Sign in</Link>
-                <Link to="/register" className="btn btn-primary nav-btn">Get started</Link>
-              </>
-            )}
-          </div>
-        </nav>
+      <div className="site-header-actions">
+        {user ? (
+          <>
+            <Link
+              to="/notifications"
+              className="site-header-icon"
+              aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+            >
+              <Bell size={20} strokeWidth={1.75} />
+              {unreadCount > 0 && (
+                <span className="site-header-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+              )}
+            </Link>
+            {username && <span className="site-header-user">{username}</span>}
+            <button type="button" className="site-header-logout" onClick={handleLogout}>
+              <LogOut size={16} strokeWidth={1.75} />
+              <span>Log out</span>
+            </button>
+          </>
+        ) : (
+          <>
+            <Link to="/login" className="site-header-link">Sign in</Link>
+            <Link to="/register" className="site-header-cta">Get started</Link>
+          </>
+        )}
       </div>
     </header>
   );

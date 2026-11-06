@@ -14,15 +14,17 @@ from application.schema.profile_schemas import (
 )
 from application.database import get_db, Database
 from application.service import ProfileService
+from application.service.profile_service import MAX_PHOTOS
 from application.repository.profile_repo import ProfileRepository
 from application.utils import get_current_user
+from application.utils.image import MAX_IMAGE_BYTES, detect_image_type
 from application.limiter import limiter
 
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
-@router.post("/set")
+@router.post("/set", response_model=ProfileResponse)
 @limiter.limit("10/hour")
 async def set(
     request: Request,
@@ -30,9 +32,11 @@ async def set(
     db: Database = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    body.user_id = current_user["user"]["id"]
+    user_id = current_user["user"]["id"]
+    body.user_id = user_id
     service = ProfileService(db)
-    return await service.set_profile(body)
+    await service.set_profile(body)
+    return await service.get_profile(user_id)
 
 
 @router.get("/get", response_model=ProfileResponse)
@@ -98,16 +102,20 @@ async def upload_photo(
     user_id = current_user["user"]["id"]
     service = ProfileService(db)
     current_count = await service.profile_repo.count_photos(user_id)
-    if current_count + len(files) > 5:
-        raise HTTPException(status_code=400, detail=f"Cannot exceed 5 photos total")
-    urls = []
+    # Checked before storing anything so a rejected request leaves no orphaned objects.
+    if current_count + len(files) > MAX_PHOTOS:
+        raise HTTPException(status_code=400, detail=f"Cannot exceed {MAX_PHOTOS} photos")
+    # Validate every file before storing any, so a bad file never leaves orphans in storage.
+    validated: list[tuple[bytes, str]] = []
     for file in files:
-        if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
-            raise HTTPException(status_code=400, detail=f"{file.filename}: only JPEG, PNG and WebP are allowed")
-        data = await file.read()
-        if len(data) > 5 * 1024 * 1024:
+        data = await file.read(MAX_IMAGE_BYTES + 1)
+        if len(data) > MAX_IMAGE_BYTES:
             raise HTTPException(status_code=400, detail=f"{file.filename}: file size must not exceed 5 MB")
-        urls.append(storage_upload(user_id, data, file.content_type))
+        image_type = detect_image_type(data)
+        if image_type is None:
+            raise HTTPException(status_code=400, detail=f"{file.filename}: only JPEG, PNG and WebP images are allowed")
+        validated.append((data, image_type))
+    urls = [storage_upload(user_id, data, image_type) for data, image_type in validated]
     return await service.add_photos(user_id, urls)
 
 

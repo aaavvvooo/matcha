@@ -33,3 +33,13 @@ dependencies = [
     "httpx>=0.28.1",
     "google-cloud-storage>=2.18.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.4",
+]
+
+[tool.ruff.lint]
+# Pin the classic default rule set so results don't drift between ruff versions
+# (newer releases enable B/UP/I/SIM by default; B008 misfires on FastAPI Depends()).
+select = ["E4", "E7", "E9", "F"]
