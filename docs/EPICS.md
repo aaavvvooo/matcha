@@ -168,11 +168,22 @@ Check a story off here when it merges.
 - [x] D4 Remove obsolete `docs/SPRINTS.md`, `docs/PRD.md`, `frontend/README.md`
 
 ### Phase 1 — Quick fixes (main session, verified with ruff/mypy, frontend build, manual check)
-- [ ] F1 E7 — replace 14 leaking `Internal server error: {e}` responses with a generic message + server-side log
-- [ ] F2 E7 — magic-byte validation on photo upload (JPEG / PNG / WebP)
-- [ ] F3 E8 — render Header + `<main>` + Footer on every page
-- [ ] F4 E6.5 — add `/notifications` route
-- [ ] F5 E8 — React error boundary
+- [x] F1 E7 — replace 14 leaking `Internal server error: {e}` responses with a generic message + server-side log
+- [x] F2 E7 — magic-byte validation on photo upload (JPEG / PNG / WebP)
+- [x] F3 E8 — render Header + `<main>` + Footer on every page
+- [x] F4 E6.5 — add `/notifications` route
+- [x] F5 E8 — React error boundary
+- [x] F6 E7 — `/profile/set` no longer accepts client photo keys (could delete another user's photo) *(found in review)*
+
+### Phase 1 review follow-ups (security-reviewer + react-reviewer, 2026-11-07) — do before Phase 5
+- [ ] R1 E7 — map `asyncpg.UniqueViolationError` → 409 and FK violations → 400 (register, update_me, second `/profile/set`, unknown tag ids); wrap `update_profile` profile + tag writes in one transaction
+- [ ] R2 E7 — upload limits: reject on `Content-Length`, cap file count per request; run blocking storage calls via `asyncio.to_thread`
+- [ ] R3 E7 — photo cap race (concurrent uploads exceed 5) and orphaned objects when `add_photos` rejects after storage upload
+- [ ] R4 E7 — repositories `print(e); raise` leak emails to stdout → `logger.exception` or just `raise`
+- [ ] R5 E7 — `POST /auth/logout` maps every exception to 400 "Invalid token" (hides DB failures); register creates the user before checking the email client is configured
+- [ ] R6 E6.3 — on direct load of `/notifications`, the initial GET can resolve after `clearUnread` and restore a stale unread count
+- [ ] R7 E8 — undefined CSS tokens (`--border`, `--surface`, `--text-muted`, `--accent`…) in `styles/global.css`, BrowsePage.css, SearchPage.css
+- [ ] R8 E8 — landing header overflows at 320 px; mobile landscape leaves ~240 px for content (consider hiding footer at `max-height: 500px`)
 
 ### Phase 2 — Test harness (`/ecc:orch-add-feature`)
 - [ ] T1 Backend pytest + test Postgres + fixtures (2 users with profiles)
