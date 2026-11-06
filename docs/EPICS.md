@@ -184,6 +184,8 @@ Check a story off here when it merges.
 - [ ] R6 E6.3 — on direct load of `/notifications`, the initial GET can resolve after `clearUnread` and restore a stale unread count
 - [ ] R7 E8 — undefined CSS tokens (`--border`, `--surface`, `--text-muted`, `--accent`…) in `styles/global.css`, BrowsePage.css, SearchPage.css
 - [ ] R8 E8 — landing header overflows at 320 px; mobile landscape leaves ~240 px for content (consider hiding footer at `max-height: 500px`)
+- [x] R9 E8 — `minio/minio` image no longer pullable (removed from Docker Hub/Quay) → Compose uses `pgsty/minio:RELEASE.2026-08-04T00-00-00Z`
+- [ ] R10 E1/E7 — email + logging failures are silent: `clients/email_client.py` catches Brevo `ApiException` and only `print`s (retry in `_send_with_retry` never fires, registration still 200); no `PYTHONUNBUFFERED=1` so `print` never reaches `docker logs`; Alembic startup prints the full DB URL with password (`DEBUGGING: tables`). Brevo also enforces an IP allowlist — allow the defense network's IP (or disable the restriction) and note it in README
 
 ### Phase 2 — Test harness (`/ecc:orch-add-feature`)
 - [ ] T1 Backend pytest + test Postgres + fixtures (2 users with profiles)
