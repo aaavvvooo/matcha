@@ -22,14 +22,17 @@ function Layout({ children }) {
 
   return (
     <div className="app-shell">
-      {showNav && <BottomNav />}
-      <div className="app-shell-column">
-        {showChrome && <Header inApp={showNav} />}
-        <Content className="app-shell-content">
-          {children}
-        </Content>
-        {showChrome && <Footer />}
+      <div className="app-shell-body">
+        {showNav && <BottomNav />}
+        <div className="app-shell-column">
+          {showChrome && <Header inApp={showNav} />}
+          <Content className="app-shell-content">
+            {children}
+          </Content>
+        </div>
       </div>
+      {/* Last in the shell: below the mobile tab bar, full width on desktop */}
+      {showChrome && <Footer />}
     </div>
   );
 }

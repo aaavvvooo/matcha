@@ -1,3 +1,4 @@
+/* shell = [body] + footer, stacked; the footer is always the last row */
 .app-shell {
   height: 100%;
   display: flex;
@@ -6,7 +7,14 @@
   background: var(--cream);
 }
 
-/* header + main + footer, stacked */
+/* body = nav + (header + main); mobile: stacked, desktop: side by side */
+.app-shell-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .app-shell-column {
   flex: 1;
   min-height: 0;
@@ -23,13 +31,14 @@
   position: relative;
 }
 
-.app-shell > .bottom-nav,
-.app-shell > .side-nav {
+/* mobile: tab bar below the page, above the footer */
+.app-shell-body > .bottom-nav,
+.app-shell-body > .side-nav {
   order: 2;
 }
 
 @media (min-width: 860px) {
-  .app-shell {
+  .app-shell-body {
     flex-direction: row;
   }
 
@@ -37,8 +46,8 @@
     order: 2;
   }
 
-  .app-shell > .bottom-nav,
-  .app-shell > .side-nav {
+  .app-shell-body > .bottom-nav,
+  .app-shell-body > .side-nav {
     order: 1;
   }
 }
