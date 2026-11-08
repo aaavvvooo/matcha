@@ -19,6 +19,7 @@ from application.utils import (
     create_password_reset_token,
 )
 from application.database import Database
+from application.service.db_errors import map_integrity_errors
 
 
 @dataclass
@@ -43,14 +44,14 @@ class AuthService:
         user = await self.user_repo.get_user_by_email(request.email)
         if user:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail="Email already registered",
             )
 
         user = await self.user_repo.get_user_by_username(request.username)
         if user:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=status.HTTP_409_CONFLICT,
                 detail="Username already taken",
             )
 
@@ -63,24 +64,25 @@ class AuthService:
         expiration_date = datetime.now(timezone.utc) + timedelta(days=1)
 
         pool = self.db.require_pool()
-        async with pool.acquire() as connection:
-            async with connection.transaction():
-                conn = cast(Connection, connection)
-                user_record = await self.user_repo.create_user(
-                    request.full_name,
-                    request.username,
-                    request.email,
-                    hashed_password,
-                    conn,
-                )
-                user = RegisterUserResponse(**user_record)
-                await self.token_repo.create_verification_token(
-                    user.id,
-                    hashed_verification_token,
-                    "email",
-                    expiration_date,
-                    conn,
-                )
+        with map_integrity_errors():
+            async with pool.acquire() as connection:
+                async with connection.transaction():
+                    conn = cast(Connection, connection)
+                    user_record = await self.user_repo.create_user(
+                        request.full_name,
+                        request.username,
+                        request.email,
+                        hashed_password,
+                        conn,
+                    )
+                    user = RegisterUserResponse(**user_record)
+                    await self.token_repo.create_verification_token(
+                        user.id,
+                        hashed_verification_token,
+                        "email",
+                        expiration_date,
+                        conn,
+                    )
         return user, verification_token
 
     async def verify_email(self, token: str):
@@ -256,7 +258,7 @@ class AuthService:
             existing = await self.user_repo.get_user_by_username(updates["username"])
             if existing and existing["id"] != user_id:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
+                    status_code=status.HTTP_409_CONFLICT, detail="Username already taken"
                 )
 
         email_changed = "email" in updates
@@ -265,7 +267,7 @@ class AuthService:
             existing = await self.user_repo.get_user_by_email(updates["email"])
             if existing and existing["id"] != user_id:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+                    status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
                 )
             updates["is_validated"] = False
             verification_token = create_verification_token()
@@ -275,14 +277,15 @@ class AuthService:
             expiration_date = datetime.now(timezone.utc) + timedelta(days=1)
 
         pool = self.db.require_pool()
-        async with pool.acquire() as connection:
-            async with connection.transaction():
-                conn = cast(Connection, connection)
-                user_record = await self.user_repo.update_user(user_id, updates, conn)
-                if email_changed:
-                    await self.token_repo.create_verification_token(
-                        user_id, hashed_verification_token, "email", expiration_date, conn
-                    )
+        with map_integrity_errors():
+            async with pool.acquire() as connection:
+                async with connection.transaction():
+                    conn = cast(Connection, connection)
+                    user_record = await self.user_repo.update_user(user_id, updates, conn)
+                    if email_changed:
+                        await self.token_repo.create_verification_token(
+                            user_id, hashed_verification_token, "email", expiration_date, conn
+                        )
 
         response = MeResponse(**dict(user_record), email_verification_sent=email_changed)
         return response, verification_token

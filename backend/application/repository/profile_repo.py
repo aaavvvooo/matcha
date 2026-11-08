@@ -88,9 +88,15 @@ class ProfileRepository:
         query = "SELECT user_id FROM photos WHERE url = $1"
         return await self.db.fetch_val(query, key)
 
+    # Column names can't be bound as parameters, so only these may be interpolated.
+    UPDATABLE_COLUMNS = frozenset({"bio", "birth_date", "gender", "sexual_orientation"})
+
     async def update_profile(
         self, user_id: int, data: dict, transaction: Optional[Connection] = None
     ):
+        unknown = set(data) - self.UPDATABLE_COLUMNS
+        if unknown or not data:
+            raise ValueError(f"update_profile: invalid columns {sorted(unknown)}")
         set_parts = []
         params = [user_id]
         for i, (col, val) in enumerate(data.items(), start=2):
@@ -214,32 +220,28 @@ class ProfileRepository:
     ):
         if not tag_ids:
             return
-
-        values_parts = []
-        params = []
-        param_index = 1
-        for tag_id in tag_ids:
-            values_parts.append(f"(${param_index}, ${param_index+1})")
-            params.extend([user_id, tag_id])
-            param_index += 2
-
-        query = f"""
+        query = """
             INSERT INTO user_tags (user_id, tag_id)
-            VALUES {", ".join(values_parts)}
+            SELECT $1, tag_id FROM unnest($2::int[]) AS t(tag_id)
             ON CONFLICT DO NOTHING
         """
         if transaction:
-            await transaction.execute(query, *params)
+            await transaction.execute(query, user_id, tag_ids)
         else:
-            await self.db.execute(query, *params)
+            await self.db.execute(query, user_id, tag_ids)
 
     async def get_all_tags(self):
         query = "SELECT id, name FROM tags ORDER BY name"
         return await self.db.fetch_all(query)
 
-    async def delete_tags(self, user_id: int, tag_ids: list[int]):
+    async def delete_tags(
+        self, user_id: int, tag_ids: list[int], transaction: Optional[Connection] = None
+    ):
         query = """
             DELETE FROM user_tags
             WHERE user_id = $1 AND tag_id = ANY($2::int[])
         """
-        await self.db.execute(query, user_id, tag_ids)
+        if transaction:
+            await transaction.execute(query, user_id, tag_ids)
+        else:
+            await self.db.execute(query, user_id, tag_ids)

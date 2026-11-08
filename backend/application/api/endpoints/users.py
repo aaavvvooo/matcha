@@ -31,12 +31,15 @@ async def update_me(
     from application.api.endpoints.auth import _get_email_client, _send_with_retry
 
     user_id = current_user["user"]["id"]
+    # An email change un-verifies the account, so fail before writing if the
+    # verification email can't be sent.
+    email_client = _get_email_client() if body.email is not None else None
     service = AuthService(db)
     response, verification_token = await service.update_me(user_id, body)
-    if verification_token:
+    if verification_token and email_client is not None:
         background_tasks.add_task(
             _send_with_retry,
-            _get_email_client().send_verification_email,
+            email_client.send_verification_email,
             response.email,
             response.username,
             verification_token,

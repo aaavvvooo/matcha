@@ -17,9 +17,18 @@ from application.repository.token_repo import TokenRepository
 from application.repository.user_repo import UserRepository
 from application.repository.profile_repo import ProfileRepository
 from application.repository.social_repo import SocialRepository
+from application.service.db_errors import map_integrity_errors
 
 MAX_PHOTOS = 5
 MAX_TAGS = 20
+
+
+def _check_tag_count(tags: list[int]) -> None:
+    if len(set(tags)) > MAX_TAGS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot exceed {MAX_TAGS} tags",
+        )
 
 
 class ProfileService:
@@ -31,12 +40,14 @@ class ProfileService:
         self.social_repo = SocialRepository(db)
 
     async def set_profile(self, request: SetProfileRequest):
+        _check_tag_count(request.tags)
         pool = self.db.require_pool()
-        async with pool.acquire() as connection:
-            async with connection.transaction():
-                conn = cast(Connection, connection)
-                await self.profile_repo.add_tags(request.user_id, request.tags, conn)
-                await self.profile_repo.set_profile(request, conn)
+        with map_integrity_errors(fk_detail="Unknown tag"):
+            async with pool.acquire() as connection:
+                async with connection.transaction():
+                    conn = cast(Connection, connection)
+                    await self.profile_repo.set_profile(request, conn)
+                    await self.profile_repo.add_tags(request.user_id, request.tags, conn)
 
     async def get_profile(self, user_id: int) -> ProfileResponse:
         profile = await self.profile_repo.get_profile(user_id)
@@ -92,23 +103,25 @@ class ProfileService:
                 detail="No fields to update",
             )
 
-        if updates:
-            await self.profile_repo.update_profile(user_id, updates)
-
         if tags is not None:
-            if len(tags) > MAX_TAGS:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Cannot exceed {MAX_TAGS} tags",
-                )
-            current = set(await self.profile_repo.get_user_tag_ids(user_id))
-            desired = set(tags)
-            to_add = list(desired - current)
-            to_remove = list(current - desired)
-            if to_add:
-                await self.profile_repo.add_tags(user_id, to_add)
-            if to_remove:
-                await self.profile_repo.delete_tags(user_id, to_remove)
+            _check_tag_count(tags)
+
+        pool = self.db.require_pool()
+        with map_integrity_errors(fk_detail="Unknown tag"):
+            async with pool.acquire() as connection:
+                async with connection.transaction():
+                    conn = cast(Connection, connection)
+                    if updates:
+                        await self.profile_repo.update_profile(user_id, updates, conn)
+                    if tags is not None:
+                        current = set(await self.profile_repo.get_user_tag_ids(user_id))
+                        desired = set(tags)
+                        to_add = list(desired - current)
+                        to_remove = list(current - desired)
+                        if to_add:
+                            await self.profile_repo.add_tags(user_id, to_add, conn)
+                        if to_remove:
+                            await self.profile_repo.delete_tags(user_id, to_remove, conn)
 
         return await self.get_profile(user_id)
 

@@ -21,7 +21,7 @@ class UserRepository:
             RETURNING id, full_name, username, email, created_at
         """
         if not transaction:
-            user = await self.db.execute(
+            user = await self.db.fetch_one(
                 query, full_name, username, email, hashed_password
             )
         else:
@@ -40,9 +40,17 @@ class UserRepository:
         user = await self.db.fetch_one(query, username)
         return user
 
+    # Column names can't be bound as parameters, so only these may be interpolated.
+    UPDATABLE_COLUMNS = frozenset(
+        {"full_name", "username", "email", "is_validated", "hashed_password"}
+    )
+
     async def update_user(
         self, user_id: int, data: dict, transaction: Optional[Connection] = None
     ):
+        unknown = set(data) - self.UPDATABLE_COLUMNS
+        if unknown or not data:
+            raise ValueError(f"update_user: invalid columns {sorted(unknown)}")
         set_clauses = [f"{column} = ${i + 2}" for i, column in enumerate(data.keys())]
         set_clause = ", ".join(set_clauses)
         query = f"""
