@@ -9,40 +9,41 @@ class UserRepository:
 
     async def create_user(
         self,
-        full_name,
+        first_name,
+        last_name,
         username,
         email,
         hashed_password,
         transaction: Optional[Connection] = None,
     ):
         query = """
-            INSERT INTO users (full_name, username, email, hashed_password)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, full_name, username, email, created_at
+            INSERT INTO users (first_name, last_name, username, email, hashed_password)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, first_name, last_name, username, email, created_at
         """
         if not transaction:
             user = await self.db.fetch_one(
-                query, full_name, username, email, hashed_password
+                query, first_name, last_name, username, email, hashed_password
             )
         else:
             user = await transaction.fetchrow(
-                query, full_name, username, email, hashed_password
+                query, first_name, last_name, username, email, hashed_password
             )
         return user
 
     async def get_user_by_email(self, email: str):
-        query = "SELECT id, full_name, username, email, hashed_password, is_validated FROM users WHERE email = $1"
+        query = "SELECT id, first_name, last_name, username, email, hashed_password, is_validated FROM users WHERE email = $1"
         user = await self.db.fetch_one(query, email)
         return user
 
     async def get_user_by_username(self, username: str):
-        query = "SELECT id, full_name, username, email, hashed_password, is_validated FROM users WHERE username = $1"
+        query = "SELECT id, first_name, last_name, username, email, hashed_password, is_validated FROM users WHERE username = $1"
         user = await self.db.fetch_one(query, username)
         return user
 
     # Column names can't be bound as parameters, so only these may be interpolated.
     UPDATABLE_COLUMNS = frozenset(
-        {"full_name", "username", "email", "is_validated", "hashed_password"}
+        {"first_name", "last_name", "username", "email", "is_validated", "hashed_password"}
     )
 
     async def update_user(
@@ -57,7 +58,7 @@ class UserRepository:
             UPDATE users
             SET {set_clause}
             WHERE id = $1
-            RETURNING id, full_name, username, email, created_at, is_validated
+            RETURNING id, first_name, last_name, username, email, created_at, is_validated
         """
         if not transaction:
             user = await self.db.fetch_one(query, user_id, *data.values())

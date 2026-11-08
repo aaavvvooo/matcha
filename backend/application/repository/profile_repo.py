@@ -27,7 +27,8 @@ class ProfileRepository:
         query = """
             SELECT
                 u.id AS user_id,
-                u.full_name,
+                u.first_name,
+                u.last_name,
                 u.username,
                 u.email,
                 u.is_online,

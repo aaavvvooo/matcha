@@ -9,11 +9,11 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 
 ## Mandatory
 
-### E1 — Authentication & Account (subject IV.1) — ⚠️ (first/last name gap)
+### E1 — Authentication & Account (subject IV.1) — ✅
 
 | Feature | Status | Notes |
 |---|---|---|
-| Register with email, username, first/last name, password | ⚠️ | Single `full_name` field; subject requires last name + first name → R13 |
+| Register with email, username, first/last name, password | ✅ | `first_name` + `last_name` (R13) |
 | Reject weak / dictionary passwords | ✅ | zxcvbn score ≥ 2 + character rules |
 | Email verification link | ✅ | |
 | Login with username + password | ✅ | Email also accepted |
@@ -21,14 +21,14 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 | One-click logout from any page | ✅ | In BottomNav; re-verify after E8 header work |
 | JWT refresh + token blacklist | ✅ | |
 
-### E2 — User Profile (IV.2) — ✅ (one gap)
+### E2 — User Profile (IV.2) — ✅
 
 | Feature | Status | Notes |
 |---|---|---|
 | Gender, sexual preference, bio | ✅ | |
 | Reusable interest tags | ✅ | |
 | Up to 5 photos, one profile picture | ✅ | Content validated by magic bytes (F2) |
-| Edit first/last name, email, profile anytime | ⚠️ | Works with single `full_name` → R13; gender/orientation values not validated → R12 |
+| Edit first/last name, email, profile anytime | ✅ | Value sets enforced (R12), first/last name (R13) |
 | GPS location with consent, manual city fallback, editable | ✅ | Nominatim geocoding |
 | See who viewed my profile | ✅ | |
 | See who liked me | ✅ | |
@@ -199,7 +199,7 @@ done twice:
 ### PR #8 review follow-ups (`/ecc:review-pr`, 2026-11-07)
 - [ ] R11 E7 — pre-existing silent failures: `set_location` turns geocoder outages into 400 "Could not find that location" (no log; should be 502/503); `delete_photos` swallows storage errors with `pass` (private image stays in bucket); `_token_cleanup_loop` dies silently on first DB error; failed `ensure_bucket` is never retried and `/health` still says healthy
 - [x] R12 E2 — validate profile value sets: `Gender` / `Orientation` `Literal` types in Set/Update requests + `ProfileResponse` (today `""` passes the `gender IS NOT NULL` completeness check and `"foo"` is accepted); `NotificationType` `Literal`; consider DB CHECK constraints; make `bio`/`birth_date` `Optional`; drop client-settable `user_id` from `SetProfileRequest`
-- [ ] R13 E1 — **mandatory gap**: split `full_name` into `first_name` + `last_name` (migration with data backfill, register/update/profile schemas, RegisterPage + ProfileEditPage, seed scripts)
+- [x] R13 E1 — **mandatory gap**: split `full_name` into `first_name` + `last_name` (migration with data backfill, register/update/profile schemas, RegisterPage + ProfileEditPage, seed scripts)
 - [ ] R14 E8 — landing page shows invented stats ("2,847 members", "94% find a match"): derive from DB or remove
 - [ ] R15 — share one `useLogout()` hook between Header and BottomNav; ErrorBoundary could reuse `components/ui/Btn`
 

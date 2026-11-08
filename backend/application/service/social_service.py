@@ -73,7 +73,8 @@ class SocialService:
 
         return UserProfileResponse(
             user_id=profile["user_id"],
-            full_name=profile["full_name"],
+            first_name=profile["first_name"],
+            last_name=profile["last_name"],
             username=profile["username"],
             bio=profile["bio"],
             age=_calculate_age(profile["birth_date"]),

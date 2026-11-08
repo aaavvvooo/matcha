@@ -69,7 +69,8 @@ class AuthService:
                 async with connection.transaction():
                     conn = cast(Connection, connection)
                     user_record = await self.user_repo.create_user(
-                        request.full_name,
+                        request.first_name,
+                        request.last_name,
                         request.username,
                         request.email,
                         hashed_password,

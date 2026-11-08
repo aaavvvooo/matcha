@@ -43,7 +43,7 @@ class SocialRepository:
 
     async def get_likers(self, user_id: int):
         query = """
-            SELECT u.id, u.username, u.full_name, p.url AS profile_photo_url
+            SELECT u.id, u.username, u.first_name, u.last_name, p.url AS profile_photo_url
             FROM likes l
             JOIN users u ON u.id = l.liker_id
             JOIN user_profiles up ON up.user_id = u.id AND up.gender IS NOT NULL
@@ -84,7 +84,7 @@ class SocialRepository:
 
     async def get_viewers(self, user_id: int):
         query = """
-            SELECT u.id, u.username, u.full_name, p.url AS profile_photo_url, pv.viewed_at
+            SELECT u.id, u.username, u.first_name, u.last_name, p.url AS profile_photo_url, pv.viewed_at
             FROM profile_views pv
             JOIN users u ON u.id = pv.viewer_id
             JOIN user_profiles up ON up.user_id = u.id AND up.gender IS NOT NULL
@@ -168,7 +168,7 @@ class SocialRepository:
 
     async def get_blocked_users(self, user_id: int):
         query = """
-            SELECT u.id, u.username, u.full_name, p.url AS profile_photo_url
+            SELECT u.id, u.username, u.first_name, u.last_name, p.url AS profile_photo_url
             FROM blocks b
             JOIN users u ON u.id = b.blocked_id
             LEFT JOIN photos p ON p.is_main = true AND p.user_id = u.id

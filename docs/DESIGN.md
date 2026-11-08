@@ -69,7 +69,7 @@ repo/service/endpoint file rather than growing an unrelated one. Existing except
 ## 4. Database schema (current)
 
 ```
-users            id PK, email UQ, username UQ, hashed_password, full_name, is_validated, is_superuser,
+users            id PK, email UQ, username UQ, hashed_password, first_name, last_name, is_validated, is_superuser,
                  is_online, last_seen, created_at, updated_at
 user_profiles    id PK, user_id FK UQ, bio, birth_date, gender, sexual_orientation,
                  profile_picture_id FK→photos, fame_rating FLOAT, latitude, longitude, location_label,

@@ -68,7 +68,8 @@ class ProfileService:
             photos.append(PhotoResponse(**data))
         return ProfileResponse(
             user_id=profile["user_id"],
-            full_name=profile["full_name"],
+            first_name=profile["first_name"],
+            last_name=profile["last_name"],
             username=profile["username"],
             email=profile["email"],
             bio=profile["bio"],

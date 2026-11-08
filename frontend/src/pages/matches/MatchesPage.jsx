@@ -4,6 +4,7 @@ import { MessageCircle, Bell, Sparkle, Eye, PartyPopper, HeartCrack } from 'luci
 import { useNotifications } from '../../context/NotificationContext';
 import { useChat } from '../../context/ChatContext';
 import Avatar from '../../components/ui/Avatar';
+import { displayName } from '../../utils/displayName';
 
 const NOTIF_ICONS = {
   like:    <Sparkle size={16} fill="currentColor"/>,
@@ -75,7 +76,7 @@ export default function MatchesPage() {
               </div>
             ) : (
               conversations.map(c => {
-                const name = c.full_name || c.username || 'Unknown';
+                const name = displayName(c, 'Unknown');
                 const hasUnread = (c.unread_count || 0) > 0;
                 return (
                   <div key={c.user_id} onClick={() => navigate(`/chat/${c.user_id}`)} style={{

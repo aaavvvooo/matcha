@@ -71,7 +71,8 @@ class PhotoResponse(BaseModel):
 
 class ProfileResponse(BaseModel):
     user_id: int
-    full_name: str
+    first_name: str
+    last_name: str
     username: str
     email: EmailStr
     bio: Optional[str] = None

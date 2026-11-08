@@ -2,17 +2,20 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 
+from application.schema.fields import PersonName
 from application.schema.profile_schemas import PhotoResponse
+from application.schema.value_sets import Gender, Orientation
 
 
 class UserProfileResponse(BaseModel):
     user_id: int
-    full_name: str
+    first_name: str
+    last_name: str
     username: str
     bio: Optional[str] = None
     age: Optional[int] = None
-    gender: Optional[str] = None
-    sexual_orientation: Optional[str] = None
+    gender: Optional[Gender] = None
+    sexual_orientation: Optional[Orientation] = None
     fame_rating: float = 0.0
     is_online: bool = False
     last_seen: Optional[datetime] = None
@@ -36,7 +39,8 @@ class LikeResponse(BaseModel):
 class SimpleUserResponse(BaseModel):
     id: int
     username: str
-    full_name: str
+    first_name: str
+    last_name: str
     profile_photo_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -47,7 +51,8 @@ class ViewerResponse(SimpleUserResponse):
 
 
 class UpdateMeRequest(BaseModel):
-    full_name: Optional[str] = Field(None, max_length=100)
+    first_name: Optional[PersonName] = None
+    last_name: Optional[PersonName] = None
     username: Optional[str] = Field(None, max_length=50)
     email: Optional[EmailStr] = None
 
@@ -58,7 +63,8 @@ class BlockResponse(BaseModel):
 
 class MeResponse(BaseModel):
     id: int
-    full_name: str
+    first_name: str
+    last_name: str
     username: str
     email: EmailStr
     is_validated: bool

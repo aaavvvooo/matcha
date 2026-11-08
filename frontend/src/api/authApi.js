@@ -1,14 +1,22 @@
 const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000"
 
-export async function register(full_name, username, email, password, confirm_password) {
+// FastAPI sends `detail` as a string, or as a list of validation errors (422).
+function errorMessage(json, fallback) {
+  const d = json?.detail;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d) && d.length) return d.map(e => e.msg).filter(Boolean).join('; ') || fallback;
+  return fallback;
+}
+
+export async function register(first_name, last_name, username, email, password, confirm_password) {
   const res = await fetch(`${BASE_URL}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ full_name, username, email, password, confirm_password }),
+    body: JSON.stringify({ first_name, last_name, username, email, password, confirm_password }),
     credentials: 'include',
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.detail || 'Registration failed');
+  if (!res.ok) throw new Error(errorMessage(json, 'Registration failed'));
   return json;
 }
 
@@ -21,7 +29,7 @@ export async function login(username, password) {
     credentials: 'include',
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.detail || 'Login failed');
+  if (!res.ok) throw new Error(errorMessage(json, 'Login failed'));
   return json;
 }
 
@@ -32,7 +40,7 @@ export async function logout(accessToken) {
     credentials: 'include',
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.detail || 'Logout failed');
+  if (!res.ok) throw new Error(errorMessage(json, 'Logout failed'));
   return json;
 }
 
@@ -42,7 +50,7 @@ export async function refreshToken() {
     credentials: 'include',
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.detail || 'Session expired');
+  if (!res.ok) throw new Error(errorMessage(json, 'Session expired'));
   return json;
 }
 
@@ -54,7 +62,7 @@ export async function verifyEmail(token) {
     credentials: 'include',
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.detail || 'Verification failed');
+  if (!res.ok) throw new Error(errorMessage(json, 'Verification failed'));
   return json;
 }
 
@@ -66,7 +74,7 @@ export async function forgotPassword(username_or_email) {
     credentials: 'include',
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.detail || 'Request failed');
+  if (!res.ok) throw new Error(errorMessage(json, 'Request failed'));
   return json;
 }
 
@@ -78,7 +86,7 @@ export async function resetPassword(token, password) {
     credentials: 'include',
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.detail || 'Reset failed');
+  if (!res.ok) throw new Error(errorMessage(json, 'Reset failed'));
   return json;
 }
 
@@ -89,6 +97,6 @@ export async function getMe(accessToken) {
     cache: 'no-store',
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.detail || 'Unauthorized');
+  if (!res.ok) throw new Error(errorMessage(json, 'Unauthorized'));
   return json;
 }

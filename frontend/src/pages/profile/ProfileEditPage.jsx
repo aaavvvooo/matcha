@@ -11,6 +11,7 @@ import Btn from '../../components/ui/Btn';
 import Chip from '../../components/ui/Chip';
 import FormInput from '../../components/ui/FormInput';
 import LocationPicker from '../../components/ui/LocationPicker';
+import { displayName } from '../../utils/displayName';
 
 const GENDERS = ['Man', 'Woman', 'Non-binary', 'Other'];
 const ORIENTATIONS = ['Heterosexual', 'Homosexual', 'Bisexual', 'Other'];
@@ -38,7 +39,7 @@ export default function ProfileEditPage() {
   const [profile, setProfile] = useState(null);
   const [availableTags, setAvailableTags] = useState([]);
   const [form, setForm] = useState({
-    full_name: '', username: '', email: '',
+    first_name: '', last_name: '', username: '', email: '',
     gender: '', sexual_orientation: '', bio: '', tags: [],
   });
   const [saved, setSaved] = useState(false);
@@ -70,7 +71,8 @@ export default function ProfileEditPage() {
         setProfile(data);
         setAvailableTags(tags);
         setForm({
-          full_name: data.full_name || '',
+          first_name: data.first_name || '',
+          last_name: data.last_name || '',
           username: data.username || '',
           email: data.email || '',
           gender: data.gender || '',
@@ -138,7 +140,8 @@ export default function ProfileEditPage() {
       });
 
       const accountUpdates = {};
-      if (form.full_name !== (profile?.full_name || '')) accountUpdates.full_name = form.full_name;
+      if (form.first_name !== (profile?.first_name || '')) accountUpdates.first_name = form.first_name;
+      if (form.last_name !== (profile?.last_name || '')) accountUpdates.last_name = form.last_name;
       if (form.email !== (profile?.email || '')) accountUpdates.email = form.email;
       let emailVerificationSent = false;
       if (Object.keys(accountUpdates).length > 0) {
@@ -163,7 +166,7 @@ export default function ProfileEditPage() {
     navigate('/');
   }
 
-  const name = form.full_name || form.username || user?.username || 'You';
+  const name = displayName(form, user?.username || 'You');
 
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
@@ -258,7 +261,8 @@ export default function ProfileEditPage() {
           </Section>
 
           <Section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <FormInput label="Full name" value={form.full_name} onChange={e => setField('full_name', e.target.value)}/>
+            <FormInput label="First name" value={form.first_name} onChange={e => setField('first_name', e.target.value)}/>
+            <FormInput label="Last name" value={form.last_name} onChange={e => setField('last_name', e.target.value)}/>
             <FormInput label="Username" value={form.username} onChange={e => setField('username', e.target.value)}/>
             <FormInput label="Email" type="email" value={form.email} onChange={e => setField('email', e.target.value)}/>
           </Section>

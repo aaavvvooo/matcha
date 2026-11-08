@@ -46,7 +46,8 @@ async def load_existing_tags(profile_repo: ProfileRepository) -> list[dict]:
 async def create_seed_user(
     user_repo: UserRepository,
     db,
-    full_name: str,
+    first_name: str,
+    last_name: str,
     username: str,
     email: str,
     hashed_password: str,
@@ -60,7 +61,7 @@ async def create_seed_user(
     async with pool.acquire() as connection:
         async with connection.transaction():
             user_record = await user_repo.create_user(
-                full_name, username, email, hashed_password, connection
+                first_name, last_name, username, email, hashed_password, connection
             )
             user_id = user_record["id"]
             await connection.execute(

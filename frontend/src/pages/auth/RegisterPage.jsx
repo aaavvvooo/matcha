@@ -48,7 +48,8 @@ function RegisterPage() {
     setLoading(true);
     try {
       await register(
-        `${form.firstName} ${form.lastName}`,
+        form.firstName.trim(),
+        form.lastName.trim(),
         form.username,
         form.email,
         form.password,
