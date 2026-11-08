@@ -142,11 +142,13 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 | GET | `/{id}/views` | Own only (403 otherwise) |
 | GET | `/{id}/likes` | Own only |
 
-### Discovery — `/profiles` (planned, E3)
+### Discovery — `/profiles` (E3)
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/browse` | Suggested list (§8). Params: `sort_by` (`score`·`age`·`distance`·`fame`·`tags`), `order`, `min_age`, `max_age`, `max_distance_km`, `min_fame`, `max_fame`, `tags`, `limit`, `offset` |
-| GET | `/search` | Same filters, user-driven; plus `location` (city, geocoded) |
+| GET | `/browse` | Suggested list (§8), people already liked are skipped. Params: `sort_by` (`score`·`age`·`distance`·`fame`·`tags`), `order` (`asc`·`desc`, default per sort), `min_age`, `max_age` (18–120), `max_distance_km`, `min_fame`, `max_fame` (0–100), `tags` (comma-separated names, any match, case-insensitive, `#` optional), `limit` (≤50, default 20), `offset`. Requires a complete profile (403). 400 if `max_distance_km` is set and there is no reference position |
+| GET | `/search` | Same filters and sorts, liked people included; plus `location` (city, geocoded → replaces the viewer's position; 400 unknown, 503 geocoder down) |
+
+Both return `DiscoveryProfile[]`: `user_id`, `username`, `first_name`, `last_name`, `age`, `gender`, `sexual_orientation`, `bio`, `fame_rating`, `is_online`, `last_seen`, `location_label`, `distance_km` (whole km, min 1, NULL without positions), `shared_tags`, `tags` (names), `photos` (main first), `score`. No email.
 
 ### Notifications — `/notifications` (planned, E6)
 | Method | Path | Notes |
@@ -192,10 +194,10 @@ connect and back (with `last_seen = now()`) when the last socket closes.
   sender's other tabs) → `notify(..., "message")`.
 - Single process, in-memory registry: acceptable for one-node evaluation; not multi-worker safe.
 
-## 8. Matching (planned, E3)
+## 8. Matching (E3, `repository/discovery_repo.py`)
 
 **Eligibility** — a candidate appears only if all hold:
-1. Not the viewer; profile complete; has a main photo.
+1. Not the viewer; email validated; profile complete; has a main photo.
 2. No block in either direction.
 3. Orientation is mutual: the candidate's gender is one the viewer is interested in **and** vice versa.
 
@@ -207,7 +209,13 @@ Interest rule, given a person's gender `g` and orientation `o` (NULL ⇒ `Bisexu
 | `Homosexual` | same gender as `g` |
 | `Bisexual`, `Other`, NULL | everyone |
 
-> Confirm this table at E3 Gate 1 — it is a product decision, not dictated by the subject.
+> Confirmed 2026-11-08 (product decision, not dictated by the subject).
+
+**Location privacy** — candidate positions are snapped to a 0.02° grid (~2 km) before distance, the
+`max_distance_km` filter, sorting and the score are computed, and `distance_km` is returned as whole km (min 1),
+so moving one's own position or searching other cities can't trilaterate anyone beyond a grid cell. Geocoding
+(Nominatim) goes through one process-wide gate (≥1 s between upstream calls, ≤10 queued, else 503) with a 24 h
+cache.
 
 **Score** (default `sort_by=score`), computed in SQL:
 

@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkle, Bell } from 'lucide-react';
-import { browse } from '../../api/profilesApi';
+import { browse, getAllTags } from '../../api/profilesApi';
 import { likeUser } from '../../api/usersApi';
 import { useNotifications } from '../../context/NotificationContext';
 import MatchaCup from '../../components/ui/MatchaCup';
@@ -10,6 +10,34 @@ import FameMeter from '../../components/ui/FameMeter';
 import Btn from '../../components/ui/Btn';
 import Chip from '../../components/ui/Chip';
 import { displayName } from '../../utils/displayName';
+import FormInput from '../../components/ui/FormInput';
+
+const PAGE_SIZE = 20;
+const SORTS = [['score', 'best match'], ['distance', 'distance'], ['age', 'age'], ['fame', 'fame'], ['tags', 'common tags']];
+const NO_FILTERS = { minAge: '', maxAge: '', maxDistance: '', minFame: '', maxFame: '', tags: [] };
+
+// Empty inputs are left out so the server applies no bound.
+function toParams(sortBy, f, offset) {
+  const num = v => (v === '' || v == null ? undefined : Number(v));
+  return {
+    sort_by: sortBy,
+    min_age: num(f.minAge),
+    max_age: num(f.maxAge),
+    max_distance_km: num(f.maxDistance),
+    min_fame: num(f.minFame),
+    max_fame: num(f.maxFame),
+    tags: f.tags.length ? f.tags.join(',') : undefined,
+    limit: PAGE_SIZE,
+    offset,
+  };
+}
+
+function apiError(err, fallback) {
+  const d = err?.response?.data?.detail;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d) && d.length) return d.map(e => e.msg).join('; ');
+  return fallback;
+}
 
 function ProfileCard({ profile, onLike, onPreview, isPreview, drag, isDragging, onPointerDown, onPointerMove, onPointerUp }) {
   const rotation = drag.x * 0.035;
@@ -99,13 +127,13 @@ function ProfileCard({ profile, onLike, onPreview, isPreview, drag, isDragging, 
               {name}{profile.age ? `, ${profile.age}` : ''}
             </div>
             <div style={{ fontSize: 12, color: 'var(--ink3)', marginTop: 1 }}>
-              {profile.distance_km ? `${profile.distance_km.toFixed(1)}km · ` : ''}{profile.location_label || ''}
+              {profile.distance_km ? `${profile.distance_km.toFixed(0)} km · ` : ''}{profile.location_label || ''}
             </div>
           </div>
           <FameMeter score={profile.fame_rating || 0}/>
         </div>
-        {profile.biography && (
-          <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.5, marginBottom: 8 }}>{profile.biography}</div>
+        {profile.bio && (
+          <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.5, marginBottom: 8 }}>{profile.bio}</div>
         )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
           {tags.slice(0, 4).map(t => (
@@ -176,16 +204,16 @@ function RightPanel({ profile, onProfile, onLike, myTags = [] }) {
           <div>
             <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 30, fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>{name}</div>
             <div style={{ fontSize: 14, color: 'var(--ink3)', marginTop: 4 }}>
-              {profile.age ? `${profile.age} · ` : ''}{profile.location_label || ''}{profile.distance_km ? ` · ${profile.distance_km.toFixed(1)}km` : ''}
+              {profile.age ? `${profile.age} · ` : ''}{profile.location_label || ''}{profile.distance_km ? ` · ${profile.distance_km.toFixed(0)} km` : ''}
             </div>
           </div>
           <FameMeter score={profile.fame_rating || 0} size="lg"/>
         </div>
 
-        {profile.biography && (
+        {profile.bio && (
           <div style={{ background: 'var(--white)', borderRadius: 'var(--r-md)', padding: '14px 16px', marginBottom: 14, border: '1.5px solid var(--cream3)' }}>
             <div style={{ fontSize: 10, color: 'var(--ink4)', letterSpacing: '0.08em', marginBottom: 6 }}>ABOUT</div>
-            <div style={{ fontSize: 14, color: 'var(--ink)', lineHeight: 1.65 }}>{profile.biography}</div>
+            <div style={{ fontSize: 14, color: 'var(--ink)', lineHeight: 1.65 }}>{profile.bio}</div>
           </div>
         )}
 
@@ -250,7 +278,18 @@ function MatchOverlay({ profile, onChat, onClose }) {
 
 export default function BrowsePage() {
   const [queue, setQueue] = useState([]);
-  const [sortBy, setSortBy] = useState('proximity');
+  const [sortBy, setSortBy] = useState('score');
+  const [filters, setFilters] = useState(NO_FILTERS);
+  const [draft, setDraft] = useState(NO_FILTERS);
+  const [showFilters, setShowFilters] = useState(false);
+  const [allTags, setAllTags] = useState([]);
+  const [loadError, setLoadError] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+  // Liked people drop out of the server's list, passed ones stay: the next page
+  // starts after the ones passed in this sort/filter session.
+  const passedRef = useRef(0);
+  // Only the latest request may update the stack (sort/filter can change mid-flight).
+  const requestRef = useRef(0);
   const [previewProfile, setPreviewProfile] = useState(null);
   const [matchProfile, setMatchProfile] = useState(null);
   const [drag, setDrag] = useState({ x: 0, y: 0 });
@@ -261,22 +300,39 @@ export default function BrowsePage() {
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
 
+  const loadPage = useCallback(async (offset, replace) => {
+    const request = ++requestRef.current;
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const data = await browse(toParams(sortBy, filters, offset));
+      if (request !== requestRef.current) return;
+      setQueue(q => (replace ? data : [...q, ...data]));
+      setHasMore(data.length === PAGE_SIZE);
+    } catch (err) {
+      if (request !== requestRef.current) return;
+      if (replace) setQueue([]);
+      setLoadError(apiError(err, 'Could not load suggestions'));
+    } finally {
+      if (request === requestRef.current) setLoading(false);
+    }
+  }, [sortBy, filters]);
+
   useEffect(() => {
-    browse({ limit: 20, offset: 0 })
-      .then(data => {
-        setQueue(data);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    passedRef.current = 0;
+    loadPage(0, true);
+  }, [loadPage]);
+
+  useEffect(() => {
+    getAllTags().then(setAllTags).catch(() => setAllTags([]));
   }, []);
 
-  const sorted = useMemo(() => {
-    if (!queue.length) return queue;
-    const q = [...queue];
-    if (sortBy === 'fame') q.sort((a, b) => (b.fame_rating || 0) - (a.fame_rating || 0));
-    if (sortBy === 'tags') q.sort((a, b) => (b.tags?.length || 0) - (a.tags?.length || 0));
-    return q;
-  }, [queue, sortBy]);
+  // Fetch the next page when the stack runs out.
+  useEffect(() => {
+    if (!loading && !loadError && queue.length === 0 && hasMore) loadPage(passedRef.current, false);
+  }, [queue.length, hasMore, loading, loadError, loadPage]);
+
+  const sorted = queue;
 
   const currentProfile = sorted[0];
 
@@ -298,6 +354,7 @@ export default function BrowsePage() {
         return;
       }
     }
+    if (!yes) passedRef.current += 1;
     setQueue(q => q.filter(p => p.user_id !== currentProfile.user_id));
     setDrag({ x: 0, y: 0 });
     setPreviewProfile(null);
@@ -335,11 +392,12 @@ export default function BrowsePage() {
         <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, fontWeight: 700, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <MatchaCup size={30} mood="happy" animate={false}/>Matcha
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8, alignItems: 'center', minWidth: 0 }}>
           <div style={{ fontSize: 12, color: 'var(--ink4)' }}>Sort:</div>
-          {['proximity', 'fame', 'tags'].map(s => (
-            <Chip key={s} label={s} active={sortBy === s} onClick={() => setSortBy(s)}/>
+          {SORTS.map(([key, label]) => (
+            <Chip key={key} label={label} active={sortBy === key} onClick={() => setSortBy(key)}/>
           ))}
+          <Chip label={showFilters ? 'hide filters' : 'filters'} active={showFilters} onClick={() => setShowFilters(v => !v)}/>
         </div>
         <button onClick={() => navigate('/matches')} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
           <Bell size={22} strokeWidth={1.75} color="var(--ink3)"/>
@@ -355,6 +413,28 @@ export default function BrowsePage() {
           )}
         </button>
       </div>
+
+      {showFilters && (
+        <div style={{ padding: '12px 24px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', flexShrink: 0 }}>
+          <FormInput label="Min age" type="number" value={draft.minAge} onChange={e => setDraft(d => ({ ...d, minAge: e.target.value }))} style={{ width: 90 }}/>
+          <FormInput label="Max age" type="number" value={draft.maxAge} onChange={e => setDraft(d => ({ ...d, maxAge: e.target.value }))} style={{ width: 90 }}/>
+          <FormInput label="Within km" type="number" value={draft.maxDistance} onChange={e => setDraft(d => ({ ...d, maxDistance: e.target.value }))} style={{ width: 100 }}/>
+          <FormInput label="Min fame" type="number" value={draft.minFame} onChange={e => setDraft(d => ({ ...d, minFame: e.target.value }))} style={{ width: 90 }}/>
+          <FormInput label="Max fame" type="number" value={draft.maxFame} onChange={e => setDraft(d => ({ ...d, maxFame: e.target.value }))} style={{ width: 90 }}/>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, flexBasis: '100%' }}>
+            {allTags.map(t => (
+              <Chip
+                key={t.id}
+                label={`#${t.name}`}
+                active={draft.tags.includes(t.name)}
+                onClick={() => setDraft(d => ({ ...d, tags: d.tags.includes(t.name) ? d.tags.filter(x => x !== t.name) : [...d.tags, t.name] }))}
+              />
+            ))}
+          </div>
+          <Btn onClick={() => setFilters(draft)}>Apply</Btn>
+          <Btn variant="ghost" onClick={() => { setDraft(NO_FILTERS); setFilters(NO_FILTERS); }}>Reset</Btn>
+        </div>
+      )}
 
       {/* Match overlay */}
       {matchProfile && (
@@ -437,7 +517,7 @@ export default function BrowsePage() {
                           <Avatar name={n} size={28} online={p.is_online}/>
                           <div>
                             <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 12, fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap' }}>{n}</div>
-                            {p.distance_km && <div style={{ fontSize: 10, color: 'var(--ink4)', whiteSpace: 'nowrap' }}>{p.distance_km.toFixed(1)}km</div>}
+                            {p.distance_km && <div style={{ fontSize: 10, color: 'var(--ink4)', whiteSpace: 'nowrap' }}>{p.distance_km.toFixed(0)} km</div>}
                           </div>
                         </div>
                       );
@@ -446,6 +526,11 @@ export default function BrowsePage() {
                 </div>
               )}
             </>
+          ) : loadError ? (
+            <div role="alert" style={{ textAlign: 'center', padding: 40, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+              <div style={{ fontSize: 14, color: 'var(--ink2)' }}>{loadError}</div>
+              <Btn variant="secondary" onClick={() => loadPage(0, true)}>Try again</Btn>
+            </div>
           ) : (
             <div style={{ textAlign: 'center', padding: 40 }}>
               <MatchaCup size={80} mood="sleepy" animate={true} style={{ margin: '0 auto 12px' }}/>

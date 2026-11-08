@@ -41,8 +41,13 @@ class SocialService:
 
     async def get_user_profile(self, viewer_id: int, user_id: int) -> UserProfileResponse:
         profile = await self.profile_repo.get_profile(user_id)
+        # Same 404 for missing, unverified, incomplete and blocking users, so the
+        # response doesn't confirm that a hidden account exists.
+        not_found = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         if not profile or profile["gender"] is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise not_found
+        if viewer_id != user_id and not profile["is_validated"]:
+            raise not_found
 
         is_blocked_by_viewer = False
         is_blocking_viewer = False
@@ -50,7 +55,7 @@ class SocialService:
             is_blocked_by_viewer = await self.social_repo.is_blocked(viewer_id, user_id)
             is_blocking_viewer = await self.social_repo.is_blocked(user_id, viewer_id)
             if is_blocking_viewer:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not found")
+                raise not_found
             if not is_blocked_by_viewer:
                 await self.social_repo.record_view(viewer_id, user_id)
                 await self.social_repo.recalculate_fame(user_id)

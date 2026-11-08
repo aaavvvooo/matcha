@@ -34,15 +34,15 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 | See who liked me | ✅ | |
 | Public fame rating | ✅ | `min(100, likes·3 + views + connections·5)` |
 
-### E3 — Discovery: Browse & Search (IV.3, IV.4) — ❌ backend missing · **top priority**
+### E3 — Discovery: Browse & Search (IV.3, IV.4) — ✅
 
 | Feature | Status | Notes |
 |---|---|---|
-| E3.1 Suggested list filtered by orientation (unset ⇒ bisexual), excluding blocked users | ❌ | `BrowsePage` calls `GET /profiles/browse` — no such route |
-| E3.2 Ranking: same area first, then shared tags, then fame | ❌ | Haversine in SQL |
-| E3.3 Sort by age / distance / fame / common tags | ❌ | |
-| E3.4 Filter by age / distance / fame / tags | ❌ | |
-| E3.5 Advanced search: age range, fame range, location, tags; sortable + filterable | ❌ | `SearchPage` calls `GET /profiles/search` — no such route; uses hardcoded tag list instead of `/profile/get-all-tags` |
+| E3.1 Suggested list filtered by orientation (unset ⇒ bisexual), excluding blocked users | ✅ | `GET /profiles/browse`; mutual interest rule DESIGN §8; liked people skipped |
+| E3.2 Ranking: same area first, then shared tags, then fame | ✅ | Haversine + score in SQL |
+| E3.3 Sort by age / distance / fame / common tags | ✅ | Server-side `sort_by` + `order` |
+| E3.4 Filter by age / distance / fame / tags | ✅ | BrowsePage filter row |
+| E3.5 Advanced search: age range, fame range, location, tags; sortable + filterable | ✅ | `GET /profiles/search`; real tag list; city geocoded |
 
 ### E4 — Profile View & Interactions (IV.5) — ✅
 
@@ -208,8 +208,8 @@ scripted smoke runs instead. Revisit only if regressions start costing time.
 - [ ] T3 Fix frontend test setup: `App.test.js` is the stale CRA default ("learn react") and CRA Jest can't resolve `react-router-dom` v7 → add `moduleNameMapper` or move to Vitest
 
 ### Phase 3 — Discovery (track A)
-- [ ] E3.1–E3.4 `GET /profiles/browse`: orientation filter, blocks, ranking, sort, filter + BrowsePage wiring
-- [ ] E3.5 `GET /profiles/search` + SearchPage wiring (real tag list)
+- [x] E3.1–E3.4 `GET /profiles/browse`: orientation filter, blocks, ranking, sort, filter + BrowsePage wiring
+- [x] E3.5 `GET /profiles/search` + SearchPage wiring (real tag list)
 
 ### Phase 4 — Real-time (track B, parallel with Phase 3)
 - [ ] E6.1 `PresenceManager.send_to_user()` push

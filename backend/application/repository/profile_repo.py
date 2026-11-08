@@ -31,6 +31,7 @@ class ProfileRepository:
                 u.last_name,
                 u.username,
                 u.email,
+                u.is_validated,
                 u.is_online,
                 u.last_seen,
                 up.bio,
