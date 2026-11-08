@@ -1,8 +1,11 @@
+import logging
+
 import sib_api_v3_sdk
-from sib_api_v3_sdk.rest import ApiException
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 from application.config import FRONTEND_URL, FROM_EMAIL
+
+logger = logging.getLogger(__name__)
 
 
 class EmailClient:
@@ -21,17 +24,16 @@ class EmailClient:
         self.jinja_env = Environment(loader=FileSystemLoader(self.template_dir))
 
     def _send_email(self, to: str, subject: str, html_content: str):
-        try:
-            send_mail = sib_api_v3_sdk.SendSmtpEmail(
-                to=[{"email": to}],
-                sender={"email": self.from_email, "name": "Matcha"},
-                subject=subject,
-                html_content=html_content,
-            )
-            self.api_instance.send_transac_email(send_smtp_email=send_mail)
-            print("Email sent successfully")
-        except ApiException as e:
-            print("Exception when calling SMTPApi->send_transac_email: %s\n" % e)
+        # Brevo's ApiException propagates on purpose: the caller's retry loop
+        # needs it, and it decides what to log (never the recipient address).
+        send_mail = sib_api_v3_sdk.SendSmtpEmail(
+            to=[{"email": to}],
+            sender={"email": self.from_email, "name": "Matcha"},
+            subject=subject,
+            html_content=html_content,
+        )
+        self.api_instance.send_transac_email(send_smtp_email=send_mail)
+        logger.info("Email sent: %s", subject)
 
     def _render_template(self, template_name: str, **kwargs):
         template = self.jinja_env.get_template(template_name)

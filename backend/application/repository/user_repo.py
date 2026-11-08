@@ -20,19 +20,15 @@ class UserRepository:
             VALUES ($1, $2, $3, $4)
             RETURNING id, full_name, username, email, created_at
         """
-        try:
-            if not transaction:
-                user = await self.db.execute(
-                    query, full_name, username, email, hashed_password
-                )
-            else:
-                user = await transaction.fetchrow(
-                    query, full_name, username, email, hashed_password
-                )
-            return user
-        except Exception as e:
-            print(e)
-            raise e
+        if not transaction:
+            user = await self.db.execute(
+                query, full_name, username, email, hashed_password
+            )
+        else:
+            user = await transaction.fetchrow(
+                query, full_name, username, email, hashed_password
+            )
+        return user
 
     async def get_user_by_email(self, email: str):
         query = "SELECT id, full_name, username, email, hashed_password, is_validated FROM users WHERE email = $1"
@@ -55,12 +51,8 @@ class UserRepository:
             WHERE id = $1
             RETURNING id, full_name, username, email, created_at, is_validated
         """
-        try:
-            if not transaction:
-                user = await self.db.fetch_one(query, user_id, *data.values())
-            else:
-                user = await transaction.fetchrow(query, user_id, *data.values())
-            return user
-        except Exception as e:
-            print(e)
-            raise e
+        if not transaction:
+            user = await self.db.fetch_one(query, user_id, *data.values())
+        else:
+            user = await transaction.fetchrow(query, user_id, *data.values())
+        return user

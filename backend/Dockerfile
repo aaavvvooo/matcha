@@ -2,6 +2,9 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
+# Flush stdout/stderr immediately so logs reach `docker logs`
+ENV PYTHONUNBUFFERED=1
+
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 

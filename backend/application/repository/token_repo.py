@@ -21,19 +21,15 @@ class TokenRepository:
             VALUES ($1, $2, $3, $4)
             RETURNING id, user_id, token, token_type, created_at, expires_at, used
         """
-        try:
-            if not transaction:
-                token_record = await self.db.fetch_one(
-                    query, user_id, token, token_type, expires_at
-                )
-            else:
-                token_record = await transaction.fetchrow(
-                    query, user_id, token, token_type, expires_at
-                )
-            return token_record
-        except Exception as e:
-            print(e)
-            raise e
+        if not transaction:
+            token_record = await self.db.fetch_one(
+                query, user_id, token, token_type, expires_at
+            )
+        else:
+            token_record = await transaction.fetchrow(
+                query, user_id, token, token_type, expires_at
+            )
+        return token_record
 
     async def get_verification_token(self, token: str):
         query = """
@@ -52,14 +48,10 @@ class TokenRepository:
             WHERE id = $1
             RETURNING id, used
         """
-        try:
-            if not transaction:
-                return await self.db.fetch_one(query, token_id)
-            else:
-                return await transaction.fetchrow(query, token_id)
-        except Exception as e:
-            print(e)
-            raise e
+        if not transaction:
+            return await self.db.fetch_one(query, token_id)
+        else:
+            return await transaction.fetchrow(query, token_id)
 
     # --- Refresh tokens ---
 

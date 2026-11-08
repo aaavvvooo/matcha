@@ -48,10 +48,30 @@ async def _send_with_retry(fn, *args, max_retries: int = 3, delay: float = 10.0)
             await loop.run_in_executor(None, fn, *args)
             return
         except Exception as e:
+            # Log status/reason only: the exception text can carry the request
+            # payload (recipient address, token link).
+            status = getattr(e, "status", None)
+            reason = getattr(e, "reason", None)
+            # 4xx other than 429 (bad key, IP not allowlisted, bad payload)
+            # won't succeed on retry.
+            permanent = isinstance(status, int) and 400 <= status < 500 and status != 429
+            if permanent:
+                logger.error(
+                    "Email delivery rejected, not retrying: %s status=%s reason=%s",
+                    type(e).__name__, status, reason,
+                )
+                return
             if attempt < max_retries - 1:
+                logger.warning(
+                    "Email delivery attempt %d/%d failed: %s status=%s reason=%s",
+                    attempt + 1, max_retries, type(e).__name__, status, reason,
+                )
                 await asyncio.sleep(delay)
             else:
-                logger.error("Email delivery failed after %d attempts: %s", max_retries, e)
+                logger.error(
+                    "Email delivery failed after %d attempts: %s status=%s reason=%s",
+                    max_retries, type(e).__name__, status, reason,
+                )
 
 
 @router.post("/register", response_model=RegisterUserResponse)
