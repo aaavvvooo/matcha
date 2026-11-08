@@ -89,7 +89,9 @@ refresh_tokens   id PK, username UQ, token_hash, expires_at, created_at
 token_blacklist  id PK, token_hash UQ, expires_at, created_at
 ```
 
-Value sets (shared by frontend, seed scripts, and matching):
+Value sets (shared by frontend, seed scripts, and matching; `Literal` types in
+`application/schema/value_sets.py`, enforced by CHECK constraints `ck_user_profiles_gender`,
+`ck_user_profiles_sexual_orientation`, `ck_notifications_type`):
 - `gender`: `Man` · `Woman` · `Non-binary` · `Other`
 - `sexual_orientation`: `Heterosexual` · `Homosexual` · `Bisexual` · `Other` (NULL ⇒ treated as `Bisexual`)
 - `notifications.type`: `like` · `view` · `message` · `match` · `unlike`

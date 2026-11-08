@@ -33,9 +33,8 @@ async def set(
     current_user: dict = Depends(get_current_user),
 ):
     user_id = current_user["user"]["id"]
-    body.user_id = user_id
     service = ProfileService(db)
-    await service.set_profile(body)
+    await service.set_profile(user_id, body)
     return await service.get_profile(user_id)
 
 

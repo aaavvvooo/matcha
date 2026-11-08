@@ -7,7 +7,7 @@ class ProfileRepository:
     def __init__(self, db: Database):
         self.db = db
 
-    async def set_profile(self, data, transaction: Optional[Connection] = None):
+    async def set_profile(self, user_id: int, data, transaction: Optional[Connection] = None):
         query = """
             INSERT INTO user_profiles (user_id, bio, birth_date, gender, sexual_orientation)
             VALUES ($1, $2, $3, $4, $5)
@@ -15,11 +15,11 @@ class ProfileRepository:
         """
         if transaction:
             return await transaction.fetchrow(
-                query, data.user_id, data.bio, data.birth_date,
+                query, user_id, data.bio, data.birth_date,
                 data.gender, data.sexual_orientation,
             )
         return await self.db.fetch_one(
-            query, data.user_id, data.bio, data.birth_date,
+            query, user_id, data.bio, data.birth_date,
             data.gender, data.sexual_orientation,
         )
 

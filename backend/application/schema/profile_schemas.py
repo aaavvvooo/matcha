@@ -2,13 +2,17 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 
+from application.schema.value_sets import Gender, Orientation
+
 
 class SetProfileRequest(BaseModel):
-    user_id: Optional[int] = None
-    bio: str = Field(None, max_length=500)
-    birth_date: datetime = Field(None)
-    gender: str = Field(None, max_length=20)
-    sexual_orientation: str = Field(None, max_length=20)
+    # The owner always comes from the access token, never from the body.
+    model_config = ConfigDict(extra="ignore")
+
+    bio: Optional[str] = Field(None, max_length=500)
+    birth_date: Optional[datetime] = None
+    gender: Gender
+    sexual_orientation: Optional[Orientation] = None
     # Photos are added only through /profile/upload-photo, which derives the storage
     # key server-side; never accept client-supplied keys here.
     tags: list[int] = Field(default_factory=list)
@@ -17,8 +21,8 @@ class SetProfileRequest(BaseModel):
 class UpdateProfileRequest(BaseModel):
     bio: Optional[str] = Field(None, max_length=500)
     birth_date: Optional[datetime] = None
-    gender: Optional[str] = Field(None, max_length=20)
-    sexual_orientation: Optional[str] = Field(None, max_length=20)
+    gender: Optional[Gender] = None
+    sexual_orientation: Optional[Orientation] = None
     tags: Optional[list[int]] = None
 
 
@@ -72,8 +76,8 @@ class ProfileResponse(BaseModel):
     email: EmailStr
     bio: Optional[str] = None
     birth_date: Optional[datetime] = None
-    gender: Optional[str] = None
-    sexual_orientation: Optional[str] = None
+    gender: Optional[Gender] = None
+    sexual_orientation: Optional[Orientation] = None
     profile_picture_id: Optional[int] = None
     fame_rating: float = 0.0
     tags: list[int] = Field(default_factory=list)

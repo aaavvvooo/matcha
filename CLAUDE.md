@@ -29,7 +29,7 @@ FastAPI (Python 3.13, uv) + asyncpg + PostgreSQL 17 · React 19 (CRA) · MinIO/G
 
 ## Checks
 Run from `backend/` unless noted (`uv sync` installs ruff from the dev group; rule set pinned in `pyproject.toml`).
-Baseline on 2026-11-07: ruff clean, mypy 13 errors — add no new ones.
+Baseline on 2026-11-08: ruff clean, mypy 8 errors — add no new ones.
 ```bash
 uv run ruff check application
 uv run mypy --config-file application/mypy.ini application

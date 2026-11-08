@@ -39,15 +39,15 @@ class ProfileService:
         self.profile_repo = ProfileRepository(db)
         self.social_repo = SocialRepository(db)
 
-    async def set_profile(self, request: SetProfileRequest):
+    async def set_profile(self, user_id: int, request: SetProfileRequest):
         _check_tag_count(request.tags)
         pool = self.db.require_pool()
         with map_integrity_errors(fk_detail="Unknown tag"):
             async with pool.acquire() as connection:
                 async with connection.transaction():
                     conn = cast(Connection, connection)
-                    await self.profile_repo.set_profile(request, conn)
-                    await self.profile_repo.add_tags(request.user_id, request.tags, conn)
+                    await self.profile_repo.set_profile(user_id, request, conn)
+                    await self.profile_repo.add_tags(user_id, request.tags, conn)
 
     async def get_profile(self, user_id: int) -> ProfileResponse:
         profile = await self.profile_repo.get_profile(user_id)

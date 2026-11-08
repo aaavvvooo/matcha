@@ -1,10 +1,19 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import CheckConstraint, Column, Integer, String, Float, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from application.database import Base
 
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
+    __table_args__ = (
+        CheckConstraint(
+            "gender IN ('Man', 'Woman', 'Non-binary', 'Other')", name="ck_user_profiles_gender"
+        ),
+        CheckConstraint(
+            "sexual_orientation IN ('Heterosexual', 'Homosexual', 'Bisexual', 'Other')",
+            name="ck_user_profiles_sexual_orientation",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(

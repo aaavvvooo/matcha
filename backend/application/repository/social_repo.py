@@ -1,3 +1,4 @@
+from application.schema.value_sets import NotificationType
 from application.database import Database
 
 
@@ -184,7 +185,9 @@ class SocialRepository:
         )
 
     # ── notifications ──────────────────────────────────────────────────────
-    async def create_notification(self, user_id: int, type: str, from_user: int | None = None):
+    async def create_notification(
+        self, user_id: int, type: NotificationType, from_user: int | None = None
+    ):
         query = """
             INSERT INTO notifications (user_id, type, from_user)
             VALUES ($1, $2, $3)
