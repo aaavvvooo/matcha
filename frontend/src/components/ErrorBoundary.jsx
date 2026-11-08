@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import Btn from './ui/Btn';
 
 // Catches render-time errors anywhere below it so a single broken component shows a
 // recoverable screen instead of a blank page. Async errors (fetch, event handlers) must
@@ -34,21 +35,7 @@ class ErrorBoundary extends Component {
           Something went wrong
         </h1>
         <p style={{ color: 'var(--ink3)', margin: 0 }}>Please reload the page. If it keeps happening, try again later.</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          style={{
-            padding: '10px 22px',
-            border: 'none',
-            borderRadius: 'var(--r-full)',
-            background: 'var(--spice)',
-            color: 'var(--white)',
-            fontSize: 15,
-            cursor: 'pointer',
-          }}
-        >
-          Reload
-        </button>
+        <Btn onClick={() => window.location.reload()}>Reload</Btn>
       </div>
     );
   }

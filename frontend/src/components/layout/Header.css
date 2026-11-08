@@ -129,3 +129,41 @@
     visibility: hidden;
   }
 }
+
+.site-header-link,
+.site-header-cta {
+  white-space: nowrap;
+}
+
+/* 320px phones: brand + "Sign in" + "Get started" must fit on one row. */
+@media (max-width: 360px) {
+  .site-header {
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  .site-header-brand {
+    gap: 6px;
+    font-size: 17px;
+  }
+
+  .site-header-actions {
+    gap: 8px;
+  }
+
+  .site-header-link {
+    font-size: 13px;
+  }
+
+  .site-header-cta {
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+}
+
+/* Phones in landscape: give the page back vertical space. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .site-header {
+    height: 44px;
+  }
+}

@@ -9,9 +9,9 @@
 }
 
 .search-form {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--white);
+  border: 1px solid var(--cream3);
+  border-radius: var(--r-md);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -30,10 +30,10 @@
 }
 
 .form-group select {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
+  background: var(--cream2);
+  border: 1px solid var(--cream3);
+  border-radius: var(--r-sm);
+  color: var(--ink);
   font-size: 14px;
   padding: 10px 14px;
   outline: none;
@@ -42,11 +42,11 @@
 }
 
 .form-group select:focus {
-  border-color: var(--accent);
+  border-color: var(--spice);
 }
 
 .search-count {
-  color: var(--text-muted);
+  color: var(--ink3);
   font-size: 13px;
   margin-bottom: 16px;
 }
@@ -63,22 +63,22 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--white);
+  border: 1px solid var(--cream3);
+  border-radius: var(--r-md);
   padding: 16px;
-  transition: border-color var(--transition);
+  transition: border-color var(--transition-base);
 }
 
 .result-card:hover {
-  border-color: var(--accent);
+  border-color: var(--spice);
 }
 
 .result-photo-wrap {
   flex-shrink: 0;
   width: 72px;
   height: 72px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   overflow: hidden;
   display: block;
 }
@@ -92,11 +92,11 @@
 .result-photo-placeholder {
   width: 100%;
   height: 100%;
-  background: var(--surface-2);
+  background: var(--cream2);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: var(--ink3);
   font-size: 11px;
 }
 
@@ -117,22 +117,22 @@
 }
 
 .result-name a {
-  color: var(--text);
+  color: var(--ink);
 }
 
 .result-name a:hover {
-  color: var(--accent);
+  color: var(--spice);
   opacity: 1;
 }
 
 .result-location {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--ink3);
 }
 
 .result-bio {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--ink3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -150,13 +150,13 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--success);
+  background: var(--matcha);
   flex-shrink: 0;
 }
 
 .fame-badge {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--ink3);
 }
 
 .btn-like {
@@ -164,21 +164,21 @@
   border: none;
   font-size: 22px;
   cursor: pointer;
-  color: var(--text-muted);
-  transition: color var(--transition);
+  color: var(--ink3);
+  transition: color var(--transition-base);
   padding: 0;
   line-height: 1;
 }
 
 .btn-like:hover,
 .btn-like.liked {
-  color: var(--accent);
+  color: var(--spice);
 }
 
 .tag {
   font-size: 11px;
   padding: 2px 8px;
-  background: var(--surface-2);
+  background: var(--cream2);
   border-radius: 99px;
-  color: var(--text-muted);
+  color: var(--ink3);
 }

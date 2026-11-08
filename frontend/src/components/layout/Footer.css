@@ -28,3 +28,15 @@
     display: none;
   }
 }
+
+/* Phones in landscape: keep the footer (every page has one) but make it a thin line. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .site-footer {
+    padding: 2px 14px;
+    font-size: 10px;
+  }
+
+  .site-footer-brand {
+    display: none;
+  }
+}

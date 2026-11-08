@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useNotifications } from '../../context/NotificationContext'
+import Btn from '../../components/ui/Btn'
 import './NotificationsPage.css'
 
 const TYPE_LABELS = {
@@ -22,18 +23,26 @@ function timeAgo(iso) {
 }
 
 export default function NotificationsPage() {
-  const { notifications, clearUnread } = useNotifications()
+  const { notifications, loadState, reload, clearUnread } = useNotifications()
 
+  // Mark read once the list is in; on failure the unread dots simply stay.
   useEffect(() => {
-    clearUnread()
-  }, [clearUnread])
+    if (loadState === 'ready') clearUnread()
+  }, [loadState, clearUnread])
 
   return (
     <div className="notif-page">
       <div className="notif-inner">
         <h1 className="notif-title">Notifications</h1>
 
-        {notifications.length === 0 ? (
+        {loadState === 'error' && notifications.length === 0 ? (
+          <div className="notif-empty" role="alert">
+            <p>Couldn't load your notifications.</p>
+            <Btn variant="secondary" onClick={reload}>Try again</Btn>
+          </div>
+        ) : loadState === 'loading' && notifications.length === 0 ? (
+          <p className="notif-empty">Loading…</p>
+        ) : notifications.length === 0 ? (
           <p className="notif-empty">You have no notifications yet.</p>
         ) : (
         <ul className="notif-list">

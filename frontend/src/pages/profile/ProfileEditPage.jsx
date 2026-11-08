@@ -12,6 +12,7 @@ import Chip from '../../components/ui/Chip';
 import FormInput from '../../components/ui/FormInput';
 import LocationPicker from '../../components/ui/LocationPicker';
 import { displayName } from '../../utils/displayName';
+import { useLogout } from '../../hooks/useLogout';
 
 const GENDERS = ['Man', 'Woman', 'Non-binary', 'Other'];
 const ORIENTATIONS = ['Heterosexual', 'Homosexual', 'Bisexual', 'Other'];
@@ -34,7 +35,8 @@ function Section({ children, style, onClick }) {
 }
 
 export default function ProfileEditPage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const handleLogout = useLogout();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [availableTags, setAvailableTags] = useState([]);
@@ -159,11 +161,6 @@ export default function ProfileEditPage() {
         setTimeout(() => navigate(`/profile/${user.id}`), 800);
       }
     } catch {}
-  }
-
-  async function handleLogout() {
-    await logout();
-    navigate('/');
   }
 
   const name = displayName(form, user?.username || 'You');

@@ -1,19 +1,15 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Bell, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { useLogout } from '../../hooks/useLogout';
 import MatchaCup from '../ui/MatchaCup';
 import './Header.css';
 
 function Header({ inApp }) {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { unreadCount } = useNotifications();
-  const navigate = useNavigate();
-
-  async function handleLogout() {
-    await logout();
-    navigate('/');
-  }
+  const handleLogout = useLogout();
 
   const username = user?.username;
 
