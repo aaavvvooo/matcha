@@ -29,11 +29,10 @@ FastAPI (Python 3.13, uv) + asyncpg + PostgreSQL 17 · React 19 (CRA) · MinIO/G
 
 ## Checks
 Run from `backend/` unless noted (`uv sync` installs ruff from the dev group; rule set pinned in `pyproject.toml`).
-Baseline on 2026-11-08: ruff clean, mypy 8 errors — add no new ones.
+Baseline on 2026-11-08: ruff clean, mypy 5 errors — add no new ones.
 ```bash
 uv run ruff check application
 uv run mypy --config-file application/mypy.ini application
-uv run pytest                          # once the Phase 2 harness exists
 cd ../frontend && npm run build        # must compile with no errors
 ```
 Full stack: `docker compose up --build` from the repo root (runs migrations and seeds 500+ profiles).
