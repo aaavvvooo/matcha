@@ -73,9 +73,19 @@ class ProfileRepository:
         rows = await self.db.fetch_all(query, user_id)
         return [row["name"] for row in rows]
 
-    async def count_photos(self, user_id: int) -> int:
+    async def count_photos(self, user_id: int, transaction: Optional[Connection] = None) -> int:
         query = "SELECT COUNT(*) FROM photos WHERE user_id = $1"
+        if transaction:
+            return await transaction.fetchval(query, user_id)
         return await self.db.fetch_val(query, user_id)
+
+    async def lock_user_photos(self, user_id: int, transaction: Connection) -> None:
+        """Serialise photo writes per user until the transaction ends.
+
+        NO KEY UPDATE still excludes other photo writers but, unlike FOR UPDATE,
+        doesn't block FK inserts (likes, views, messages) that reference the user.
+        """
+        await transaction.execute("SELECT 1 FROM users WHERE id = $1 FOR NO KEY UPDATE", user_id)
 
     async def count_tags(self, user_id: int) -> int:
         query = "SELECT COUNT(*) FROM user_tags WHERE user_id = $1"
@@ -153,67 +163,76 @@ class ProfileRepository:
                     )
         return photo
 
-    async def add_photos(self, user_id: int, urls: list[str], start_order: int):
+    async def add_photos(
+        self,
+        user_id: int,
+        urls: list[str],
+        start_order: int,
+        transaction: Optional[Connection] = None,
+    ):
         if not urls:
             return []
-
-        values_parts = []
-        params = []
-        param_index = 1
-        for i, url in enumerate(urls):
-            values_parts.append(f"(${param_index}, ${param_index+1}, ${param_index+2})")
-            params.extend([user_id, url, start_order + i])
-            param_index += 3
-
-        query = f"""
+        query = """
             INSERT INTO photos (user_id, url, "order")
-            VALUES {", ".join(values_parts)}
+            SELECT $1, u.url, $3 + u.ord - 1
+            FROM unnest($2::text[]) WITH ORDINALITY AS u(url, ord)
+            ORDER BY u.ord
             RETURNING id, user_id, url, "order", is_main
         """
-        return await self.db.fetch_all(query, *params)
+        if transaction:
+            return await transaction.fetch(query, user_id, urls, start_order)
+        return await self.db.fetch_all(query, user_id, urls, start_order)
 
-    async def get_existing_urls(self, user_id: int, urls: list[str]) -> list[str]:
+    async def get_existing_urls(
+        self, user_id: int, urls: list[str], transaction: Optional[Connection] = None
+    ) -> list[str]:
         query = "SELECT url FROM photos WHERE user_id = $1 AND url = ANY($2::text[])"
-        rows = await self.db.fetch_all(query, user_id, urls)
+        if transaction:
+            rows = await transaction.fetch(query, user_id, urls)
+        else:
+            rows = await self.db.fetch_all(query, user_id, urls)
         return [row["url"] for row in rows]
 
-    async def get_photos_urls(self, user_id: int, photo_ids: list[int]) -> list[str]:
+    async def get_photos_urls(
+        self, user_id: int, photo_ids: list[int], transaction: Optional[Connection] = None
+    ) -> list[str]:
         query = "SELECT url FROM photos WHERE user_id = $1 AND id = ANY($2::int[])"
-        rows = await self.db.fetch_all(query, user_id, photo_ids)
+        if transaction:
+            rows = await transaction.fetch(query, user_id, photo_ids)
+        else:
+            rows = await self.db.fetch_all(query, user_id, photo_ids)
         return [row["url"] for row in rows]
 
-    async def delete_photos(self, user_id: int, photo_ids: list[int]):
-        pool = self.db.require_pool()
-        async with pool.acquire() as connection:
-            async with connection.transaction():
-                await connection.execute(
-                    """
-                    UPDATE user_profiles SET profile_picture_id = NULL, updated_at = NOW()
-                    WHERE user_id = $1 AND profile_picture_id = ANY($2::int[])
-                    """,
-                    user_id, photo_ids,
-                )
-                deleted = await connection.fetch(
-                    """
-                    DELETE FROM photos
-                    WHERE user_id = $1 AND id = ANY($2::int[])
-                    RETURNING id
-                    """,
-                    user_id, photo_ids,
-                )
-                await connection.execute(
-                    """
-                    WITH ranked AS (
-                        SELECT id, ROW_NUMBER() OVER (ORDER BY "order") AS new_order
-                        FROM photos WHERE user_id = $1
-                    )
-                    UPDATE photos p
-                    SET "order" = r.new_order, updated_at = NOW()
-                    FROM ranked r
-                    WHERE p.id = r.id
-                    """,
-                    user_id,
-                )
+    async def delete_photos(self, user_id: int, photo_ids: list[int], transaction: Connection):
+        """Delete photos, clear a deleted profile picture and renumber the rest."""
+        await transaction.execute(
+            """
+            UPDATE user_profiles SET profile_picture_id = NULL, updated_at = NOW()
+            WHERE user_id = $1 AND profile_picture_id = ANY($2::int[])
+            """,
+            user_id, photo_ids,
+        )
+        deleted = await transaction.fetch(
+            """
+            DELETE FROM photos
+            WHERE user_id = $1 AND id = ANY($2::int[])
+            RETURNING id
+            """,
+            user_id, photo_ids,
+        )
+        await transaction.execute(
+            """
+            WITH ranked AS (
+                SELECT id, ROW_NUMBER() OVER (ORDER BY "order") AS new_order
+                FROM photos WHERE user_id = $1
+            )
+            UPDATE photos p
+            SET "order" = r.new_order, updated_at = NOW()
+            FROM ranked r
+            WHERE p.id = r.id
+            """,
+            user_id,
+        )
         return [row["id"] for row in deleted]
 
     async def add_tags(

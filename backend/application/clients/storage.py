@@ -52,7 +52,8 @@ def normalize_key(key: str) -> str:
     return key
 
 
-def _photo_key(user_id: int, file_bytes: bytes) -> str:
+def photo_key(user_id: int, file_bytes: bytes) -> str:
+    """Content-addressed object key; identical bytes from one user share a key."""
     digest = hashlib.sha256(file_bytes).hexdigest()
     return f"{user_id}/{digest}"
 
@@ -94,7 +95,7 @@ def _minio_upload(user_id: int, file_bytes: bytes, content_type: str) -> str:
     from botocore.exceptions import ClientError
 
     s3 = _get_s3()
-    key = _photo_key(user_id, file_bytes)
+    key = photo_key(user_id, file_bytes)
     try:
         s3.head_object(Bucket=BUCKET, Key=key)
     except ClientError as e:
@@ -156,7 +157,7 @@ def _gcs_ensure_bucket() -> None:
 
 
 def _gcs_upload(user_id: int, file_bytes: bytes, content_type: str) -> str:
-    key = _photo_key(user_id, file_bytes)
+    key = photo_key(user_id, file_bytes)
     blob = _get_gcs_bucket().blob(key)
     # The key is a digest of the bytes, so a hit is byte-identical already.
     if not blob.exists():
@@ -198,14 +199,27 @@ def _gcs_delete(key: str) -> None:
 # ── Public interface ─────────────────────────────────────────────────────
 
 
+_bucket_ready = False
+
+
 def ensure_bucket() -> None:
+    global _bucket_ready
     if BACKEND == "gcs":
         _gcs_ensure_bucket()
     else:
         _minio_ensure_bucket()
+    _bucket_ready = True
+
+
+def is_ready() -> bool:
+    """Whether ensure_bucket has succeeded since startup."""
+    return _bucket_ready
 
 
 def upload_photo(user_id: int, file_bytes: bytes, content_type: str) -> str:
+    if not _bucket_ready:
+        # Storage may have been unreachable at startup; retry before writing.
+        ensure_bucket()
     if BACKEND == "gcs":
         return _gcs_upload(user_id, file_bytes, content_type)
     return _minio_upload(user_id, file_bytes, content_type)

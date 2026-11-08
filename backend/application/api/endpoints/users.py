@@ -14,6 +14,7 @@ from application.service.social_service import SocialService
 from application.service.auth_service import AuthService
 from application.utils import get_current_user, require_profile
 from application.limiter import limiter
+from application.schema.fields import PathId
 
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -62,7 +63,7 @@ async def get_blocked_users(
 @limiter.limit("60/minute")
 async def get_user(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -75,7 +76,7 @@ async def get_user(
 @limiter.limit("60/minute")
 async def like_user(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -88,7 +89,7 @@ async def like_user(
 @limiter.limit("60/minute")
 async def unlike_user(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -101,7 +102,7 @@ async def unlike_user(
 @limiter.limit("30/minute")
 async def block_user(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -114,7 +115,7 @@ async def block_user(
 @limiter.limit("30/minute")
 async def unblock_user(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -127,7 +128,7 @@ async def unblock_user(
 @limiter.limit("30/minute")
 async def report_user(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -140,7 +141,7 @@ async def report_user(
 @limiter.limit("30/minute")
 async def get_views(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -152,7 +153,7 @@ async def get_views(
 @limiter.limit("30/minute")
 async def get_likes(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):

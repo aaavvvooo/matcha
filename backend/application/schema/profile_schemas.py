@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 
+from application.schema.fields import DbId
 from application.schema.value_sets import Gender, Orientation
 
 
@@ -15,7 +16,7 @@ class SetProfileRequest(BaseModel):
     sexual_orientation: Optional[Orientation] = None
     # Photos are added only through /profile/upload-photo, which derives the storage
     # key server-side; never accept client-supplied keys here.
-    tags: list[int] = Field(default_factory=list)
+    tags: list[DbId] = Field(default_factory=list, max_length=100)
 
 
 class UpdateProfileRequest(BaseModel):
@@ -23,7 +24,7 @@ class UpdateProfileRequest(BaseModel):
     birth_date: Optional[datetime] = None
     gender: Optional[Gender] = None
     sexual_orientation: Optional[Orientation] = None
-    tags: Optional[list[int]] = None
+    tags: Optional[list[DbId]] = Field(None, max_length=100)
 
 
 class SetLocationRequest(BaseModel):
@@ -40,11 +41,11 @@ class LocationResponse(BaseModel):
 
 
 class SetProfilePicRequest(BaseModel):
-    photo_id: int
+    photo_id: DbId
 
 
 class DeletePhotosRequest(BaseModel):
-    photo_ids: list[int] = Field(..., min_length=1)
+    photo_ids: list[DbId] = Field(..., min_length=1, max_length=50)
 
 
 

@@ -26,7 +26,18 @@ def _in_list(values: tuple[str, ...]) -> str:
     return ", ".join(f"'{v}'" for v in values)
 
 
+def _canonicalise(column: str, values: tuple[str, ...]) -> str:
+    """Map case/whitespace variants ('man ', 'BISEXUAL') onto the canonical value."""
+    cases = " ".join(f"WHEN '{v.lower()}' THEN '{v}'" for v in values)
+    return (
+        f"UPDATE user_profiles SET {column} = CASE lower(btrim({column})) {cases} ELSE {column} END "
+        f"WHERE {column} IS NOT NULL"
+    )
+
+
 def upgrade() -> None:
+    op.execute(_canonicalise("gender", GENDERS))
+    op.execute(_canonicalise("sexual_orientation", ORIENTATIONS))
     # Unknown gender => incomplete profile (hidden until fixed); unknown
     # orientation => NULL, which matching treats as Bisexual.
     op.execute(f"UPDATE user_profiles SET gender = NULL WHERE gender NOT IN ({_in_list(GENDERS)})")

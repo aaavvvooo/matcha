@@ -13,6 +13,8 @@ from slowapi.errors import RateLimitExceeded
 from application.api.router import router
 from application.limiter import limiter
 from application.repository.token_repo import TokenRepository
+from application.service.profile_service import MAX_PHOTOS
+from application.utils.image import MAX_IMAGE_BYTES
 from typing import Any, cast
 
 # Application loggers have no handler under uvicorn's default config, so
@@ -46,7 +48,14 @@ async def _token_cleanup_loop() -> None:
     repo = TokenRepository(database)
     while True:
         await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
-        await repo.cleanup_expired_tokens()
+        try:
+            await repo.cleanup_expired_tokens()
+        except Exception as e:
+            # One failed run (e.g. DB restart) must not kill the loop for good.
+            logger.error(
+                "Token cleanup failed: %s sqlstate=%s",
+                type(e).__name__, getattr(e, "sqlstate", None),
+            )
 
 
 @asynccontextmanager
@@ -74,6 +83,32 @@ app = FastAPI(title="Matcha", lifespan=lifespan)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# Starlette parses the whole multipart body before the endpoint (or any
+# dependency) runs, so oversized uploads must be refused here, from the header.
+_UPLOAD_PATH = "/profile/upload-photo"
+_MAX_UPLOAD_BODY = MAX_PHOTOS * MAX_IMAGE_BYTES + 64 * 1024  # files + multipart overhead
+
+
+@app.middleware("http")
+async def upload_size_guard(request: Request, call_next):
+    if request.method == "POST" and request.url.path == _UPLOAD_PATH:
+        # Chunked bodies have no declared size, and h11 lets Transfer-Encoding
+        # override a (small) Content-Length: refuse it so the length below is
+        # the real body size, enforced by the server's HTTP framing.
+        if "transfer-encoding" in request.headers:
+            return JSONResponse(status_code=411, content={"detail": "Content-Length required"})
+        # Credentials are only verified after the body is parsed; at least make
+        # anonymous clients unable to trigger that parsing.
+        if "authorization" not in request.headers and "access_token" not in request.cookies:
+            return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+        length = request.headers.get("content-length")
+        if length is None or not length.isdigit():
+            return JSONResponse(status_code=411, content={"detail": "Content-Length required"})
+        if int(length) > _MAX_UPLOAD_BODY:
+            return JSONResponse(status_code=413, content={"detail": "Upload too large"})
+    return await call_next(request)
 
 
 # Registered before CORSMiddleware so CORS wraps it: the browser receives a readable
@@ -119,12 +154,19 @@ async def read_root():
 
 @app.get("/health")
 async def health_check():
-    """Public liveness check: reports only whether the database answers."""
+    """Public liveness check: database reachable, storage bucket ready (no details)."""
     if not database.pool:
         raise HTTPException(status_code=503, detail="Database pool not initialized")
     try:
         result = await database.fetch_val("SELECT 1")
-        return {"status": "healthy", "database": {"connected": result == 1}}
+        from application.clients.storage import is_ready
+
+        storage_ready = is_ready()
+        return {
+            "status": "healthy" if storage_ready else "degraded",
+            "database": {"connected": result == 1},
+            "storage": {"ready": storage_ready},
+        }
     except Exception:
         logger.exception("Health check failed")
         raise HTTPException(
