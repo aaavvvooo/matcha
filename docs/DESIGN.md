@@ -227,8 +227,10 @@ fame_norm    = fame_rating / 100
 score        = 0.5 * proximity + 0.3 * shared_norm + 0.2 * fame_norm
 ```
 
-"Same area first" (subject IV.3) is enforced by the proximity weight. Explicit sorts (`age`, `distance`, `fame`,
-`tags`) replace the score; filters apply before sorting. Pagination by `limit`/`offset`.
+"Same area first" (subject IV.3) is enforced by ordering, not only by the weight: `sort_by=score` sorts by distance
+band first — ≤25 km, ≤100 km, ≤500 km, farther, unknown distance last (`AREA_BANDS_KM`) — and by score within a band,
+so shared tags or fame never lift a distant candidate above a nearby one. Explicit sorts (`age`, `distance`, `fame`,
+`tags`) replace the score and are not banded; filters apply before sorting. Pagination by `limit`/`offset`.
 
 ## 9. Fame rating
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search as SearchIcon } from 'lucide-react';
 import { search, getAllTags } from '../../api/profilesApi';
@@ -8,15 +8,12 @@ import Chip from '../../components/ui/Chip';
 import Btn from '../../components/ui/Btn';
 import FormInput from '../../components/ui/FormInput';
 import { displayName } from '../../utils/displayName';
+import { apiError } from '../../api/errors';
 
 const SORTS = [['score', 'best match'], ['distance', 'distance'], ['age', 'age'], ['fame', 'fame'], ['tags', 'common tags']];
 
-function apiError(err, fallback) {
-  const d = err?.response?.data?.detail;
-  if (typeof d === 'string') return d;
-  if (Array.isArray(d) && d.length) return d.map(e => e.msg).join('; ');
-  return fallback;
-}
+const PAGE_SIZE = 50;
+const MAX_OFFSET = 1000; // server bound (DiscoveryQuery.offset)
 
 const num = v => (v === '' || v == null ? undefined : Number(v));
 
@@ -27,6 +24,10 @@ export default function SearchPage() {
   const [error, setError] = useState(null);
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [tagsError, setTagsError] = useState(false);
+  // Only the latest request may update the results (sort can change mid-flight).
+  const requestRef = useRef(0);
   const navigate = useNavigate();
 
   const toggleTag = t => setFilters(f => ({
@@ -35,10 +36,12 @@ export default function SearchPage() {
   }));
 
   useEffect(() => {
-    getAllTags().then(setAllTags).catch(() => setAllTags([]));
+    getAllTags().then(setAllTags).catch(() => setTagsError(true));
   }, []);
 
-  async function runSearch(sort = sortBy) {
+  // offset 0 starts a new result list; a later offset appends the next page.
+  async function runSearch(sort = sortBy, offset = 0) {
+    const request = ++requestRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -51,19 +54,28 @@ export default function SearchPage() {
         max_distance_km: num(filters.maxDistance),
         tags: filters.tags.join(',') || undefined,
         location: filters.location.trim() || undefined,
-        limit: 50,
-        offset: 0,
+        limit: PAGE_SIZE,
+        offset,
       };
-      setResults(await search(params));
+      const data = await search(params);
+      if (request !== requestRef.current) return;
+      // The sort chip only switches once results in that order are shown.
+      setSortBy(sort);
+      setResults(prev => {
+        if (offset === 0 || !prev) return data;
+        const seen = new Set(prev.map(p => p.user_id));
+        return [...prev, ...data.filter(p => !seen.has(p.user_id))];
+      });
+      setHasMore(data.length === PAGE_SIZE && offset + PAGE_SIZE <= MAX_OFFSET);
     } catch (err) {
+      if (request !== requestRef.current) return;
       setError(apiError(err, 'Search failed — try again'));
     } finally {
-      setLoading(false);
+      if (request === requestRef.current) setLoading(false);
     }
   }
 
   function changeSort(key) {
-    setSortBy(key);
     runSearch(key);
   }
 
@@ -144,6 +156,9 @@ export default function SearchPage() {
             <div style={{ background: 'var(--white)', borderRadius: 'var(--r-md)', padding: 16, border: '1.5px solid var(--cream3)' }}>
               <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 12 }}>Interests</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {tagsError && (
+                  <div style={{ fontSize: 12, color: 'var(--ink3)' }}>Interest tags couldn't be loaded — reload the page to filter by tags.</div>
+                )}
                 {allTags.map(t => <Chip key={t.id} label={`#${t.name}`} active={filters.tags.includes(t.name)} onClick={() => toggleTag(t.name)}/>)}
               </div>
             </div>
@@ -156,8 +171,8 @@ export default function SearchPage() {
         ) : (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ fontSize: 14, color: 'var(--ink3)', fontStyle: 'italic' }}>{loading ? 'Searching…' : `${results.length} results`}</div>
-              <button onClick={() => { setResults(null); setError(null); }} style={{ background: 'none', border: 'none', color: 'var(--spice)', fontSize: 13, cursor: 'pointer', fontWeight: 500, fontFamily: 'DM Sans, sans-serif' }}>
+              <div style={{ fontSize: 14, color: 'var(--ink3)', fontStyle: 'italic' }}>{loading ? 'Searching…' : `${results.length}${hasMore ? '+' : ''} results`}</div>
+              <button onClick={() => { requestRef.current += 1; setLoading(false); setResults(null); setError(null); }} style={{ background: 'none', border: 'none', color: 'var(--spice)', fontSize: 13, cursor: 'pointer', fontWeight: 500, fontFamily: 'DM Sans, sans-serif' }}>
                 ← Edit search
               </button>
             </div>
@@ -204,6 +219,11 @@ export default function SearchPage() {
                   </div>
                 );
               })
+            )}
+            {hasMore && results.length > 0 && (
+              <Btn variant="secondary" onClick={() => runSearch(sortBy, results.length)} disabled={loading} style={{ width: '100%', marginTop: 6 }}>
+                {loading ? 'Loading…' : 'Load more'}
+              </Btn>
             )}
           </div>
         )}

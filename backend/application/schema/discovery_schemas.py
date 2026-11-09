@@ -60,8 +60,13 @@ class SearchQuery(DiscoveryQuery):
     @field_validator("location")
     @classmethod
     def _location_no_nul(cls, v):
-        if v is not None and "\x00" in v:
+        if v is None:
+            return v
+        if "\x00" in v:
             raise ValueError("Invalid character")
+        v = v.strip()
+        if not v:
+            raise ValueError("Location must not be blank")
         return v
 
 

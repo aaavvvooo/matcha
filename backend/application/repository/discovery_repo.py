@@ -15,6 +15,12 @@ from application.schema.discovery_schemas import DiscoveryQuery
 # to trilaterate someone's exact location; at best an attacker learns the cell.
 GRID_DEG = 0.02
 
+# Default ranking puts nearer areas first (subject: "priority to people in the same
+# geographical area"): candidates are banded by distance and the score only orders
+# them within a band, so tags/fame can't lift someone 500 km away above a neighbour.
+AREA_BANDS_KM = (25, 100, 500)
+_AREA_BANDS_SQL = "ARRAY[" + ", ".join(f"{km}.0" for km in AREA_BANDS_KM) + "]::float8[]"
+
 # sort_by -> (output column, natural direction)
 _SORTS: dict[str, tuple[str, str]] = {
     "score": ("score", "DESC"),
@@ -88,7 +94,8 @@ scored AS (
     SELECT c.*,
         0.5 * COALESCE(1.0 / (1.0 + c.distance_km / 10.0), 0)
         + 0.3 * c.shared_tags::float8 / GREATEST(1, (SELECT count(*) FROM viewer_tags))
-        + 0.2 * c.fame_rating / 100.0 AS score
+        + 0.2 * c.fame_rating / 100.0 AS score,
+        width_bucket(c.distance_km, {_AREA_BANDS_SQL}) AS area_band
     FROM candidates c
 )
 SELECT * FROM scored c
@@ -138,7 +145,9 @@ class DiscoveryRepository:
         query = _BASE
         if where:
             query += "WHERE " + " AND ".join(where) + "\n"
-        query += f"ORDER BY {column} {direction} NULLS LAST, c.user_id\n"
+        # Score sorts within area bands (unknown distance last); explicit sorts don't band.
+        band = "area_band ASC NULLS LAST, " if q.sort_by == "score" else ""
+        query += f"ORDER BY {band}{column} {direction} NULLS LAST, c.user_id\n"
         query += f"LIMIT {bind(q.limit)} OFFSET {bind(q.offset)}"
         return await self.db.fetch_all(query, *params)
 

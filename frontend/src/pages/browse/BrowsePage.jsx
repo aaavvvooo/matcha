@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkle, Bell } from 'lucide-react';
 import { browse, getAllTags } from '../../api/profilesApi';
 import { likeUser } from '../../api/usersApi';
+import { apiError } from '../../api/errors';
 import { useNotifications } from '../../context/NotificationContext';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
@@ -30,13 +31,6 @@ function toParams(sortBy, f, offset) {
     limit: PAGE_SIZE,
     offset,
   };
-}
-
-function apiError(err, fallback) {
-  const d = err?.response?.data?.detail;
-  if (typeof d === 'string') return d;
-  if (Array.isArray(d) && d.length) return d.map(e => e.msg).join('; ');
-  return fallback;
 }
 
 function ProfileCard({ profile, onLike, onPreview, isPreview, drag, isDragging, onPointerDown, onPointerMove, onPointerUp }) {
@@ -283,6 +277,7 @@ export default function BrowsePage() {
   const [draft, setDraft] = useState(NO_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [allTags, setAllTags] = useState([]);
+  const [tagsError, setTagsError] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   // Liked people drop out of the server's list, passed ones stay: the next page
@@ -324,7 +319,7 @@ export default function BrowsePage() {
   }, [loadPage]);
 
   useEffect(() => {
-    getAllTags().then(setAllTags).catch(() => setAllTags([]));
+    getAllTags().then(setAllTags).catch(() => setTagsError(true));
   }, []);
 
   // Fetch the next page when the stack runs out.
@@ -422,6 +417,9 @@ export default function BrowsePage() {
           <FormInput label="Min fame" type="number" value={draft.minFame} onChange={e => setDraft(d => ({ ...d, minFame: e.target.value }))} style={{ width: 90 }}/>
           <FormInput label="Max fame" type="number" value={draft.maxFame} onChange={e => setDraft(d => ({ ...d, maxFame: e.target.value }))} style={{ width: 90 }}/>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, flexBasis: '100%' }}>
+            {tagsError && (
+              <div style={{ fontSize: 12, color: 'var(--ink3)' }}>Interest tags couldn't be loaded — reload the page to filter by tags.</div>
+            )}
             {allTags.map(t => (
               <Chip
                 key={t.id}
@@ -529,7 +527,7 @@ export default function BrowsePage() {
           ) : loadError ? (
             <div role="alert" style={{ textAlign: 'center', padding: 40, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
               <div style={{ fontSize: 14, color: 'var(--ink2)' }}>{loadError}</div>
-              <Btn variant="secondary" onClick={() => loadPage(0, true)}>Try again</Btn>
+              <Btn variant="secondary" onClick={() => loadPage(passedRef.current, true)}>Try again</Btn>
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: 40 }}>
