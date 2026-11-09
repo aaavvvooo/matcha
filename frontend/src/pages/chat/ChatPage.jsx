@@ -6,6 +6,7 @@ import { useChat } from '../../context/ChatContext';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
+import { displayName } from '../../utils/displayName';
 
 function timeAgo(dateStr) {
   if (!dateStr) return '';
@@ -47,7 +48,7 @@ function ChatListView({ conversations, onSelect, loading }) {
           </div>
         ) : (
           conversations.map(c => {
-            const name = c.full_name || c.username || 'Unknown';
+            const name = displayName(c, 'Unknown');
             const hasUnread = (c.unread_count || 0) > 0;
             return (
               <div key={c.user_id} onClick={() => onSelect(c.user_id, c)} style={{
@@ -82,7 +83,7 @@ function ChatThreadView({ partner, messages, onSend, onBack, myId }) {
   const [input, setInput] = useState('');
   const [typing] = useState(false);
   const endRef = useRef(null);
-  const name = partner?.full_name || partner?.username || 'Unknown';
+  const name = displayName(partner, 'Unknown');
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });

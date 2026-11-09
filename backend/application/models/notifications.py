@@ -1,10 +1,15 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import CheckConstraint, Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from application.database import Base
 
 
 class Notification(Base):
     __tablename__ = "notifications"
+    __table_args__ = (
+        CheckConstraint(
+            "type IN ('like', 'view', 'message', 'match', 'unlike')", name="ck_notifications_type"
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)

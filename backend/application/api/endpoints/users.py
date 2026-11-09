@@ -14,6 +14,7 @@ from application.service.social_service import SocialService
 from application.service.auth_service import AuthService
 from application.utils import get_current_user, require_profile
 from application.limiter import limiter
+from application.schema.fields import PathId
 
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -31,12 +32,15 @@ async def update_me(
     from application.api.endpoints.auth import _get_email_client, _send_with_retry
 
     user_id = current_user["user"]["id"]
+    # An email change un-verifies the account, so fail before writing if the
+    # verification email can't be sent.
+    email_client = _get_email_client() if body.email is not None else None
     service = AuthService(db)
     response, verification_token = await service.update_me(user_id, body)
-    if verification_token:
+    if verification_token and email_client is not None:
         background_tasks.add_task(
             _send_with_retry,
-            _get_email_client().send_verification_email,
+            email_client.send_verification_email,
             response.email,
             response.username,
             verification_token,
@@ -59,7 +63,7 @@ async def get_blocked_users(
 @limiter.limit("60/minute")
 async def get_user(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -72,7 +76,7 @@ async def get_user(
 @limiter.limit("60/minute")
 async def like_user(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -85,7 +89,7 @@ async def like_user(
 @limiter.limit("60/minute")
 async def unlike_user(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -98,7 +102,7 @@ async def unlike_user(
 @limiter.limit("30/minute")
 async def block_user(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -111,7 +115,7 @@ async def block_user(
 @limiter.limit("30/minute")
 async def unblock_user(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -124,7 +128,7 @@ async def unblock_user(
 @limiter.limit("30/minute")
 async def report_user(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -137,7 +141,7 @@ async def report_user(
 @limiter.limit("30/minute")
 async def get_views(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):
@@ -149,7 +153,7 @@ async def get_views(
 @limiter.limit("30/minute")
 async def get_likes(
     request: Request,
-    user_id: int,
+    user_id: PathId,
     db: Database = Depends(get_db),
     current_user: dict = Depends(require_profile),
 ):

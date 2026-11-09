@@ -8,6 +8,7 @@ import FameMeter from '../../components/ui/FameMeter';
 import Btn from '../../components/ui/Btn';
 import MatchaCup from '../../components/ui/MatchaCup';
 import './ProfileViewPage.css';
+import { displayName } from '../../utils/displayName';
 
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
@@ -157,7 +158,7 @@ export default function ProfileViewPage() {
     );
   }
 
-  const name = profile.full_name || profile.username || 'Unknown';
+  const name = displayName(profile, 'Unknown');
 
   if (blocked) {
     return (

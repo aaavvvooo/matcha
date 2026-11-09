@@ -1,3 +1,4 @@
+from application.schema.value_sets import NotificationType
 from application.database import Database
 
 
@@ -42,7 +43,7 @@ class SocialRepository:
 
     async def get_likers(self, user_id: int):
         query = """
-            SELECT u.id, u.username, u.full_name, p.url AS profile_photo_url
+            SELECT u.id, u.username, u.first_name, u.last_name, p.url AS profile_photo_url
             FROM likes l
             JOIN users u ON u.id = l.liker_id
             JOIN user_profiles up ON up.user_id = u.id AND up.gender IS NOT NULL
@@ -83,7 +84,7 @@ class SocialRepository:
 
     async def get_viewers(self, user_id: int):
         query = """
-            SELECT u.id, u.username, u.full_name, p.url AS profile_photo_url, pv.viewed_at
+            SELECT u.id, u.username, u.first_name, u.last_name, p.url AS profile_photo_url, pv.viewed_at
             FROM profile_views pv
             JOIN users u ON u.id = pv.viewer_id
             JOIN user_profiles up ON up.user_id = u.id AND up.gender IS NOT NULL
@@ -167,7 +168,7 @@ class SocialRepository:
 
     async def get_blocked_users(self, user_id: int):
         query = """
-            SELECT u.id, u.username, u.full_name, p.url AS profile_photo_url
+            SELECT u.id, u.username, u.first_name, u.last_name, p.url AS profile_photo_url
             FROM blocks b
             JOIN users u ON u.id = b.blocked_id
             LEFT JOIN photos p ON p.is_main = true AND p.user_id = u.id
@@ -184,7 +185,9 @@ class SocialRepository:
         )
 
     # ── notifications ──────────────────────────────────────────────────────
-    async def create_notification(self, user_id: int, type: str, from_user: int | None = None):
+    async def create_notification(
+        self, user_id: int, type: NotificationType, from_user: int | None = None
+    ):
         query = """
             INSERT INTO notifications (user_id, type, from_user)
             VALUES ($1, $2, $3)

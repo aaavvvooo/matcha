@@ -99,11 +99,14 @@ async def register(
     background_tasks: BackgroundTasks,
     db: Database = Depends(get_db),
 ):
+    # Resolve the email client first: a 503 must not leave an account behind
+    # that can never receive its verification link.
+    email_client = _get_email_client()
     service = AuthService(db)
     user, token = await service.register(body)
     background_tasks.add_task(
         _send_with_retry,
-        _get_email_client().send_verification_email,
+        email_client.send_verification_email,
         user.email,
         user.username,
         token,
@@ -177,12 +180,13 @@ async def forget_password(
     background_tasks: BackgroundTasks,
     db=Depends(get_db),
 ):
+    email_client = _get_email_client()  # 503 before a reset token is stored
     service = AuthService(db)
     result = await service.forget_password(body.username_or_email)
     if result.has_email:
         background_tasks.add_task(
             _send_with_retry,
-            _get_email_client().send_password_reset_email,
+            email_client.send_password_reset_email,
             result.email_to,
             result.email_username,
             result.email_token,

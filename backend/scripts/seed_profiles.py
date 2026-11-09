@@ -94,12 +94,11 @@ async def seed_gender(
         for person in people:
             first = person["name"]["first"]
             last = person["name"]["last"]
-            full_name = f"{first} {last}"
             username = f"{person['login']['username']}_{person['login']['uuid'][:8]}"
             email = f"{username}@matcha-seed.dev"
 
             user_id = await create_seed_user(
-                user_repo, db, full_name, username, email, hashed_password
+                user_repo, db, first, last, username, email, hashed_password
             )
             if user_id is None:
                 continue

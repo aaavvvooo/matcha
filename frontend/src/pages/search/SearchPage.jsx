@@ -7,6 +7,7 @@ import FameMeter from '../../components/ui/FameMeter';
 import Chip from '../../components/ui/Chip';
 import Btn from '../../components/ui/Btn';
 import FormInput from '../../components/ui/FormInput';
+import { displayName } from '../../utils/displayName';
 
 const TAGS = ['#photography', '#music', '#cooking', '#travel', '#reading', '#cycling', '#art', '#tech', '#yoga', '#film', '#plants', '#coffee'];
 
@@ -127,7 +128,7 @@ export default function SearchPage() {
               </div>
             ) : (
               results.map(p => {
-                const name = p.full_name || p.username || 'Unknown';
+                const name = displayName(p, 'Unknown');
                 return (
                   <div key={p.user_id} onClick={() => navigate(`/profile/${p.user_id}`)} style={{
                     padding: '14px 16px', marginBottom: 10,

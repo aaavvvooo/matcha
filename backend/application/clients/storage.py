@@ -52,10 +52,18 @@ def normalize_key(key: str) -> str:
     return key
 
 
-def _photo_key(user_id: int, file_bytes: bytes) -> str:
+def photo_key(user_id: int, file_bytes: bytes) -> str:
+    """Content-addressed object key; identical bytes from one user share a key."""
     digest = hashlib.sha256(file_bytes).hexdigest()
     return f"{user_id}/{digest}"
 
+
+# Photo writes/deletes run while the uploader's users row is locked
+# (ProfileRepository.lock_user_photos), so a stalled backend must give up
+# instead of holding that lock for botocore's default 60 s x retries. The values
+# are per request; GCS's library retry deadline still applies on top.
+_CONNECT_TIMEOUT_S = 5
+_IO_TIMEOUT_S = 15
 
 # ── MinIO ────────────────────────────────────────────────────────────────
 
@@ -71,7 +79,12 @@ def _get_s3():
             endpoint_url=f"http://{MINIO_ENDPOINT}",
             aws_access_key_id=MINIO_ACCESS_KEY,
             aws_secret_access_key=MINIO_SECRET_KEY,
-            config=Config(signature_version="s3v4"),
+            config=Config(
+                signature_version="s3v4",
+                connect_timeout=_CONNECT_TIMEOUT_S,
+                read_timeout=_IO_TIMEOUT_S,
+                retries={"max_attempts": 2, "mode": "standard"},
+            ),
             region_name="us-east-1",
         )
     return _s3_client
@@ -94,7 +107,7 @@ def _minio_upload(user_id: int, file_bytes: bytes, content_type: str) -> str:
     from botocore.exceptions import ClientError
 
     s3 = _get_s3()
-    key = _photo_key(user_id, file_bytes)
+    key = photo_key(user_id, file_bytes)
     try:
         s3.head_object(Bucket=BUCKET, Key=key)
     except ClientError as e:
@@ -156,11 +169,11 @@ def _gcs_ensure_bucket() -> None:
 
 
 def _gcs_upload(user_id: int, file_bytes: bytes, content_type: str) -> str:
-    key = _photo_key(user_id, file_bytes)
+    key = photo_key(user_id, file_bytes)
     blob = _get_gcs_bucket().blob(key)
     # The key is a digest of the bytes, so a hit is byte-identical already.
-    if not blob.exists():
-        blob.upload_from_string(file_bytes, content_type=content_type)
+    if not blob.exists(timeout=_IO_TIMEOUT_S):
+        blob.upload_from_string(file_bytes, content_type=content_type, timeout=_IO_TIMEOUT_S)
     return key
 
 
@@ -190,7 +203,7 @@ def _gcs_delete(key: str) -> None:
     from google.cloud.exceptions import NotFound
 
     try:
-        _get_gcs_bucket().blob(normalize_key(key)).delete()
+        _get_gcs_bucket().blob(normalize_key(key)).delete(timeout=_IO_TIMEOUT_S)
     except NotFound:
         pass
 
@@ -198,14 +211,27 @@ def _gcs_delete(key: str) -> None:
 # ── Public interface ─────────────────────────────────────────────────────
 
 
+_bucket_ready = False
+
+
 def ensure_bucket() -> None:
+    global _bucket_ready
     if BACKEND == "gcs":
         _gcs_ensure_bucket()
     else:
         _minio_ensure_bucket()
+    _bucket_ready = True
+
+
+def is_ready() -> bool:
+    """Whether ensure_bucket has succeeded since startup."""
+    return _bucket_ready
 
 
 def upload_photo(user_id: int, file_bytes: bytes, content_type: str) -> str:
+    if not _bucket_ready:
+        # Storage may have been unreachable at startup; retry before writing.
+        ensure_bucket()
     if BACKEND == "gcs":
         return _gcs_upload(user_id, file_bytes, content_type)
     return _minio_upload(user_id, file_bytes, content_type)

@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -34,7 +36,7 @@ async def get_photo(
             raise HTTPException(status_code=404, detail="Photo not found")
 
     try:
-        photo = get_photo_object(key)
+        photo = await asyncio.to_thread(get_photo_object, key)
     except PhotoNotFound:
         raise HTTPException(status_code=404, detail="Photo not found")
 

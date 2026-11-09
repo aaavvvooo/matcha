@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getViews } from '../../api/usersApi';
 import { useAuth } from '../../context/AuthContext';
 import Avatar from '../../components/ui/Avatar';
+import { displayName } from '../../utils/displayName';
 
 function timeAgo(dateStr) {
   const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
@@ -55,9 +56,9 @@ export default function ProfileViewersPage() {
                 borderRadius: 'var(--r-md)', padding: '10px 14px', cursor: 'pointer',
               }}
             >
-              <Avatar name={v.full_name || v.username} src={v.profile_photo_url} size={44} />
+              <Avatar name={displayName(v, null)} src={v.profile_photo_url} size={44} />
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{v.full_name || v.username}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{displayName(v, null)}</div>
                 <div style={{ fontSize: 12, color: 'var(--ink4)' }}>@{v.username}</div>
               </div>
               <div style={{ fontSize: 12, color: 'var(--ink4)', fontStyle: 'italic' }}>{timeAgo(v.viewed_at)}</div>

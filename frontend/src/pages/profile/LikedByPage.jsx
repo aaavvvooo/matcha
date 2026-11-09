@@ -4,6 +4,7 @@ import { Sparkle } from 'lucide-react';
 import { getLikes } from '../../api/usersApi';
 import { useAuth } from '../../context/AuthContext';
 import Avatar from '../../components/ui/Avatar';
+import { displayName } from '../../utils/displayName';
 
 export default function LikedByPage() {
   const navigate = useNavigate();
@@ -48,9 +49,9 @@ export default function LikedByPage() {
                 borderRadius: 'var(--r-md)', padding: '10px 14px', cursor: 'pointer',
               }}
             >
-              <Avatar name={l.full_name || l.username} src={l.profile_photo_url} size={44} />
+              <Avatar name={displayName(l, null)} src={l.profile_photo_url} size={44} />
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{l.full_name || l.username}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{displayName(l, null)}</div>
                 <div style={{ fontSize: 12, color: 'var(--ink4)' }}>@{l.username}</div>
               </div>
               <Sparkle size={18} color="var(--spice)" fill="var(--spice)"/>

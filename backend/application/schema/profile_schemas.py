@@ -2,24 +2,29 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 
+from application.schema.fields import DbId
+from application.schema.value_sets import Gender, Orientation
+
 
 class SetProfileRequest(BaseModel):
-    user_id: Optional[int] = None
-    bio: str = Field(None, max_length=500)
-    birth_date: datetime = Field(None)
-    gender: str = Field(None, max_length=20)
-    sexual_orientation: str = Field(None, max_length=20)
+    # The owner always comes from the access token, never from the body.
+    model_config = ConfigDict(extra="ignore")
+
+    bio: Optional[str] = Field(None, max_length=500)
+    birth_date: Optional[datetime] = None
+    gender: Gender
+    sexual_orientation: Optional[Orientation] = None
     # Photos are added only through /profile/upload-photo, which derives the storage
     # key server-side; never accept client-supplied keys here.
-    tags: list[int] = Field(default_factory=list)
+    tags: list[DbId] = Field(default_factory=list, max_length=100)
 
 
 class UpdateProfileRequest(BaseModel):
     bio: Optional[str] = Field(None, max_length=500)
     birth_date: Optional[datetime] = None
-    gender: Optional[str] = Field(None, max_length=20)
-    sexual_orientation: Optional[str] = Field(None, max_length=20)
-    tags: Optional[list[int]] = None
+    gender: Optional[Gender] = None
+    sexual_orientation: Optional[Orientation] = None
+    tags: Optional[list[DbId]] = Field(None, max_length=100)
 
 
 class SetLocationRequest(BaseModel):
@@ -36,11 +41,11 @@ class LocationResponse(BaseModel):
 
 
 class SetProfilePicRequest(BaseModel):
-    photo_id: int
+    photo_id: DbId
 
 
 class DeletePhotosRequest(BaseModel):
-    photo_ids: list[int] = Field(..., min_length=1)
+    photo_ids: list[DbId] = Field(..., min_length=1, max_length=50)
 
 
 
@@ -67,13 +72,14 @@ class PhotoResponse(BaseModel):
 
 class ProfileResponse(BaseModel):
     user_id: int
-    full_name: str
+    first_name: str
+    last_name: str
     username: str
     email: EmailStr
     bio: Optional[str] = None
     birth_date: Optional[datetime] = None
-    gender: Optional[str] = None
-    sexual_orientation: Optional[str] = None
+    gender: Optional[Gender] = None
+    sexual_orientation: Optional[Orientation] = None
     profile_picture_id: Optional[int] = None
     fame_rating: float = 0.0
     tags: list[int] = Field(default_factory=list)

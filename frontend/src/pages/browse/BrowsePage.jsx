@@ -9,11 +9,12 @@ import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
 import Btn from '../../components/ui/Btn';
 import Chip from '../../components/ui/Chip';
+import { displayName } from '../../utils/displayName';
 
 function ProfileCard({ profile, onLike, onPreview, isPreview, drag, isDragging, onPointerDown, onPointerMove, onPointerUp }) {
   const rotation = drag.x * 0.035;
   const opacity = Math.max(0.4, 1 - Math.abs(drag.x) / 260);
-  const name = profile.full_name || profile.username || 'Unknown';
+  const name = displayName(profile, 'Unknown');
   const tags = profile.tags || [];
   const photos = profile.photos || [];
   const firstPhoto = photos[0]?.url;
@@ -144,7 +145,7 @@ function RightPanel({ profile, onProfile, onLike, myTags = [] }) {
     );
   }
 
-  const name = profile.full_name || profile.username || 'Unknown';
+  const name = displayName(profile, 'Unknown');
   const tags = profile.tags || [];
   const shared = tags.filter(t => myTags.includes(t));
   const firstPhoto = profile.photos?.[0]?.url;
@@ -217,7 +218,7 @@ function RightPanel({ profile, onProfile, onLike, myTags = [] }) {
 }
 
 function MatchOverlay({ profile, onChat, onClose }) {
-  const name = profile?.full_name || profile?.username || 'them';
+  const name = displayName(profile, 'them');
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 100,
@@ -424,7 +425,7 @@ export default function BrowsePage() {
                   <div style={{ fontSize: 11, color: 'var(--ink4)', marginBottom: 8 }}>Coming up</div>
                   <div style={{ display: 'flex', gap: 8, overflow: 'hidden' }}>
                     {sorted.slice(1, 4).map(p => {
-                      const n = p.full_name || p.username || '?';
+                      const n = displayName(p, '?');
                       return (
                         <div key={p.user_id} onClick={() => setPreviewProfile(p)} style={{
                           flex: '0 0 auto', padding: '8px 10px',

@@ -9,11 +9,11 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 
 ## Mandatory
 
-### E1 — Authentication & Account (subject IV.1) — ⚠️ (first/last name gap)
+### E1 — Authentication & Account (subject IV.1) — ✅
 
 | Feature | Status | Notes |
 |---|---|---|
-| Register with email, username, first/last name, password | ⚠️ | Single `full_name` field; subject requires last name + first name → R13 |
+| Register with email, username, first/last name, password | ✅ | `first_name` + `last_name` (R13) |
 | Reject weak / dictionary passwords | ✅ | zxcvbn score ≥ 2 + character rules |
 | Email verification link | ✅ | |
 | Login with username + password | ✅ | Email also accepted |
@@ -21,14 +21,14 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 | One-click logout from any page | ✅ | In BottomNav; re-verify after E8 header work |
 | JWT refresh + token blacklist | ✅ | |
 
-### E2 — User Profile (IV.2) — ✅ (one gap)
+### E2 — User Profile (IV.2) — ✅
 
 | Feature | Status | Notes |
 |---|---|---|
 | Gender, sexual preference, bio | ✅ | |
 | Reusable interest tags | ✅ | |
 | Up to 5 photos, one profile picture | ✅ | Content validated by magic bytes (F2) |
-| Edit first/last name, email, profile anytime | ⚠️ | Works with single `full_name` → R13; gender/orientation values not validated → R12 |
+| Edit first/last name, email, profile anytime | ✅ | Value sets enforced (R12), first/last name (R13) |
 | GPS location with consent, manual city fallback, editable | ✅ | Nominatim geocoding |
 | See who viewed my profile | ✅ | |
 | See who liked me | ✅ | |
@@ -82,7 +82,7 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 |---|---|---|
 | Hashed passwords, parameterised SQL | ✅ | argon2; asyncpg `$n` placeholders |
 | No internal details in error responses | ✅ | Error middleware (F1) |
-| Upload validation by content (magic bytes), not declared type | ✅ | `utils/image.py` (F2); request-size limit → R2 |
+| Upload validation by content (magic bytes), not declared type | ✅ | `utils/image.py` (F2); request-size guard in `main.py` (R2) |
 | Logout always ends the session | ✅ | Idempotent `/auth/logout` clears cookies + revokes refresh token even with an expired access token |
 | Rate limiting, CORS whitelist, secrets in `.env` (gitignored) | ✅ | |
 
@@ -178,32 +178,31 @@ Check a story off here when it merges.
 
 ### Phase 1 review follow-ups (security-reviewer + react-reviewer, 2026-11-07) — do before Phase 5
 
-**Order (2026-11-08):** these are scheduled around the phases that touch the same files, so the work isn't
-done twice:
-0. R4, R10 (log leaks) → 1. Phase 2 T1+T3 → 2. R1, R5b, R12, R13 (auth/profile integrity, before E3) →
-3. parallel worktrees: Track A E3 + R7 · Track B E6/E5 + R6 · Track C R2, R3, R11 photo part →
-4. polish: R8, R14, R15, rest of R11 → 5. Phase 5.
+**Done 2026-11-08** (PRs #9, #10). Verified with ruff, mypy, `npm run build` and scripted smoke runs
+against a scratch Postgres; no automated test suite (Phase 2 deferred).
 
-- [ ] R1 E7 — map `asyncpg.UniqueViolationError` → 409 and FK violations → 400 (register, update_me, second `/profile/set`, unknown tag ids); wrap `update_profile` profile + tag writes in one transaction; `user_repo.update_user` builds `SET` column names with an f-string from `data.keys()` — restrict to a fixed column allowlist
-- [ ] R2 E7 — upload limits: reject on `Content-Length`, cap file count per request; run blocking storage calls via `asyncio.to_thread`
-- [ ] R3 E7 — photo cap race (concurrent uploads exceed 5) and orphaned objects when `add_photos` rejects after storage upload
+- [x] R1 E7 — map `asyncpg.UniqueViolationError` → 409 and FK violations → 400 (register, update_me, second `/profile/set`, unknown tag ids); wrap `update_profile` profile + tag writes in one transaction; `user_repo.update_user` builds `SET` column names with an f-string from `data.keys()` — restrict to a fixed column allowlist
+- [x] R2 E7 — upload limits: reject on `Content-Length`, cap file count per request; run blocking storage calls via `asyncio.to_thread`
+- [x] R3 E7 — photo cap race (concurrent uploads exceed 5) and orphaned objects when `add_photos` rejects after storage upload
 - [x] R4 E7 — repositories `print(e); raise` leak emails to stdout → `logger.exception` or just `raise`
 - [x] R5a E7 — `POST /auth/logout` mapped every exception to 400 and kept the refresh cookie when the access token had expired *(fixed in PR #8 review)*
-- [ ] R5b E1 — register creates the user before checking the email client is configured (503 after the account already exists)
-- [ ] R6 E6.3 — notifications UI hides failures: initial GET can resolve after `clearUnread` and restore a stale count; failed load shows "no notifications" (`.catch(() => {})`); `clearUnread` clears locally even if `markRead` failed; WS has no `onclose`/reconnect and an empty `catch` in `onmessage`
-- [ ] R7 E8 — undefined CSS tokens (`--border`, `--surface`, `--text-muted`, `--accent`…) in `styles/global.css`, BrowsePage.css, SearchPage.css
-- [ ] R8 E8 — landing header overflows at 320 px; mobile landscape leaves ~240 px for content (consider hiding footer at `max-height: 500px`)
+- [x] R5b E1 — register creates the user before checking the email client is configured (503 after the account already exists)
+- [x] R6 E6.3 — notifications UI hides failures: initial GET can resolve after `clearUnread` and restore a stale count; failed load shows "no notifications" (`.catch(() => {})`); `clearUnread` clears locally even if `markRead` failed; WS has no `onclose`/reconnect and an empty `catch` in `onmessage`
+- [x] R7 E8 — undefined CSS tokens (`--border`, `--surface`, `--text-muted`, `--accent`…) in `styles/global.css`, BrowsePage.css, SearchPage.css
+- [x] R8 E8 — landing header overflows at 320 px; mobile landscape leaves ~240 px for content (consider hiding footer at `max-height: 500px`)
 - [x] R9 E8 — `minio/minio` image no longer pullable (removed from Docker Hub/Quay) → Compose uses `pgsty/minio:RELEASE.2026-08-04T00-00-00Z`
 - [x] R10 E1/E7 — email + logging failures are silent: `clients/email_client.py` catches Brevo `ApiException` and only `print`s (retry in `_send_with_retry` never fires, registration still 200); no `PYTHONUNBUFFERED=1` so `print` never reaches `docker logs`; Alembic startup prints the full DB URL with password (`DEBUGGING: tables`). Brevo also enforces an IP allowlist — allow the defense network's IP (or disable the restriction) and note it in README
 
 ### PR #8 review follow-ups (`/ecc:review-pr`, 2026-11-07)
-- [ ] R11 E7 — pre-existing silent failures: `set_location` turns geocoder outages into 400 "Could not find that location" (no log; should be 502/503); `delete_photos` swallows storage errors with `pass` (private image stays in bucket); `_token_cleanup_loop` dies silently on first DB error; failed `ensure_bucket` is never retried and `/health` still says healthy
-- [ ] R12 E2 — validate profile value sets: `Gender` / `Orientation` `Literal` types in Set/Update requests + `ProfileResponse` (today `""` passes the `gender IS NOT NULL` completeness check and `"foo"` is accepted); `NotificationType` `Literal`; consider DB CHECK constraints; make `bio`/`birth_date` `Optional`; drop client-settable `user_id` from `SetProfileRequest`
-- [ ] R13 E1 — **mandatory gap**: split `full_name` into `first_name` + `last_name` (migration with data backfill, register/update/profile schemas, RegisterPage + ProfileEditPage, seed scripts)
-- [ ] R14 E8 — landing page shows invented stats ("2,847 members", "94% find a match"): derive from DB or remove
-- [ ] R15 — share one `useLogout()` hook between Header and BottomNav; ErrorBoundary could reuse `components/ui/Btn`
+- [x] R11 E7 — pre-existing silent failures: `set_location` turns geocoder outages into 400 "Could not find that location" (no log; should be 502/503); `delete_photos` swallows storage errors with `pass` (private image stays in bucket); `_token_cleanup_loop` dies silently on first DB error; failed `ensure_bucket` is never retried and `/health` still says healthy
+- [x] R12 E2 — validate profile value sets: `Gender` / `Orientation` `Literal` types in Set/Update requests + `ProfileResponse` (today `""` passes the `gender IS NOT NULL` completeness check and `"foo"` is accepted); `NotificationType` `Literal`; consider DB CHECK constraints; make `bio`/`birth_date` `Optional`; drop client-settable `user_id` from `SetProfileRequest`
+- [x] R13 E1 — **mandatory gap**: split `full_name` into `first_name` + `last_name` (migration with data backfill, register/update/profile schemas, RegisterPage + ProfileEditPage, seed scripts)
+- [x] R14 E8 — landing page shows invented stats ("2,847 members", "94% find a match"): derive from DB or remove
+- [x] R15 — share one `useLogout()` hook between Header and BottomNav; ErrorBoundary could reuse `components/ui/Btn`
 
-### Phase 2 — Test harness (`/ecc:orch-add-feature`)
+### Phase 2 — Test harness — **deferred (2026-11-08)**
+Judged not worth the cost before the mandatory features exist; changes are verified with static checks and
+scripted smoke runs instead. Revisit only if regressions start costing time.
 - [ ] T1 Backend pytest + test Postgres + fixtures (2 users with profiles). `main.py` connects DB/storage in `lifespan` — tests must override it or use a test DB
 - [ ] T2 Regression tests, ranked: F6 `/profile/set` ignores `photos`; F2 upload (type from bytes, oversize, all-or-nothing storage, 5-photo cap, `detect_image_type` edge cases incl. `RIFF…WAVE`, `nosniff` header); F1 middleware (generic 500 + CORS header, HTTPException untouched, `/health` body); logout idempotency (expired access + refresh cookie → revoked + cookies cleared); frontend `clearUnread` stable identity, `logout` clears state on API failure, `/` redirect, one banner/main/contentinfo per page
 - [ ] T3 Fix frontend test setup: `App.test.js` is the stale CRA default ("learn react") and CRA Jest can't resolve `react-router-dom` v7 → add `moduleNameMapper` or move to Vitest

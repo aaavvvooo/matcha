@@ -1,9 +1,11 @@
+from application.schema.fields import PersonName
 from pydantic import BaseModel, EmailStr, Field, validator
 from datetime import datetime
 
 
 class RegisterRequest(BaseModel):
-    full_name: str = Field(..., max_length=100)
+    first_name: PersonName
+    last_name: PersonName
     username: str = Field(..., max_length=50)
     email: EmailStr = Field(...)
     password: str = Field(..., min_length=8, max_length=128)
@@ -18,7 +20,8 @@ class RegisterRequest(BaseModel):
 
 class RegisterUserResponse(BaseModel):
     id: int
-    full_name: str
+    first_name: str
+    last_name: str
     username: str
     email: EmailStr
     created_at: datetime

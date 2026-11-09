@@ -4,9 +4,19 @@ const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000'
 
 // Module-level token — set by AuthContext via setClientToken()
 let _token = null
+// AuthContext's setter, so a refresh done here also updates React state.
+let _onTokenRefreshed = null
 
 export function setClientToken(token) {
   _token = token
+}
+
+export function getClientToken() {
+  return _token
+}
+
+export function onTokenRefreshed(listener) {
+  _onTokenRefreshed = listener
 }
 
 const client = axios.create({
@@ -20,48 +30,44 @@ client.interceptors.request.use((config) => {
   return config
 })
 
-let isRefreshing = false
-let queue = []
+// Single-flight: concurrent callers share one /auth/refresh call, since the
+// server rotates the refresh cookie and a second parallel call would fail.
+let _refreshing = null
 
-// On 401: refresh the token, retry all queued requests, then retry the original
+export function refreshAccessToken() {
+  if (!_refreshing) {
+    _refreshing = axios
+      .post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true })
+      .then((res) => {
+        _token = res.data.access_token
+        _onTokenRefreshed?.(_token)
+        return _token
+      })
+      .finally(() => {
+        _refreshing = null
+      })
+  }
+  return _refreshing
+}
+
+// On 401: refresh the token once, then retry the original request
 client.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config
 
-    if (error.response?.status === 401 && !original._retry) {
+    if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true
-
-      if (isRefreshing) {
-        // Another refresh is in flight — queue this request
-        return new Promise((resolve, reject) => queue.push({ resolve, reject }))
-          .then((token) => {
-            original.headers.Authorization = `Bearer ${token}`
-            return client(original)
-          })
-      }
-
-      isRefreshing = true
+      let token
       try {
-        const res = await axios.post(
-          `${BASE_URL}/auth/refresh`,
-          {},
-          { withCredentials: true }
-        )
-        const newToken = res.data.access_token
-        _token = newToken
-        queue.forEach(({ resolve }) => resolve(newToken))
-        queue = []
-        original.headers.Authorization = `Bearer ${newToken}`
-        return client(original)
+        token = await refreshAccessToken()
       } catch {
-        queue.forEach(({ reject }) => reject())
-        queue = []
         _token = null
         window.location.href = '/login'
-      } finally {
-        isRefreshing = false
+        return Promise.reject(error)
       }
+      original.headers.Authorization = `Bearer ${token}`
+      return client(original)
     }
 
     return Promise.reject(error)

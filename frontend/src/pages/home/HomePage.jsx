@@ -19,10 +19,11 @@ const FEATURES = [
   { n: '04', title: 'Start talking',       desc: 'Chat in real-time. No timer, no pressure. Just conversation.' },
 ];
 
+// Product facts only: no invented member counts or success rates.
 const STATS = [
-  ['2,847', 'members'],
-  ['94%', 'find a match'],
-  ['12 min', 'avg reply time'],
+  ['5', 'photos per profile'],
+  ['Mutual', 'likes to chat'],
+  ['Live', 'chat & alerts'],
 ];
 
 function HomePage() {
@@ -177,7 +178,7 @@ function HomePage() {
         <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 36, fontWeight: 700, color: 'var(--ink)', marginBottom: 12 }}>
           Ready to meet someone real?
         </div>
-        <div style={{ fontSize: 15, color: 'var(--ink3)', marginBottom: 28 }}>Join 2,847 people already on Matcha.</div>
+        <div style={{ fontSize: 15, color: 'var(--ink3)', marginBottom: 28 }}>Set up your profile in a few minutes.</div>
         <Btn onClick={() => navigate('/register')} style={{ fontSize: 16, padding: '15px 40px' }}>Create your account →</Btn>
       </div>
 

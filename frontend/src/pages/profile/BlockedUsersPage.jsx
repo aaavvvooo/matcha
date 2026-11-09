@@ -4,6 +4,7 @@ import { UserX } from 'lucide-react';
 import { getBlockedUsers, unblockUser } from '../../api/usersApi';
 import Avatar from '../../components/ui/Avatar';
 import Btn from '../../components/ui/Btn';
+import { displayName } from '../../utils/displayName';
 
 export default function BlockedUsersPage() {
   const navigate = useNavigate();
@@ -57,9 +58,9 @@ export default function BlockedUsersPage() {
                 borderRadius: 'var(--r-md)', padding: '10px 14px',
               }}
             >
-              <Avatar name={u.full_name || u.username} src={u.profile_photo_url} size={44} />
+              <Avatar name={displayName(u, null)} src={u.profile_photo_url} size={44} />
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{u.full_name || u.username}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{displayName(u, null)}</div>
                 <div style={{ fontSize: 12, color: 'var(--ink4)' }}>@{u.username}</div>
               </div>
               <Btn variant="ghost" onClick={() => setConfirmTarget(u)} style={{ fontSize: 12, padding: '6px 12px' }}>Unblock</Btn>
@@ -86,7 +87,7 @@ export default function BlockedUsersPage() {
           >
             <UserX size={36} strokeWidth={1.5} color="var(--ink3)"/>
             <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 19, fontWeight: 700, color: 'var(--ink)' }}>
-              Unblock {confirmTarget.full_name || confirmTarget.username}?
+              Unblock {displayName(confirmTarget, null)}?
             </div>
             <div style={{ fontSize: 13, color: 'var(--ink4)' }}>
               They'll be able to view your profile, like you, and message you again.

@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Compass, Search, Heart, MessageCircle, CircleUser, LogOut } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
+import { useLogout } from '../../hooks/useLogout';
 import MatchaCup from '../ui/MatchaCup';
 import './BottomNav.css';
 
@@ -9,12 +10,8 @@ function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
-  const { user, logout } = useAuth();
-
-  async function handleLogout() {
-    await logout();
-    navigate('/');
-  }
+  const { user } = useAuth();
+  const handleLogout = useLogout();
 
   const NAV_ITEMS = [
     { path: '/browse',                icon: Compass, label: 'Discover' },

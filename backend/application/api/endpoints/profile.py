@@ -33,9 +33,8 @@ async def set(
     current_user: dict = Depends(get_current_user),
 ):
     user_id = current_user["user"]["id"]
-    body.user_id = user_id
     service = ProfileService(db)
-    await service.set_profile(body)
+    await service.set_profile(user_id, body)
     return await service.get_profile(user_id)
 
 
@@ -98,12 +97,13 @@ async def upload_photo(
     db: Database = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    from application.clients.storage import upload_photo as storage_upload
     user_id = current_user["user"]["id"]
+    if len(files) > MAX_PHOTOS:
+        raise HTTPException(status_code=400, detail=f"At most {MAX_PHOTOS} files per request")
     service = ProfileService(db)
-    current_count = await service.profile_repo.count_photos(user_id)
-    # Checked before storing anything so a rejected request leaves no orphaned objects.
-    if current_count + len(files) > MAX_PHOTOS:
+    # Cheap early exit when already full. The exact check (after skipping photos
+    # the user already has) runs under a row lock in ProfileService.add_photos.
+    if await service.profile_repo.count_photos(user_id) >= MAX_PHOTOS:
         raise HTTPException(status_code=400, detail=f"Cannot exceed {MAX_PHOTOS} photos")
     # Validate every file before storing any, so a bad file never leaves orphans in storage.
     validated: list[tuple[bytes, str]] = []
@@ -115,8 +115,7 @@ async def upload_photo(
         if image_type is None:
             raise HTTPException(status_code=400, detail=f"{file.filename}: only JPEG, PNG and WebP images are allowed")
         validated.append((data, image_type))
-    urls = [storage_upload(user_id, data, image_type) for data, image_type in validated]
-    return await service.add_photos(user_id, urls)
+    return await service.upload_photos(user_id, validated)
 
 
 
