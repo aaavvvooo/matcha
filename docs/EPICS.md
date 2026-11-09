@@ -82,7 +82,7 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 |---|---|---|
 | Hashed passwords, parameterised SQL | ✅ | argon2; asyncpg `$n` placeholders |
 | No internal details in error responses | ✅ | Error middleware (F1) |
-| Upload validation by content (magic bytes), not declared type | ✅ | `utils/image.py` (F2); request-size limit → R2 |
+| Upload validation by content (magic bytes), not declared type | ✅ | `utils/image.py` (F2); request-size guard in `main.py` (R2) |
 | Logout always ends the session | ✅ | Idempotent `/auth/logout` clears cookies + revokes refresh token even with an expired access token |
 | Rate limiting, CORS whitelist, secrets in `.env` (gitignored) | ✅ | |
 

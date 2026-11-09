@@ -44,16 +44,6 @@ export async function logout(accessToken) {
   return json;
 }
 
-export async function refreshToken() {
-  const res = await fetch(`${BASE_URL}/auth/refresh`, {
-    method: 'POST',
-    credentials: 'include',
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(errorMessage(json, 'Session expired'));
-  return json;
-}
-
 export async function verifyEmail(token) {
   const res = await fetch(`${BASE_URL}/auth/verify-email`, {
     method: 'POST',

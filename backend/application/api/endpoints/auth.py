@@ -1,5 +1,7 @@
 import asyncio
+import json
 import logging
+import re
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, Request
 from fastapi.security import OAuth2PasswordRequestForm
 
@@ -38,6 +40,27 @@ def _get_email_client() -> EmailClient:
     return _email_client
 
 
+def _describe_email_error(e: Exception) -> str:
+    """Safe one-line summary of a delivery failure for the logs.
+
+    Brevo's ApiException carries the HTTP status and a JSON body whose `code`
+    (e.g. "unauthorized") tells an unlisted IP apart from a bad key. The body's
+    `message` and the exception text are never logged: they can echo the request
+    payload (recipient address, token link).
+    """
+    status = getattr(e, "status", None)
+    code = None
+    body = getattr(e, "body", None)
+    if body:
+        try:
+            parsed = json.loads(body)
+        except (TypeError, ValueError):
+            parsed = None
+        if isinstance(parsed, dict) and isinstance(parsed.get("code"), str):
+            code = re.sub(r"[^A-Za-z0-9_.-]", "", parsed["code"])[:64] or None
+    return f"{type(e).__name__} status={status} code={code}"
+
+
 async def _send_with_retry(fn, *args, max_retries: int = 3, delay: float = 10.0):
     # NOTE: email delivery via BackgroundTasks is best-effort — jobs are lost
     # on process restart. Acceptable for this project; upgrade to a persistent
@@ -48,29 +71,23 @@ async def _send_with_retry(fn, *args, max_retries: int = 3, delay: float = 10.0)
             await loop.run_in_executor(None, fn, *args)
             return
         except Exception as e:
-            # Log status/reason only: the exception text can carry the request
-            # payload (recipient address, token link).
             status = getattr(e, "status", None)
-            reason = getattr(e, "reason", None)
             # 4xx other than 429 (bad key, IP not allowlisted, bad payload)
             # won't succeed on retry.
             permanent = isinstance(status, int) and 400 <= status < 500 and status != 429
             if permanent:
-                logger.error(
-                    "Email delivery rejected, not retrying: %s status=%s reason=%s",
-                    type(e).__name__, status, reason,
-                )
+                logger.error("Email delivery rejected, not retrying: %s", _describe_email_error(e))
                 return
             if attempt < max_retries - 1:
                 logger.warning(
-                    "Email delivery attempt %d/%d failed: %s status=%s reason=%s",
-                    attempt + 1, max_retries, type(e).__name__, status, reason,
+                    "Email delivery attempt %d/%d failed: %s",
+                    attempt + 1, max_retries, _describe_email_error(e),
                 )
                 await asyncio.sleep(delay)
             else:
                 logger.error(
-                    "Email delivery failed after %d attempts: %s status=%s reason=%s",
-                    max_retries, type(e).__name__, status, reason,
+                    "Email delivery failed after %d attempts: %s",
+                    max_retries, _describe_email_error(e),
                 )
 
 

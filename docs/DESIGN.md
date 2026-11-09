@@ -108,7 +108,7 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 ### Auth — `/auth`
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/register` | Sends verification email · 10/hour |
+| POST | `/register` | Sends verification email · 10/hour · 409 if username/email is taken |
 | POST | `/verify-email` | Token in body |
 | POST | `/login` | Form body (username or email + password) · returns access token, sets refresh cookie · 5/min |
 | GET | `/me` | Current user |
@@ -124,7 +124,7 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 | GET | `/get` | Own full profile |
 | PATCH | `/update` | Gender, orientation, bio, birth date, tags |
 | PATCH | `/location` | `{latitude, longitude}` (GPS) or `{city}` (geocoded) |
-| POST | `/upload-photo` | multipart `files[]`; JPEG/PNG/WebP, ≤5 MB, ≤5 total |
+| POST | `/upload-photo` | multipart `files[]`; JPEG/PNG/WebP, ≤5 MB each, ≤5 total. Refused before parsing: 411 (no `Content-Length` / chunked), 401 (no credentials), 413 (body > 5×5 MB + 64 KB) |
 | DELETE | `/delete-photos` | `{photo_ids: []}` |
 | POST | `/set-profpic` | `{photo_id}` |
 | GET | `/get-all-tags` | Tag autocomplete |
@@ -133,7 +133,7 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 ### Other users — `/users`
 | Method | Path | Notes |
 |---|---|---|
-| PATCH | `/me` | Name / email (email change ⇒ re-verify) |
+| PATCH | `/me` | Name / email (email change ⇒ re-verify) · 409 if username/email is taken |
 | GET | `/me/blocks` | My blocked list |
 | GET | `/{id}` | Public profile (no email); records a view; 403 if they blocked me |
 | POST / DELETE | `/{id}/like` | Like requires own photo; mutual ⇒ connection. Unlike removes connection |
@@ -252,8 +252,8 @@ Stored in `user_profiles.fame_rating`. `profile_viewers` counts distinct viewers
 | CSRF | Refresh cookie httpOnly + SameSite=Strict; CORS whitelist | ✅ |
 | Brute force | SlowAPI limits on auth routes | ✅ |
 | Token replay | Access blacklist on logout; refresh rotation | ✅ |
-| Malicious upload | Type detected from magic bytes (`utils/image.py`), never client `content_type`; ≤5 MB read cap; all files validated before any is stored; served with `nosniff` | ✅ (request-size limit: R2) |
-| Info leakage | `main.py` middleware logs unhandled errors and returns `{"detail":"Internal server error"}`; `/health` reports only connectivity | ✅ |
+| Malicious upload | Type detected from magic bytes (`utils/image.py`), never client `content_type`; ≤5 MB read cap; all files validated before any is stored; served with `nosniff`; `upload_size_guard` (`main.py`) refuses oversized, chunked or anonymous upload bodies from the headers before Starlette parses them | ✅ |
+| Info leakage | `main.py` middleware logs unhandled errors and returns `{"detail":"Internal server error"}`; `/health` returns only `status` (`healthy`/`degraded`/`unhealthy`), database connectivity and `storage.ready` — no versions, hosts or errors | ✅ |
 | Secrets | `.env` gitignored | ✅ |
 
 **Micro-framework rule (subject §III).** Decision 2026-11-07: keep FastAPI + Pydantic. Defense position: FastAPI is

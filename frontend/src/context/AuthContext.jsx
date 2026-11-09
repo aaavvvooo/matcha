@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { login as loginApi, logout as logoutApi, refreshToken, getMe } from '../api/authApi';
-import { setClientToken } from '../api/client';
+import { login as loginApi, logout as logoutApi, getMe } from '../api/authApi';
+import { setClientToken, refreshAccessToken, onTokenRefreshed } from '../api/client';
 
 const AuthContext = createContext(null);
 
@@ -10,18 +10,32 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const accessTokenRef = useRef(null);
   accessTokenRef.current = accessToken;
+  // True from the start of logout(); a re-render mid-logout would otherwise put
+  // the old token back into accessTokenRef before the guard below reads it.
+  const loggingOutRef = useRef(false);
 
   // Keep axios client in sync with the current token
   useEffect(() => {
     setClientToken(accessToken);
   }, [accessToken]);
 
+  // A refresh done by the axios client (on a 401) or the WebSocket must reach
+  // React state too, or logout/getMe would keep using the expired token.
+  // Ignored once signed out, so a refresh still in flight at logout can't
+  // bring the session back.
+  useEffect(() => {
+    onTokenRefreshed((token) => {
+      if (accessTokenRef.current && !loggingOutRef.current) setAccessToken(token);
+    });
+    return () => onTokenRefreshed(null);
+  }, []);
+
   // Runs once when the app first loads — tries to restore session
   useEffect(() => {
-    refreshToken()
-      .then(async (data) => {
-        setAccessToken(data.access_token);
-        const me = await getMe(data.access_token);
+    refreshAccessToken()
+      .then(async (token) => {
+        setAccessToken(token);
+        const me = await getMe(token);
         setUser(me);
       })
       .catch(() => {
@@ -34,6 +48,7 @@ export function AuthProvider({ children }) {
 
   async function login(username, password) {
     const data = await loginApi(username, password);
+    loggingOutRef.current = false;
     setAccessToken(data.access_token);
     const me = await getMe(data.access_token);
     setUser(me);
@@ -43,6 +58,7 @@ export function AuthProvider({ children }) {
   // Always end the local session, even if the server call fails (expired token,
   // network error) — logout must never leave the user stuck or throw to the caller.
   async function logout() {
+    loggingOutRef.current = true; // stop late refreshes from re-signing in
     try {
       await logoutApi(accessToken);
     } catch {

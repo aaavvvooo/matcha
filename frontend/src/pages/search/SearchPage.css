@@ -67,7 +67,7 @@
   border: 1px solid var(--cream3);
   border-radius: var(--r-md);
   padding: 16px;
-  transition: border-color var(--transition-base);
+  transition: var(--transition-base);
 }
 
 .result-card:hover {
@@ -165,7 +165,7 @@
   font-size: 22px;
   cursor: pointer;
   color: var(--ink3);
-  transition: color var(--transition-base);
+  transition: var(--transition-base);
   padding: 0;
   line-height: 1;
 }
