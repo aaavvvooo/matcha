@@ -47,8 +47,10 @@ Seeded accounts use emails ending in `@matcha-seed.dev` or `@matcha-seed-am.dev`
 
 **Email delivery:** Brevo rejects API calls from IPs that aren't on the account's allowlist (`401 unrecognised IP
 address`). Before running on a new network (e.g. the defense machine), add its public IP to the authorised IPs in
-the Brevo account's security settings, or turn the restriction off. Failed sends are retried 3 times and logged by
-`application.api.endpoints.auth` (status and reason only); check with `docker logs fastapi_backend`.
+the Brevo account's security settings, or turn the restriction off. Server errors, `429` and network failures are
+retried 3 times; any other `4xx` (bad key, IP not allowlisted, invalid sender) is logged once and not retried. Logs
+come from `application.api.endpoints.auth` and carry the HTTP status and Brevo's error `code` only (e.g.
+`status=401 code=unauthorized`); check with `docker logs fastapi_backend`.
 
 ## Development
 
