@@ -58,6 +58,13 @@ def photo_key(user_id: int, file_bytes: bytes) -> str:
     return f"{user_id}/{digest}"
 
 
+# Photo writes/deletes run while the uploader's users row is locked
+# (ProfileRepository.lock_user_photos), so a stalled backend must give up
+# instead of holding that lock for botocore's default 60 s x retries. The values
+# are per request; GCS's library retry deadline still applies on top.
+_CONNECT_TIMEOUT_S = 5
+_IO_TIMEOUT_S = 15
+
 # ── MinIO ────────────────────────────────────────────────────────────────
 
 
@@ -72,7 +79,12 @@ def _get_s3():
             endpoint_url=f"http://{MINIO_ENDPOINT}",
             aws_access_key_id=MINIO_ACCESS_KEY,
             aws_secret_access_key=MINIO_SECRET_KEY,
-            config=Config(signature_version="s3v4"),
+            config=Config(
+                signature_version="s3v4",
+                connect_timeout=_CONNECT_TIMEOUT_S,
+                read_timeout=_IO_TIMEOUT_S,
+                retries={"max_attempts": 2, "mode": "standard"},
+            ),
             region_name="us-east-1",
         )
     return _s3_client
@@ -160,8 +172,8 @@ def _gcs_upload(user_id: int, file_bytes: bytes, content_type: str) -> str:
     key = photo_key(user_id, file_bytes)
     blob = _get_gcs_bucket().blob(key)
     # The key is a digest of the bytes, so a hit is byte-identical already.
-    if not blob.exists():
-        blob.upload_from_string(file_bytes, content_type=content_type)
+    if not blob.exists(timeout=_IO_TIMEOUT_S):
+        blob.upload_from_string(file_bytes, content_type=content_type, timeout=_IO_TIMEOUT_S)
     return key
 
 
@@ -191,7 +203,7 @@ def _gcs_delete(key: str) -> None:
     from google.cloud.exceptions import NotFound
 
     try:
-        _get_gcs_bucket().blob(normalize_key(key)).delete()
+        _get_gcs_bucket().blob(normalize_key(key)).delete(timeout=_IO_TIMEOUT_S)
     except NotFound:
         pass
 

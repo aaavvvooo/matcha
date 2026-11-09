@@ -57,9 +57,12 @@ class ProfileRepository:
         """
         return await self.db.fetch_all(query, user_id)
 
-    async def get_user_tag_ids(self, user_id: int):
+    async def get_user_tag_ids(self, user_id: int, transaction: Optional[Connection] = None):
         query = "SELECT tag_id FROM user_tags WHERE user_id = $1"
-        rows = await self.db.fetch_all(query, user_id)
+        if transaction:
+            rows = await transaction.fetch(query, user_id)
+        else:
+            rows = await self.db.fetch_all(query, user_id)
         return [row["tag_id"] for row in rows]
 
     async def get_user_tag_names(self, user_id: int):
@@ -84,8 +87,17 @@ class ProfileRepository:
 
         NO KEY UPDATE still excludes other photo writers but, unlike FOR UPDATE,
         doesn't block FK inserts (likes, views, messages) that reference the user.
+        It does block other UPDATEs of this users row (presence, /users/me) for as
+        long as the transaction runs, so callers keep storage I/O in it bounded
+        (storage clients have short timeouts).
         """
         await transaction.execute("SELECT 1 FROM users WHERE id = $1 FOR NO KEY UPDATE", user_id)
+
+    async def lock_profile(self, user_id: int, transaction: Connection) -> None:
+        """Serialise profile/tag rewrites per user until the transaction ends."""
+        await transaction.execute(
+            "SELECT 1 FROM user_profiles WHERE user_id = $1 FOR NO KEY UPDATE", user_id
+        )
 
     async def count_tags(self, user_id: int) -> int:
         query = "SELECT COUNT(*) FROM user_tags WHERE user_id = $1"
