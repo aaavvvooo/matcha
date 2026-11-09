@@ -45,6 +45,13 @@ Seeded accounts use emails ending in `@matcha-seed.dev` or `@matcha-seed-am.dev`
 | `GCP_PROJECT_ID`, `GCS_BUCKET_NAME` | Only when `STORAGE_BACKEND=gcs` |
 | `NOMINATIM_URL`, `NOMINATIM_USER_AGENT`, `NOMINATIM_ACCEPT_LANGUAGE` | Optional geocoding overrides |
 
+**Email delivery:** Brevo rejects API calls from IPs that aren't on the account's allowlist (`401 unrecognised IP
+address`). Before running on a new network (e.g. the defense machine), add its public IP to the authorised IPs in
+the Brevo account's security settings, or turn the restriction off. Server errors, `429` and network failures are
+retried 3 times; any other `4xx` (bad key, IP not allowlisted, invalid sender) is logged once and not retried. Logs
+come from `application.api.endpoints.auth` and carry the HTTP status and Brevo's error `code` only (e.g.
+`status=401 code=unauthorized`); check with `docker logs fastapi_backend`.
+
 ## Development
 
 Backend (from `backend/`, uses [uv](https://docs.astral.sh/uv/)):

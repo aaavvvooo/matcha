@@ -13,19 +13,15 @@ class ProfileRepository:
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id, user_id, bio, birth_date, gender, sexual_orientation
         """
-        try:
-            if transaction:
-                return await transaction.fetchrow(
-                    query, data.user_id, data.bio, data.birth_date,
-                    data.gender, data.sexual_orientation,
-                )
-            return await self.db.fetch_one(
+        if transaction:
+            return await transaction.fetchrow(
                 query, data.user_id, data.bio, data.birth_date,
                 data.gender, data.sexual_orientation,
             )
-        except Exception as e:
-            print(e)
-            raise e
+        return await self.db.fetch_one(
+            query, data.user_id, data.bio, data.birth_date,
+            data.gender, data.sexual_orientation,
+        )
 
     async def get_profile(self, user_id: int):
         query = """

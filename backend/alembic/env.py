@@ -19,23 +19,23 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Get database URL from environment
-POSTGRES_USER = os.getenv("POSTGRES_USER", "admin")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "securepassword123")
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
-POSTGRES_PORT_INNER = os.getenv("POSTGRES_PORT_INNER", "5432")
-POSTGRES_DB = os.getenv("POSTGRES_DB", "myapp_db")
-
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT_INNER}/{POSTGRES_DB}",
-)
+# Get database URL from environment. No credential defaults: fail fast instead.
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    _required = ("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB")
+    _missing = [name for name in _required if not os.getenv(name)]
+    if _missing:
+        raise RuntimeError(f"Set DATABASE_URL or {', '.join(_missing)}")
+    DATABASE_URL = (
+        f"postgresql+asyncpg://{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}"
+        f"@{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT_INNER', '5432')}"
+        f"/{os.environ['POSTGRES_DB']}"
+    )
 
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 # add your model's MetaData object here for 'autogenerate' support
 target_metadata = Base.metadata
-print("DEBUGGING: tables ->", Base.metadata.tables.keys())
 
 
 def run_migrations_offline() -> None:
@@ -61,7 +61,6 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode."""
-    print(DATABASE_URL)
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
