@@ -34,15 +34,15 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 | See who liked me | ✅ | |
 | Public fame rating | ✅ | `min(100, likes·3 + views + connections·5)` |
 
-### E3 — Discovery: Browse & Search (IV.3, IV.4) — ❌ backend missing · **top priority**
+### E3 — Discovery: Browse & Search (IV.3, IV.4) — ✅
 
 | Feature | Status | Notes |
 |---|---|---|
-| E3.1 Suggested list filtered by orientation (unset ⇒ bisexual), excluding blocked users | ❌ | `BrowsePage` calls `GET /profiles/browse` — no such route |
-| E3.2 Ranking: same area first, then shared tags, then fame | ❌ | Haversine in SQL |
-| E3.3 Sort by age / distance / fame / common tags | ❌ | |
-| E3.4 Filter by age / distance / fame / tags | ❌ | |
-| E3.5 Advanced search: age range, fame range, location, tags; sortable + filterable | ❌ | `SearchPage` calls `GET /profiles/search` — no such route; uses hardcoded tag list instead of `/profile/get-all-tags` |
+| E3.1 Suggested list filtered by orientation (unset ⇒ bisexual), excluding blocked users | ✅ | `GET /profiles/browse`; mutual interest rule DESIGN §8; liked people skipped |
+| E3.2 Ranking: same area first, then shared tags, then fame | ✅ | Haversine + score in SQL |
+| E3.3 Sort by age / distance / fame / common tags | ✅ | Server-side `sort_by` + `order` |
+| E3.4 Filter by age / distance / fame / tags | ✅ | BrowsePage filter row |
+| E3.5 Advanced search: age range, fame range, location, tags; sortable + filterable | ✅ | `GET /profiles/search`; real tag list; city geocoded |
 
 ### E4 — Profile View & Interactions (IV.5) — ✅
 
@@ -200,6 +200,17 @@ against a scratch Postgres; no automated test suite (Phase 2 deferred).
 - [x] R14 E8 — landing page shows invented stats ("2,847 members", "94% find a match"): derive from DB or remove
 - [x] R15 — share one `useLogout()` hook between Header and BottomNav; ErrorBoundary could reuse `components/ui/Btn`
 
+### PR #9–#11 review follow-ups (`/ecc:review-pr`, 2026-11-09)
+- [x] R16 E1 — README overstated email retries (4xx are not retried); logs now carry Brevo's error `code` so an un-allowlisted IP (401) is distinguishable from a bad key
+- [x] R17 E6/E8 — WebSocket reconnect looped every 1 s once the access token expired: axios refreshes never reached `AuthContext`; refresh is now single-flight in `api/client.js` and synced to React state, a 1008 close triggers one refresh, backoff resets only after a server frame
+- [x] R18 E2 — `update_profile` read tags on a second pooled connection inside its transaction (pool exhaustion / tag-cap race): read on `conn` under a profile row lock; storage clients get short timeouts so the photo lock is bounded; cleanup logs carry the object key
+- [x] R19 E8 — invalid `transition: <prop> var(--transition-base)` declarations (token is a full shorthand) dropped every hover transition; `.error-msg`/`.success-msg` use tokens; ProfileEditPage shows save errors (shared `api/errors.js`)
+- [x] R20 E3 — default `score` sort is banded by distance (≤25/100/500 km) so "same area first" holds; Search pages with "Load more", switches the sort chip only on success; Browse retry resumes after passed cards; tag-load failures shown; blank `location` → 422
+- [ ] R21 E2 — legacy rows whose gender the value-set migration NULLed can't finish setup (`/profile/set` is a plain INSERT → 409); fresh seeds unaffected. Fix: upsert when the existing row is incomplete
+- [ ] R22 E3 — Browse "shared tags" highlight is never fed (`RightPanel` `myTags`); discovery returns tag names but `/profile/get` returns ids
+- [ ] R23 E3 — one process-wide geocoder gate is shared by search and profile location; many unique-city searches can 503 onboarding
+- [ ] R24 E1 — `auth_service.refresh` reads then upserts the single refresh row non-atomically: two tabs refreshing with the same cookie → the loser gets 401 and is sent to /login (pre-existing; more likely now that the WebSocket refreshes on 1008). Fix: `UPDATE … WHERE token_hash = $old RETURNING` as the rotation check
+
 ### Phase 2 — Test harness — **deferred (2026-11-08)**
 Judged not worth the cost before the mandatory features exist; changes are verified with static checks and
 scripted smoke runs instead. Revisit only if regressions start costing time.
@@ -208,8 +219,8 @@ scripted smoke runs instead. Revisit only if regressions start costing time.
 - [ ] T3 Fix frontend test setup: `App.test.js` is the stale CRA default ("learn react") and CRA Jest can't resolve `react-router-dom` v7 → add `moduleNameMapper` or move to Vitest
 
 ### Phase 3 — Discovery (track A)
-- [ ] E3.1–E3.4 `GET /profiles/browse`: orientation filter, blocks, ranking, sort, filter + BrowsePage wiring
-- [ ] E3.5 `GET /profiles/search` + SearchPage wiring (real tag list)
+- [x] E3.1–E3.4 `GET /profiles/browse`: orientation filter, blocks, ranking, sort, filter + BrowsePage wiring
+- [x] E3.5 `GET /profiles/search` + SearchPage wiring (real tag list)
 
 ### Phase 4 — Real-time (track B, parallel with Phase 3)
 - [ ] E6.1 `PresenceManager.send_to_user()` push
