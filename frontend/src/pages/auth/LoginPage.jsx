@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
 import FormInput from '../../components/ui/FormInput';
+import OAuthButtons from '../../components/auth/OAuthButtons';
 
 function LoginPage() {
   const [username, setUsername] = useState('');
@@ -69,6 +70,7 @@ function LoginPage() {
             Forgot password?
           </span>
         </div>
+        <OAuthButtons />
       </form>
 
       <div style={{ padding: '12px 24px 32px', textAlign: 'center', fontSize: 13, color: 'var(--ink3)' }}>
