@@ -58,16 +58,15 @@ async def list_providers():
 @limiter.limit("20/minute")
 async def start(request: Request, provider: str):
     config = oauth_service.get_enabled_provider(provider)  # 404 unless allowlisted + configured
-    # A restarted flow replaces the previous one in this browser.
-    oauth_service.discard(request.cookies.get(_FLOW_COOKIE))
-    url, flow_id = oauth_service.begin(config)
+    # A restarted flow overwrites the previous cookie in this browser.
+    url, flow_cookie = oauth_service.begin(config)
     response = RedirectResponse(url, status_code=302)
     response.headers["Cache-Control"] = "no-store"
     # SameSite=Lax (not Strict): the callback is a cross-site top-level GET from
     # the provider, and Lax cookies are sent on exactly that.
     response.set_cookie(
         key=_FLOW_COOKIE,
-        value=flow_id,
+        value=flow_cookie,
         max_age=oauth_service.STATE_TTL_SECONDS,
         path=_FLOW_COOKIE_PATH,
         httponly=True,
@@ -89,10 +88,10 @@ async def callback(
     db: Database = Depends(get_db),
 ):
     config = oauth_service.get_enabled_provider(provider)
-    flow_id = request.cookies.get(_FLOW_COOKIE)
+    flow_cookie = request.cookies.get(_FLOW_COOKIE)
     try:
         # State first, so even a provider error can't be replayed against a live flow.
-        code_verifier = oauth_service.consume(flow_id, config.id, state)
+        code_verifier = oauth_service.consume(flow_cookie, config.id, state)
         if error is not None:
             # The provider's error text is never echoed; cancellation is the usual case.
             raise OAuthFlowError("access_denied")
@@ -106,7 +105,6 @@ async def callback(
         email_available = bool(BREVO_API_KEY)
         result = await OAuthService(db).sign_in(config, identity, email_available)
     except OAuthFlowError as e:
-        oauth_service.discard(flow_id)
         return _frontend_redirect(error=e.code)
     except Exception as e:
         # No exception text: asyncpg messages can echo row data (emails).

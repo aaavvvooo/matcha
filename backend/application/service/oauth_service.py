@@ -1,25 +1,29 @@
 """OAuth sign-in (bonus B1): state/PKCE bookkeeping and account linking.
 
-Flow state: /start stores {provider, state, code_verifier} server-side under an
-opaque random id that goes to the browser in a short-lived httpOnly cookie. The
-callback pops that entry (single use, whatever the outcome) and compares `state`
-in constant time. The store is in-process memory, like the WebSocket registry
-and rate limiter: fine for the single-process deployment, lost on restart (the
-user just clicks the button again).
+Flow state is stateless: /start puts {provider, state, code_verifier, exp} in
+the httpOnly `oauth_flow` cookie, authenticated with HMAC-SHA256 under a key
+derived from the server secret. The callback verifies it (constant time, strict
+parsing), compares `state` in constant time and always clears the cookie, so a
+flow is single-use per browser; the provider's codes are single-use too. Works
+across instances and needs no server memory.
 
 Linking rules (never trust an address the provider does not mark verified):
   1. provider identity already linked          -> that user
   2. provider-verified email == validated user -> link + that user
      provider-verified email == unvalidated    -> refuse (link_unverified)
      unverified/absent email == existing user  -> refuse (email_in_use), no link
-  3. otherwise create a user + link in one transaction; is_validated only when
-     the provider verified the email, else a verification email is sent and no
-     session is issued until the link in it is clicked.
+  3. otherwise create a user + link in one transaction. GitHub: only with a
+     verified primary email (else no_email: no account, no link). 42: its
+     school-assigned address has no verified flag, so the account starts
+     unvalidated and gets a verification email; the link is inert (no session)
+     until that mail is clicked.
 """
 
 import base64
+import binascii
 import hashlib
 import hmac
+import json
 import logging
 import re
 import secrets
@@ -41,6 +45,7 @@ from application.clients.oauth_client import (
     ProviderIdentity,
     authorization_url,
 )
+from application.config import JWT_SECRET_KEY
 from application.database import Database
 from application.repository import TokenRepository, UserRepository
 from application.repository.oauth_repo import OAuthRepository
@@ -50,7 +55,6 @@ from application.utils import create_verification_token, get_password_hash
 logger = logging.getLogger(__name__)
 
 STATE_TTL_SECONDS = 600
-_MAX_PENDING = 10_000
 _MAX_STATE_LEN = 128
 _NAME_MAX = 50  # users.first_name / last_name VARCHAR(50)
 _USERNAME_BASE_MAX = 40  # leaves room for a numeric suffix under the 50-char limit
@@ -81,22 +85,6 @@ class OAuthFlowError(HTTPException):
         self.code = code
 
 
-@dataclass(frozen=True)
-class _Pending:
-    provider: str
-    state: str
-    code_verifier: Optional[str]
-    expires_at: float
-
-
-_pending: dict[str, _Pending] = {}
-
-
-def _purge_expired(now: float) -> None:
-    for key in [k for k, v in _pending.items() if v.expires_at <= now]:
-        del _pending[key]
-
-
 def get_enabled_provider(provider_id: str) -> ProviderConfig:
     provider = PROVIDERS.get(provider_id)
     if provider is None or not provider.enabled:
@@ -104,42 +92,104 @@ def get_enabled_provider(provider_id: str) -> ProviderConfig:
     return provider
 
 
+# --- stateless flow cookie ----------------------------------------------------
+# value = b64url(json payload) "." b64url(HMAC-SHA256(flow_key, b64url payload))
+# flow_key = HMAC-SHA256(JWT_SECRET_KEY, context label): a key of its own, so a
+# flow MAC can never be confused with a JWT signature.
+
+_FLOW_MAC_CONTEXT = b"matcha/oauth-flow-v1"
+_MAX_FLOW_COOKIE_LEN = 1024
+_CLOCK_SKEW_SECONDS = 5
+_B64URL_RE = re.compile(r"[A-Za-z0-9_-]+")
+_STATE_RE = re.compile(r"[A-Za-z0-9_-]{43}")      # secrets.token_urlsafe(32)
+_VERIFIER_RE = re.compile(r"[A-Za-z0-9_-]{86}")   # secrets.token_urlsafe(64)
+_FLOW_KEYS = frozenset({"p", "s", "v", "e"})
+
+
+def _flow_key() -> bytes:
+    if not JWT_SECRET_KEY:
+        raise RuntimeError("JWT_SECRET_KEY must be set")
+    return hmac.new(JWT_SECRET_KEY.encode(), _FLOW_MAC_CONTEXT, hashlib.sha256).digest()
+
+
+def _b64e(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _b64d(text: str) -> bytes:
+    if not _B64URL_RE.fullmatch(text):
+        raise ValueError("not base64url")
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+
+def _mac(body: str) -> bytes:
+    return hmac.new(_flow_key(), body.encode("ascii"), hashlib.sha256).digest()
+
+
+def _seal(payload: dict) -> str:
+    body = _b64e(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode())
+    return f"{body}.{_b64e(_mac(body))}"
+
+
+def _unseal(cookie: Optional[str]) -> Optional[dict]:
+    """The payload if the cookie is well-formed, authentic and unexpired, else None."""
+    if not cookie or len(cookie) > _MAX_FLOW_COOKIE_LEN or cookie.count(".") != 1:
+        return None
+    body, mac = cookie.split(".")
+    try:
+        given_mac = _b64d(mac)
+        raw = _b64d(body)
+    except (ValueError, binascii.Error):
+        return None
+    if not hmac.compare_digest(_mac(body), given_mac):
+        return None
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(data, dict) or set(data) != _FLOW_KEYS:
+        return None
+    provider, state, verifier, exp = data["p"], data["s"], data["v"], data["e"]
+    now = int(time.time())
+    if (
+        not isinstance(provider, str) or provider not in PROVIDERS
+        or not isinstance(state, str) or not _STATE_RE.fullmatch(state)
+        or not (verifier is None or (isinstance(verifier, str) and _VERIFIER_RE.fullmatch(verifier)))
+        or isinstance(exp, bool) or not isinstance(exp, int)
+        or not now < exp <= now + STATE_TTL_SECONDS + _CLOCK_SKEW_SECONDS
+    ):
+        return None
+    return data
+
+
 def begin(provider: ProviderConfig) -> tuple[str, str]:
-    """Returns (provider authorize URL, opaque flow id for the cookie)."""
-    now = time.monotonic()
-    _purge_expired(now)
-    if len(_pending) >= _MAX_PENDING:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Too many sign-in attempts in progress, try again shortly",
-        )
+    """Returns (provider authorize URL, sealed flow cookie value). Nothing is kept
+    server-side, so /start can't be used to exhaust server memory."""
     state = secrets.token_urlsafe(32)  # 256 bits
     verifier = challenge = None
     if provider.pkce:
         verifier = secrets.token_urlsafe(64)  # 86 chars, within RFC 7636's 43..128
         digest = hashlib.sha256(verifier.encode("ascii")).digest()
-        challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-    flow_id = secrets.token_urlsafe(32)
-    _pending[flow_id] = _Pending(provider.id, state, verifier, now + STATE_TTL_SECONDS)
-    return authorization_url(provider, state, challenge), flow_id
+        challenge = _b64e(digest)
+    cookie = _seal({
+        "p": provider.id,
+        "s": state,
+        "v": verifier,
+        "e": int(time.time()) + STATE_TTL_SECONDS,
+    })
+    return authorization_url(provider, state, challenge), cookie
 
 
-def consume(flow_id: Optional[str], provider_id: str, state: Optional[str]) -> Optional[str]:
-    """Validate and burn the pending flow. Returns the PKCE verifier (or None)."""
-    entry = _pending.pop(flow_id, None) if flow_id else None
-    if entry is None or entry.expires_at <= time.monotonic():
+def consume(cookie: Optional[str], provider_id: str, state: Optional[str]) -> Optional[str]:
+    """Check the callback against the browser's flow cookie. Returns the PKCE
+    verifier (or None). The caller always clears the cookie afterwards."""
+    data = _unseal(cookie)
+    if data is None or not state or len(state) > _MAX_STATE_LEN:
         raise OAuthFlowError("invalid_state")
-    if not state or len(state) > _MAX_STATE_LEN:
+    same_state = hmac.compare_digest(data["s"].encode(), state.encode())
+    if not same_state or data["p"] != provider_id:
         raise OAuthFlowError("invalid_state")
-    same_state = hmac.compare_digest(entry.state.encode(), state.encode())
-    if not same_state or entry.provider != provider_id:
-        raise OAuthFlowError("invalid_state")
-    return entry.code_verifier
-
-
-def discard(flow_id: Optional[str]) -> None:
-    if flow_id:
-        _pending.pop(flow_id, None)
+    return data["v"]
 
 
 # --- profile data sanitising --------------------------------------------------
@@ -237,6 +287,8 @@ class OAuthService:
             return await self._session_for(local)
 
         # 3. New account.
+        if not verified and not provider.unverified_signup:
+            raise OAuthFlowError("no_email")  # defense in depth; the GitHub client already drops it
         if not verified and not email_available:
             raise OAuthFlowError("email_unavailable")
         return await self._create(provider, identity, email, verified)
