@@ -40,6 +40,26 @@ def _get_email_client() -> EmailClient:
     return _email_client
 
 
+def set_session_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    """Session cookies shared by password login, refresh and OAuth sign-in."""
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=False,
+        samesite="strict",
+        max_age=7 * 24 * 60 * 60,
+    )
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=False,
+        samesite="strict",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+
+
 def _describe_email_error(e: Exception) -> str:
     """Safe one-line summary of a delivery failure for the logs.
 
@@ -134,22 +154,7 @@ async def login(
     access_token, refresh_token = await service.login(
         form_data.username, form_data.password
     )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=False,
-        samesite="strict",
-        max_age=7 * 24 * 60 * 60,
-    )
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=False,
-        samesite="strict",
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    )
+    set_session_cookies(response, access_token, refresh_token)
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -222,22 +227,7 @@ async def refresh(request: Request, response: Response, db=Depends(get_db)):
         raise HTTPException(status_code=401, detail="Missing refresh token")
     service = AuthService(db)
     access_token, new_refresh_token = await service.refresh(refresh_token)
-    response.set_cookie(
-        key="refresh_token",
-        value=new_refresh_token,
-        httponly=True,
-        secure=False,
-        samesite="strict",
-        max_age=7 * 24 * 60 * 60,
-    )
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=False,
-        samesite="strict",
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    )
+    set_session_cookies(response, access_token, new_refresh_token)
     return {
         "access_token": access_token,
         "refresh_token": new_refresh_token,

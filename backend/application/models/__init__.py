@@ -13,6 +13,7 @@ from .messages import Message
 from .notifications import Notification
 from .blocks import Block
 from .reports import Report
+from .oauth_accounts import OAuthAccount
 
 __all__ = [
     "User",
@@ -30,4 +31,5 @@ __all__ = [
     "Notification",
     "Block",
     "Report",
+    "OAuthAccount",
 ]
