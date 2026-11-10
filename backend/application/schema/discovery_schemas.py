@@ -70,6 +70,34 @@ class SearchQuery(DiscoveryQuery):
         return v
 
 
+MAP_MAX_RESULTS = 200
+
+
+class MapQuery(BaseModel):
+    """Viewport box for GET /profiles/map. Ordering (min < max) is checked in the service (400)."""
+
+    min_lat: float = Field(..., ge=-90, le=90)
+    max_lat: float = Field(..., ge=-90, le=90)
+    min_lng: float = Field(..., ge=-180, le=180)
+    max_lng: float = Field(..., ge=-180, le=180)
+    limit: int = Field(MAP_MAX_RESULTS, ge=1, le=MAP_MAX_RESULTS)
+
+
+class MapUser(BaseModel):
+    """A user on the map. latitude/longitude are grid-cell centres, never true coordinates."""
+
+    user_id: int
+    username: str
+    first_name: str
+    age: Optional[int] = None
+    fame_rating: float = 0.0
+    is_online: bool = False
+    photo_url: Optional[str] = None
+    latitude: float
+    longitude: float
+    shared_tags: int = 0
+
+
 class DiscoveryProfile(BaseModel):
     user_id: int
     username: str
