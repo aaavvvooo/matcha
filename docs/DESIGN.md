@@ -219,7 +219,8 @@ Interest rule, given a person's gender `g` and orientation `o` (NULL ⇒ `Bisexu
 `max_distance_km` filter, sorting and the score are computed, and `distance_km` is returned as whole km (min 1),
 so moving one's own position or searching other cities can't trilaterate anyone beyond a grid cell. Geocoding
 (Nominatim) goes through one process-wide gate (≥1 s between upstream calls, ≤10 queued, else 503) with a 24 h
-cache.
+cache. The 0.02° cell is ~2.2 km north–south and ~2.2·cos(latitude) km east–west (narrower at high latitudes, e.g.
+~1.5 km at 47°N); this holds for browse and the map alike.
 
 **Map privacy (B3.3)** — `GET /profiles/map` reuses the same eligibility and the same snapped position (`_ELIGIBLE`,
 `GRID_DEG`). The bounding box is tested against the *snapped* cell centre, and only that centre is returned, so

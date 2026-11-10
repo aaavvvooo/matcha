@@ -15,7 +15,7 @@ const ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
 const WORLD_BOUNDS = [[-85, -180], [85, 180]];
 const MAP_LIMIT = 200; // keep in sync with the backend cap
-const DEBOUNCE_MS = 300;
+const DEBOUNCE_MS = 450;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const round4 = (v) => Number(v.toFixed(4));
@@ -83,9 +83,11 @@ export default function MapPage() {
   const markersRef = useRef(null);
   const selfMarkerRef = useRef(null);
   const homeRef = useRef(null);
+  const invalidateRef = useRef(null); // forgets the last fetched box, so the next move refetches
 
   const [ready, setReady] = useState(false); // viewer's profile fetched
   const [home, setHome] = useState(null); // viewer's own position (shown to them only)
+  const [locationLabel, setLocationLabel] = useState(null);
   const [users, setUsers] = useState([]);
   const [selected, setSelected] = useState(null); // users in the clicked cell
   const [loading, setLoading] = useState(false);
@@ -102,6 +104,7 @@ export default function MapPage() {
           const pos = { lat: p.latitude, lng: p.longitude };
           homeRef.current = pos;
           setHome(pos);
+          setLocationLabel(p.location_label ?? null);
         } else {
           setPickerOpen(true);
         }
@@ -137,6 +140,12 @@ export default function MapPage() {
 
     let timer = null;
     let controller = null;
+    // Last successful fetch: while the viewport stays inside it and nothing was cut off by
+    // the limit, that response already holds everyone visible, so panning needs no request.
+    let lastOk = null;
+    invalidateRef.current = () => {
+      lastOk = null;
+    };
 
     const load = async () => {
       const b = map.getBounds();
@@ -147,6 +156,14 @@ export default function MapPage() {
         max_lng: round4(clamp(b.getEast(), -180, 180)),
       };
       if (params.min_lat >= params.max_lat || params.min_lng >= params.max_lng) return;
+      if (
+        lastOk &&
+        lastOk.count < MAP_LIMIT &&
+        params.min_lat >= lastOk.box.min_lat && params.max_lat <= lastOk.box.max_lat &&
+        params.min_lng >= lastOk.box.min_lng && params.max_lng <= lastOk.box.max_lng
+      ) {
+        return;
+      }
       if (controller) controller.abort();
       const mine = new AbortController();
       controller = mine;
@@ -154,10 +171,12 @@ export default function MapPage() {
       try {
         const data = await getMapUsers(params, mine.signal);
         if (mine.signal.aborted) return;
+        lastOk = { box: params, count: data.length };
         setUsers(data);
         setError(null);
       } catch (err) {
         if (mine.signal.aborted || err?.code === 'ERR_CANCELED') return;
+        lastOk = null; // any later move retries
         setError(apiError(err, 'Could not load people on the map.'));
       } finally {
         if (controller === mine) setLoading(false);
@@ -174,6 +193,7 @@ export default function MapPage() {
     return () => {
       clearTimeout(timer);
       if (controller) controller.abort();
+      invalidateRef.current = null;
       map.remove();
       mapRef.current = null;
       markersRef.current = null;
@@ -218,7 +238,9 @@ export default function MapPage() {
     const pos = { lat: result.latitude, lng: result.longitude };
     homeRef.current = pos;
     setHome(pos);
+    setLocationLabel(result.location_label ?? null);
     setPickerOpen(false);
+    invalidateRef.current?.();
     mapRef.current?.flyTo([pos.lat, pos.lng], 11);
   }
 
@@ -257,7 +279,7 @@ export default function MapPage() {
           <p className="map-panel-note">
             Others only ever see you within a ~2 km area, never your exact position.
           </p>
-          <LocationPicker onSaved={handleLocationSaved} />
+          <LocationPicker locationLabel={locationLabel} onSaved={handleLocationSaved} />
         </section>
       )}
 

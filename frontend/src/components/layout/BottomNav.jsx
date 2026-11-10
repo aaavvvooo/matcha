@@ -17,7 +17,7 @@ function BottomNav() {
     { path: '/browse',                icon: Compass, label: 'Discover' },
     { path: '/search',                icon: Search, label: 'Search' },
     { path: '/map',                   icon: MapIcon, label: 'Map' },
-    { path: '/matches',              icon: Heart, label: 'Matches' },
+    { path: '/matches',               icon: Heart, label: 'Matches' },
     { path: '/chat',                  icon: MessageCircle, label: 'Chat' },
     { path: user ? `/profile/${user.id}` : '/profile/settings', icon: CircleUser, label: 'Profile' },
   ];

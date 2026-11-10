@@ -239,7 +239,7 @@
   padding: 0 5px;
   border-radius: var(--r-full);
   background: var(--spice);
-  color: #fff;
+  color: var(--white);
   border: 2px solid var(--white);
   font-size: 11px;
   font-weight: 700;
@@ -252,7 +252,7 @@
   height: 40px;
   border-radius: 50%;
   background: var(--matcha2);
-  color: #fff;
+  color: var(--white);
   border: 3px solid var(--white);
   box-shadow: var(--shadow-md);
   display: flex;

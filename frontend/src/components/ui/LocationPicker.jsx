@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MapPin, LocateFixed, Check } from 'lucide-react';
 import Btn from './Btn';
 import { setLocation } from '../../api/profilesApi';
@@ -17,6 +17,14 @@ function LocationPicker({ locationLabel, onSaved }) {
   const [status, setStatus] = useState('idle'); // idle | loading | error
   const [error, setError] = useState(null);
   const [savedLabel, setSavedLabel] = useState(locationLabel);
+  // A pending GPS fix can't be cancelled; once unmounted its callbacks must do nothing.
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   async function handleUseGps() {
     setMode('gps');
@@ -29,20 +37,24 @@ function LocationPicker({ locationLabel, onSaved }) {
     }
     navigator.geolocation.getCurrentPosition(
       async (position) => {
+        if (!aliveRef.current) return;
         try {
           const result = await setLocation({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           });
+          if (!aliveRef.current) return;
           setStatus('idle');
           setSavedLabel(result?.location_label);
           onSaved?.(result);
         } catch (err) {
+          if (!aliveRef.current) return;
           setStatus('error');
           setError(apiError(err, 'Failed to save your location.'));
         }
       },
       (geoErr) => {
+        if (!aliveRef.current) return;
         setStatus('error');
         setError(GEO_ERRORS[geoErr?.code] || GEO_ERRORS[2]);
         setMode('manual');
@@ -57,11 +69,13 @@ function LocationPicker({ locationLabel, onSaved }) {
     setError(null);
     try {
       const result = await setLocation({ city: city.trim() });
+      if (!aliveRef.current) return;
       setStatus('idle');
       setCity('');
       setSavedLabel(result?.location_label);
       onSaved?.(result);
     } catch (err) {
+      if (!aliveRef.current) return;
       setStatus('error');
       setError(apiError(err, 'Could not find that location.'));
     }
