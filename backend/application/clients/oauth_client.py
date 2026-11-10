@@ -45,6 +45,9 @@ class ProviderConfig:
     token_url: str
     scope: str
     pkce: bool
+    # May an address the provider doesn't mark verified start a new (unvalidated)
+    # account? Only for 42, whose addresses are school-assigned.
+    unverified_signup: bool
     client_id: Optional[str]
     client_secret: Optional[str]
 
@@ -79,6 +82,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         token_url="https://api.intra.42.fr/oauth/token",
         scope="public",
         pkce=False,
+        unverified_signup=True,
         client_id=OAUTH_42_CLIENT_ID,
         client_secret=OAUTH_42_CLIENT_SECRET,
     ),
@@ -89,6 +93,7 @@ PROVIDERS: dict[str, ProviderConfig] = {
         token_url="https://github.com/login/oauth/access_token",
         scope="read:user user:email",
         pkce=True,  # GitHub supports S256 only
+        unverified_signup=False,
         client_id=OAUTH_GITHUB_CLIENT_ID,
         client_secret=OAUTH_GITHUB_CLIENT_SECRET,
     ),
@@ -190,8 +195,10 @@ async def _fetch_42(client: httpx.AsyncClient, token: str) -> ProviderIdentity:
     return ProviderIdentity(
         provider_user_id=_provider_user_id(me.get("id")),
         login=_str(me.get("login")),
-        # 42 exposes no "verified" flag for the address, so it is never trusted
-        # for linking and a new account must verify it through our own email link.
+        # 42 exposes no "verified" flag. The address is assigned by 42 (the
+        # student can't pick someone else's), but it is still never used to link
+        # to an existing account; a new account must confirm it through our own
+        # verification email before the 42 link can sign anyone in.
         email=_str(me.get("email")) or None,
         email_verified=False,
         first_name=_str(me.get("usual_first_name")) or _str(me.get("first_name")),
@@ -205,13 +212,16 @@ async def _fetch_github(client: httpx.AsyncClient, token: str) -> ProviderIdenti
     if not isinstance(user, dict):
         raise ProviderError("github.user")
     emails = await _json(client, "GET", _GITHUB_EMAILS_URL, "github.emails", headers=headers)
+    # Only a verified primary address is used. An unverified one is dropped
+    # entirely (-> no_email): creating an account for it would let whoever
+    # typed it into GitHub pre-register someone else's address with a link
+    # that survives the real owner's later password reset.
     email: Optional[str] = None
-    verified = False
     if isinstance(emails, list):
         for entry in emails:
             if isinstance(entry, dict) and entry.get("primary") is True:
-                email = _str(entry.get("email")) or None
-                verified = entry.get("verified") is True
+                if entry.get("verified") is True:
+                    email = _str(entry.get("email")) or None
                 break
     name = _str(user.get("name"))
     first, _, last = name.partition(" ")
@@ -219,7 +229,7 @@ async def _fetch_github(client: httpx.AsyncClient, token: str) -> ProviderIdenti
         provider_user_id=_provider_user_id(user.get("id")),
         login=_str(user.get("login")),
         email=email,
-        email_verified=verified and email is not None,
+        email_verified=email is not None,
         first_name=first.strip(),
         last_name=last.strip(),
     )

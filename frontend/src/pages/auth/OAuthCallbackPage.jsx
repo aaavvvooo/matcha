@@ -8,7 +8,7 @@ const ERROR_MESSAGES = {
   access_denied: 'Sign-in was cancelled.',
   invalid_state: 'This sign-in link expired or was already used. Please try again.',
   provider_error: 'The provider could not complete the sign-in. Please try again.',
-  no_email: 'Your provider account has no email address we can use.',
+  no_email: 'Your provider account has no verified primary email address we can use.',
   email_in_use: 'An account already uses this email. Sign in with your password instead.',
   link_unverified: 'An account with this email exists but its email is not verified yet. Verify it with the link we sent, or sign in with your password, then try again.',
   already_linked: 'Your Matcha account is already linked to a different account at this provider.',
