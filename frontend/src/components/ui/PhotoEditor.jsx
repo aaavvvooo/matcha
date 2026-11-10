@@ -204,30 +204,54 @@ export default function PhotoEditor({ source, title = 'Edit photo', saveLabel = 
     }
   }
 
-  // Dialog behaviour: focus on open, Esc closes, Tab stays inside, focus restored after.
+  // Dialog behaviour: focus on open, Esc closes, Tab stays inside, focus restored after,
+  // page scroll locked. Keys are handled on document so they still work after a click
+  // on the backdrop has moved focus out of the dialog.
+  const savingRef = useRef(saving);
+  savingRef.current = saving;
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
+
   useEffect(() => {
     const previous = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     dialogRef.current?.focus();
+
+    const onKey = (e) => {
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      if (e.key === 'Escape') {
+        if (!savingRef.current) {
+          e.preventDefault();
+          cancelRef.current();
+        }
+      } else if (e.key === 'Tab') {
+        const focusable = dialog.querySelectorAll(
+          'button:not([disabled]), input:not([disabled]), [tabindex="0"]'
+        );
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!dialog.contains(document.activeElement)) {
+          e.preventDefault();
+          (e.shiftKey ? last : first).focus();
+        } else if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey);
     return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previousOverflow;
       if (previous && typeof previous.focus === 'function') previous.focus();
     };
   }, []);
-
-  function onDialogKey(e) {
-    if (e.key === 'Escape' && !saving) {
-      e.stopPropagation();
-      onCancel();
-    } else if (e.key === 'Tab') {
-      const focusable = dialogRef.current.querySelectorAll(
-        'button:not([disabled]), input:not([disabled]), [tabindex="0"]'
-      );
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    }
-  }
 
   const handle = (mode, cursor, pos) => (
     <div
@@ -263,7 +287,6 @@ export default function PhotoEditor({ source, title = 'Edit photo', saveLabel = 
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        onKeyDown={onDialogKey}
         style={{
           background: 'var(--white)', borderRadius: 'var(--r-md)', boxShadow: 'var(--shadow-lg)',
           width: '100%', maxWidth: 520, maxHeight: '100%', display: 'flex', flexDirection: 'column',
@@ -309,10 +332,10 @@ export default function PhotoEditor({ source, title = 'Edit photo', saveLabel = 
                         cursor: 'move', touchAction: 'none',
                       }}
                     >
-                      {handle('nw', 'nwse-resize', { left: -14, top: -14 })}
-                      {handle('ne', 'nesw-resize', { right: -14, top: -14 })}
-                      {handle('sw', 'nesw-resize', { left: -14, bottom: -14 })}
-                      {handle('se', 'nwse-resize', { right: -14, bottom: -14 })}
+                      {handle('nw', 'nwse-resize', { left: 0, top: 0 })}
+                      {handle('ne', 'nesw-resize', { right: 0, top: 0 })}
+                      {handle('sw', 'nesw-resize', { left: 0, bottom: 0 })}
+                      {handle('se', 'nwse-resize', { right: 0, bottom: 0 })}
                     </div>
                   </div>
                 </div>

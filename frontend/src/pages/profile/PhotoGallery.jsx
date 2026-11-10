@@ -4,8 +4,9 @@ import Btn from '../../components/ui/Btn';
 import PhotoDropZone from '../../components/ui/PhotoDropZone';
 import PhotoEditor from '../../components/ui/PhotoEditor';
 import {
-  getMyProfile, uploadPhoto, deletePhotos, setProfilePic, reorderPhotos,
+  getMyProfile, uploadPhoto, replacePhoto, setProfilePic, reorderPhotos,
 } from '../../api/profilesApi';
+import { useBlockFileDrops } from '../../hooks/useBlockFileDrops';
 import { apiError } from '../../api/errors';
 import { MAX_PHOTOS } from '../../utils/photoFiles';
 
@@ -23,8 +24,9 @@ let nextStagedId = 1;
  * "ready to upload" tray (where photos can be edited first), drag-to-reorder
  * with move buttons as the keyboard/touch fallback, and editing of existing photos.
  *
- * Editing an existing photo produces a NEW image that goes through the normal
- * upload endpoint and then replaces the old one (see uploadItem).
+ * Editing an existing photo produces a NEW image that goes through the upload
+ * endpoint with `replaces`, which swaps it in atomically on the server (same
+ * position and profile-picture status; the original goes only if the copy is saved).
  */
 export default function PhotoGallery({ photos, onPhotosChange, onOpen, onDelete }) {
   const [staged, setStaged] = useState([]); // { id, file, url, replaces?, error? }
@@ -34,6 +36,8 @@ export default function PhotoGallery({ photos, onPhotosChange, onOpen, onDelete 
   const [dragId, setDragId] = useState(null);
   const [overId, setOverId] = useState(null);
   const [announce, setAnnounce] = useState('');
+
+  useBlockFileDrops();
 
   const photosRef = useRef(photos);
   photosRef.current = photos;
@@ -73,34 +77,15 @@ export default function PhotoGallery({ photos, onPhotosChange, onOpen, onDelete 
 
   // ---- upload tray ----
   async function uploadItem(item) {
-    const current = photosRef.current;
-    const old = item.replaces ? current.find(p => p.id === item.replaces) : null;
-    const oldIdx = old ? current.findIndex(p => p.id === old.id) : -1;
-    const full = current.length >= MAX_PHOTOS;
-    if (!old && full) throw new Error(`You can have at most ${MAX_PHOTOS} photos`);
-
-    // At the cap there is no room for the new image until the old one is gone, so it
-    // goes first. Otherwise the original stays until the edited copy is safely saved.
-    let deletedOld = false;
-    if (old && full) {
-      await deletePhotos([old.id]);
-      deletedOld = true;
+    if (item.replaces) {
+      await replacePhoto(item.file, item.replaces);
+      return 'ok';
     }
+    const current = photosRef.current;
+    if (current.length >= MAX_PHOTOS) throw new Error(`You can have at most ${MAX_PHOTOS} photos`);
     const created = (await uploadPhoto([item.file]))[0];
     if (!created) return 'duplicate'; // identical image already in the gallery
-
-    if (!old && current.length === 0) await setProfilePic(created.id);
-    if (old?.is_main) await setProfilePic(created.id);
-    if (old && deletedOld) {
-      const ids = current.filter(p => p.id !== old.id).map(p => p.id);
-      ids.splice(oldIdx, 0, created.id);
-      await reorderPhotos(ids);
-    } else if (old) {
-      const ids = current.map(p => (p.id === old.id ? created.id : p.id));
-      ids.push(old.id);
-      await reorderPhotos(ids);
-      await deletePhotos([old.id]);
-    }
+    if (current.length === 0) await setProfilePic(created.id);
     return 'ok';
   }
 
@@ -240,6 +225,7 @@ export default function PhotoGallery({ photos, onPhotosChange, onOpen, onDelete 
                 <button
                   type="button"
                   className="photo-tile-btn"
+                  disabled={busy}
                   onClick={() => onDelete(photo.id)}
                   aria-label={`Delete photo ${i + 1}`}
                   style={{
@@ -256,8 +242,8 @@ export default function PhotoGallery({ photos, onPhotosChange, onOpen, onDelete 
                   aria-label={`Move photo ${i + 1} left`}
                 ><ChevronLeft size={14} aria-hidden="true"/></button>
                 <button
-                  type="button" className="photo-tile-btn" style={iconBtn}
-                  onClick={() => setEditing({ photo })}
+                  type="button" className="photo-tile-btn" style={{ ...iconBtn, opacity: busy ? 0.4 : 1 }}
+                  disabled={busy} onClick={() => setEditing({ photo })}
                   aria-label={`Edit photo ${i + 1}`}
                 ><Pencil size={13} aria-hidden="true"/></button>
                 <button

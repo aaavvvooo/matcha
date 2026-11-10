@@ -124,7 +124,7 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 | GET | `/get` | Own full profile |
 | PATCH | `/update` | Gender, orientation, bio, birth date, tags |
 | PATCH | `/location` | `{latitude, longitude}` (GPS) or `{city}` (geocoded) |
-| POST | `/upload-photo` | multipart `files[]`; JPEG/PNG/WebP, ≤5 MB each, ≤5 total. Refused before parsing: 411 (no `Content-Length` / chunked), 401 (no credentials), 413 (body > 5×5 MB + 64 KB) |
+| POST | `/upload-photo` | multipart `files[]`; JPEG/PNG/WebP, ≤5 MB each, ≤5 total. Refused before parsing: 411 (no `Content-Length` / chunked), 401 (no credentials), 413 (body > 5×5 MB + 64 KB). Optional form field `replaces` (photo id, B2.3): atomic replace, valid with exactly one file (else 400). In one locked transaction the new image is stored, inserted at the old `"order"` with the old `is_main`, `profile_picture_id` is repointed and the old row deleted; the old storage object is removed only after commit, the new one if the transaction fails, so the original disappears only if the replacement commits. Net photo count is unchanged (works at 5/5). 400 if the id isn't the caller's; 409 "This image is already in your gallery" if the bytes match any existing photo of the caller (including the one being replaced), nothing changed. Returns a one-element list |
 | DELETE | `/delete-photos` | `{photo_ids: []}` |
 | POST | `/set-profpic` | `{photo_id}` |
 | PATCH | `/photo-order` | `{photo_ids: []}` (B2.2) · 30/min. Must be exactly the caller's photo ids, each once, in the new order, else 400 (foreign, duplicate, missing, unknown or empty list). Renumbers `"order"` 1..n in one statement under the per-user photo lock. Returns the photos in the new order. `is_main` / `profile_picture_id` are untouched: the profile picture is the explicit `is_main` flag (browse/search sort "main first, then `"order"`"), so reordering never changes it |
@@ -277,9 +277,11 @@ library (auth, tokens, verification, reset are hand-written).
   (`utils/photoEdit.js`, no image library) and exports a JPEG (longest side ≤ 2048 px, re-encoded under 5 MB).
   Photos come from another origin, so an existing photo is fetched as a Blob through the API client
   (`fetchPhotoBlob`) rather than drawn from its `<img>` URL, which would taint the canvas. The edited file goes into
-  an "upload" tray and through `POST /profile/upload-photo` as a new image; an edit of an existing photo then
-  replaces it: with a free slot, upload → reorder into the old position → delete old (original kept until the
-  copy is saved); at 5 photos, delete old → upload (the edited file stays in the tray for retry if the upload fails).
+  an "upload" tray; an edit of an existing photo is sent as one `POST /profile/upload-photo` with `replaces`, which
+  swaps it in atomically on the server (position and profile-picture status carried over, original removed only if
+  the copy is saved), so there is no client-side delete/upload sequence and no 5-photo special case. The tray item
+  stays for retry if the request fails. `hooks/useBlockFileDrops` cancels stray file drops so the browser never
+  navigates to a dropped image.
   `ProfileSetupPage` uses the drop zone for its single photo.
 - **Errors:** `components/ErrorBoundary.jsx` wraps the whole app (render errors only — async errors must be
   handled where they occur).

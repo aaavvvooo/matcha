@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
-from typing import List
+from fastapi import APIRouter, Depends, Request, UploadFile, File, Form, HTTPException
+from typing import List, Optional
 
 from application.schema.profile_schemas import (
     SetProfileRequest,
@@ -20,6 +20,7 @@ from application.repository.profile_repo import ProfileRepository
 from application.utils import get_current_user
 from application.utils.image import MAX_IMAGE_BYTES, detect_image_type
 from application.limiter import limiter
+from application.schema.fields import INT4_MAX
 
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -108,16 +109,20 @@ async def reorder_photos(
 async def upload_photo(
     request: Request,
     files: List[UploadFile] = File(...),
+    replaces: Optional[int] = Form(None, ge=1, le=INT4_MAX),
     db: Database = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
     user_id = current_user["user"]["id"]
     if len(files) > MAX_PHOTOS:
         raise HTTPException(status_code=400, detail=f"At most {MAX_PHOTOS} files per request")
+    if replaces is not None and len(files) != 1:
+        raise HTTPException(status_code=400, detail="Replacing a photo takes exactly one file")
     service = ProfileService(db)
-    # Cheap early exit when already full. The exact check (after skipping photos
-    # the user already has) runs under a row lock in ProfileService.add_photos.
-    if await service.profile_repo.count_photos(user_id) >= MAX_PHOTOS:
+    # Cheap early exit when already full (a replacement doesn't change the count).
+    # The exact check (after skipping photos the user already has) runs under a row
+    # lock in ProfileService.upload_photos.
+    if replaces is None and await service.profile_repo.count_photos(user_id) >= MAX_PHOTOS:
         raise HTTPException(status_code=400, detail=f"Cannot exceed {MAX_PHOTOS} photos")
     # Validate every file before storing any, so a bad file never leaves orphans in storage.
     validated: list[tuple[bytes, str]] = []
@@ -129,6 +134,9 @@ async def upload_photo(
         if image_type is None:
             raise HTTPException(status_code=400, detail=f"{file.filename}: only JPEG, PNG and WebP images are allowed")
         validated.append((data, image_type))
+    if replaces is not None:
+        data, image_type = validated[0]
+        return [await service.replace_photo(user_id, replaces, data, image_type)]
     return await service.upload_photos(user_id, validated)
 
 

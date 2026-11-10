@@ -1,5 +1,6 @@
 import { useRef, useState, useId } from 'react';
 import { checkPhotoFiles, PHOTO_ACCEPT } from '../../utils/photoFiles';
+import { useBlockFileDrops } from '../../hooks/useBlockFileDrops';
 
 /**
  * Drag-and-drop (native HTML5) or click/keyboard file picker for photos.
@@ -22,6 +23,7 @@ export default function PhotoDropZone({
   const [over, setOver] = useState(false);
   const hintId = useId();
   const inactive = disabled || busy || slots <= 0;
+  useBlockFileDrops();
 
   function handle(fileList) {
     const files = Array.from(fileList || []);
@@ -52,16 +54,19 @@ export default function PhotoDropZone({
           open();
         }
       }}
+      // Always cancel file drags (even when inactive): otherwise the browser would
+      // navigate to the dropped file. An inactive zone just shows the "no drop" cursor.
       onDragEnter={(e) => {
-        if (inactive || !hasFiles(e)) return;
+        if (!hasFiles(e)) return;
         e.preventDefault();
+        if (inactive) return;
         depth.current += 1;
         setOver(true);
       }}
       onDragOver={(e) => {
-        if (inactive || !hasFiles(e)) return;
+        if (!hasFiles(e)) return;
         e.preventDefault();
-        e.dataTransfer.dropEffect = 'copy';
+        e.dataTransfer.dropEffect = inactive ? 'none' : 'copy';
       }}
       onDragLeave={(e) => {
         if (inactive || !hasFiles(e)) return;
