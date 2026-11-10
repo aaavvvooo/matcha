@@ -2,6 +2,14 @@ import { useState } from 'react';
 import { MapPin, LocateFixed, Check } from 'lucide-react';
 import Btn from './Btn';
 import { setLocation } from '../../api/profilesApi';
+import { apiError } from '../../api/errors';
+
+// GeolocationPositionError.code -> message (1 denied, 2 unavailable, 3 timeout)
+const GEO_ERRORS = {
+  1: 'Location permission denied. Enter your city instead.',
+  2: 'Your position is unavailable right now. Enter your city instead.',
+  3: 'Locating took too long. Try again or enter your city.',
+};
 
 function LocationPicker({ locationLabel, onSaved }) {
   const [mode, setMode] = useState(null); // 'gps' | 'manual' | null
@@ -31,15 +39,15 @@ function LocationPicker({ locationLabel, onSaved }) {
           onSaved?.(result);
         } catch (err) {
           setStatus('error');
-          setError(err?.response?.data?.detail || 'Failed to save your location.');
+          setError(apiError(err, 'Failed to save your location.'));
         }
       },
-      () => {
+      (geoErr) => {
         setStatus('error');
-        setError('Location permission denied. Enter your city instead.');
+        setError(GEO_ERRORS[geoErr?.code] || GEO_ERRORS[2]);
         setMode('manual');
       },
-      { enableHighAccuracy: false, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   }
 
@@ -55,7 +63,7 @@ function LocationPicker({ locationLabel, onSaved }) {
       onSaved?.(result);
     } catch (err) {
       setStatus('error');
-      setError(err?.response?.data?.detail || 'Could not find that location.');
+      setError(apiError(err, 'Could not find that location.'));
     }
   }
 

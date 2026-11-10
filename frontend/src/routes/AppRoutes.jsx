@@ -18,7 +18,8 @@ import BlockedUsersPage   from '../pages/profile/BlockedUsersPage';
 
 import BrowsePage         from '../pages/browse/BrowsePage';
 import SearchPage         from '../pages/search/SearchPage';
-import ChatPage           from '../pages/chat/ChatPage';
+import MapPage           from '../pages/map/MapPage';
+import ChatPage         from '../pages/chat/ChatPage';
 import MatchesPage        from '../pages/matches/MatchesPage';
 import NotificationsPage  from '../pages/notifications/NotificationsPage';
 
@@ -43,7 +44,8 @@ function AppRoutes() {
 
       <Route path="/browse"         element={<ProtectedRoute><BrowsePage /></ProtectedRoute>} />
       <Route path="/search"         element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
-      <Route path="/chat"           element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+      <Route path="/map"            element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
+      <Route path="/chat"         element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
       <Route path="/chat/:userId"   element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
       <Route path="/matches"        element={<ProtectedRoute><MatchesPage /></ProtectedRoute>} />
       <Route path="/notifications"  element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />

@@ -6,7 +6,9 @@ export const updateProfile = (data) => client.patch('/profile/update', data).the
 export const getAllTags = () => client.get('/profile/get-all-tags').then(r => r.data)
 export const browse = (params) => client.get('/profiles/browse', { params }).then(r => r.data)
 export const search = (params) => client.get('/profiles/search', { params }).then(r => r.data)
-export const uploadPhoto = (files) => {
+// Users inside a viewport box; positions come back snapped to a ~2 km grid. `signal` aborts a stale request.
+export const getMapUsers = (params, signal) => client.get('/profiles/map', { params, signal }).then(r => r.data)
+export const uploadPhoto =(files) => {
   const form = new FormData()
   const arr = Array.isArray(files) ? files : [files]
   arr.forEach(f => form.append('files', f))
