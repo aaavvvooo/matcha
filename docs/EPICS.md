@@ -122,9 +122,9 @@ All ❌. Each bonus reuses mandatory infrastructure, so its dependencies must be
 
 | Feature | Notes |
 |---|---|
-| B2.1 Drag-and-drop upload zone (native HTML5 DnD) | Same 5-photo limit and server validation |
-| B2.2 Drag-to-reorder gallery + `PATCH` order endpoint | Photo order column already exists |
-| B2.3 Editor: crop, rotate, filters on `<canvas>`; result uploaded as a new image | Server re-validates the edited file |
+| B2.1 Drag-and-drop upload zone (native HTML5 DnD) ✅ | Same 5-photo limit and server validation |
+| B2.2 Drag-to-reorder gallery + `PATCH` order endpoint ✅ | Photo order column already exists |
+| B2.3 Editor: crop, rotate, filters on `<canvas>`; result uploaded as a new image ✅ | Server re-validates the edited file |
 
 ### B3 — Interactive user map · depends on E3
 
@@ -238,7 +238,7 @@ scripted smoke runs instead. Revisit only if regressions start costing time.
 - [ ] Seed ≥500 profiles on the eval database
 
 ### Phase 6 — Bonus (only after Phase 5 is fully green)
-- [ ] **B2 Gallery** — B2.1 drag-and-drop upload · B2.2 drag-to-reorder + order endpoint · B2.3 crop / rotate / filter editor
+- [x] **B2 Gallery** — B2.1 drag-and-drop upload · B2.2 drag-to-reorder + order endpoint · B2.3 crop / rotate / filter editor
 - [ ] **B3 Map** — B3.1 precise GPS · B3.2 bounding-box endpoint · B3.3 neighbourhood-level privacy · B3.4 Leaflet map + mini cards
 - [ ] **B5 Dates** — B5.1 `dates` table · B5.2 propose / accept / decline / cancel · B5.3 notifications · B5.4 upcoming list · B5.5 reminder (optional)
 - [ ] **B1 OAuth** — B1.1 providers · B1.2 redirect + callback (state, PKCE) · B1.3 account linking · B1.4 first-login setup · B1.5 frontend buttons + callback page

@@ -7,6 +7,7 @@ from application.schema.profile_schemas import (
     SetLocationRequest,
     SetProfilePicRequest,
     DeletePhotosRequest,
+    ReorderPhotosRequest,
     ProfileResponse,
     PhotoResponse,
     TagResponse,
@@ -87,6 +88,19 @@ async def set_profpic(
     user_id = current_user["user"]["id"]
     service = ProfileService(db)
     return await service.set_profile_picture(user_id, body.photo_id)
+
+
+@router.patch("/photo-order", response_model=list[PhotoResponse])
+@limiter.limit("30/minute")
+async def reorder_photos(
+    request: Request,
+    body: ReorderPhotosRequest,
+    db: Database = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user["user"]["id"]
+    service = ProfileService(db)
+    return await service.reorder_photos(user_id, body.photo_ids)
 
 
 @router.post("/upload-photo", response_model=list[PhotoResponse])

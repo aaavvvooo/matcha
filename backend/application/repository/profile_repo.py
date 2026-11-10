@@ -248,6 +248,29 @@ class ProfileRepository:
         )
         return [row["id"] for row in deleted]
 
+    async def get_photo_ids(self, user_id: int, transaction: Connection) -> list[int]:
+        rows = await transaction.fetch(
+            'SELECT id FROM photos WHERE user_id = $1 ORDER BY "order"', user_id
+        )
+        return [row["id"] for row in rows]
+
+    async def set_photo_order(self, user_id: int, photo_ids: list[int], transaction: Connection):
+        """Renumber the user's photos 1..n following photo_ids (one statement).
+
+        is_main and profile_picture_id are deliberately untouched.
+        """
+        rows = await transaction.fetch(
+            """
+            UPDATE photos p
+            SET "order" = o.new_order, updated_at = NOW()
+            FROM unnest($2::int[]) WITH ORDINALITY AS o(id, new_order)
+            WHERE p.id = o.id AND p.user_id = $1
+            RETURNING p.id, p.user_id, p.url, p."order", p.is_main
+            """,
+            user_id, photo_ids,
+        )
+        return sorted(rows, key=lambda r: r["order"])
+
     async def add_tags(
         self, user_id: int, tag_ids: list[int], transaction: Optional[Connection] = None
     ):

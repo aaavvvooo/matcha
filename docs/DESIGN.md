@@ -127,6 +127,7 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 | POST | `/upload-photo` | multipart `files[]`; JPEG/PNG/WebP, ≤5 MB each, ≤5 total. Refused before parsing: 411 (no `Content-Length` / chunked), 401 (no credentials), 413 (body > 5×5 MB + 64 KB) |
 | DELETE | `/delete-photos` | `{photo_ids: []}` |
 | POST | `/set-profpic` | `{photo_id}` |
+| PATCH | `/photo-order` | `{photo_ids: []}` (B2.2) · 30/min. Must be exactly the caller's photo ids, each once, in the new order, else 400 (foreign, duplicate, missing, unknown or empty list). Renumbers `"order"` 1..n in one statement under the per-user photo lock. Returns the photos in the new order. `is_main` / `profile_picture_id` are untouched: the profile picture is the explicit `is_main` flag (browse/search sort "main first, then `"order"`"), so reordering never changes it |
 | GET | `/get-all-tags` | Tag autocomplete |
 | GET | `/photo/{key}` | Serves a stored photo (cookie auth) |
 
@@ -269,6 +270,17 @@ library (auth, tokens, verification, reset are hand-written).
 - **Layout:** `Layout.jsx` renders `[BottomNav (side menu ≥860 px / tab bar below) + Header + <main>]` then
   `Footer` as the last row (under the tab bar on mobile, full width on desktop). The landing page `/` draws its
   own header/main/footer; signed-in users visiting `/` are redirected to `/browse`.
+- **Photo gallery (B2):** `pages/profile/PhotoGallery.jsx` on the edit page. `ui/PhotoDropZone` (native HTML5 drop
+  + click/Enter fallback; type/size/count pre-checks are UX only, the server re-validates), drag-to-reorder with
+  left/right buttons for keyboard and touch (`PATCH /profile/photo-order`), and `ui/PhotoEditor`, a modal that
+  crops, rotates (90° steps) and filters (grayscale, sepia, brightness, contrast) on a `<canvas>`
+  (`utils/photoEdit.js`, no image library) and exports a JPEG (longest side ≤ 2048 px, re-encoded under 5 MB).
+  Photos come from another origin, so an existing photo is fetched as a Blob through the API client
+  (`fetchPhotoBlob`) rather than drawn from its `<img>` URL, which would taint the canvas. The edited file goes into
+  an "upload" tray and through `POST /profile/upload-photo` as a new image; an edit of an existing photo then
+  replaces it: with a free slot, upload → reorder into the old position → delete old (original kept until the
+  copy is saved); at 5 photos, delete old → upload (the edited file stays in the tray for retry if the upload fails).
+  `ProfileSetupPage` uses the drop zone for its single photo.
 - **Errors:** `components/ErrorBoundary.jsx` wraps the whole app (render errors only — async errors must be
   handled where they occur).
 - **Design system:** tokens in `src/index.css` (cream / matcha palette, Playfair Display + DM Sans);
