@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { login as loginApi, logout as logoutApi, refreshToken, getMe } from '../api/authApi';
-import { setClientToken } from '../api/client';
+import { setClientToken, onTokenChange } from '../api/client';
 
 const AuthContext = createContext(null);
 
@@ -15,6 +15,13 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     setClientToken(accessToken);
   }, [accessToken]);
+
+  // The client owns refreshes (axios 401s and the WebSocket both go through it): mirror
+  // its token here, and treat a failed refresh (null) as the end of the session.
+  useEffect(() => onTokenChange((token) => {
+    setAccessToken(token);
+    if (!token) setUser(null);
+  }), []);
 
   // Runs once when the app first loads — tries to restore session
   useEffect(() => {

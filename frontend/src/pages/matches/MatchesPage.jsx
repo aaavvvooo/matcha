@@ -27,13 +27,13 @@ function timeAgo(dateStr) {
 
 export default function MatchesPage() {
   const [tab, setTab] = useState('chats');
-  const { notifications, clearUnread } = useNotifications();
+  const { notifications, unreadCount, clearUnread } = useNotifications();
   const { conversations, loadConversations } = useChat();
   const navigate = useNavigate();
 
   useEffect(() => { loadConversations().catch(() => {}); }, [loadConversations]);
 
-  const unread = notifications.filter(n => !n.is_read).length;
+  const unread = unreadCount;
 
   function handleNotifTab() {
     setTab('notifs');
@@ -89,7 +89,7 @@ export default function MatchesPage() {
                     boxShadow: hasUnread ? 'var(--shadow-sm)' : 'none',
                     transition: 'transform .15s',
                   }}>
-                    <Avatar name={name} size={52} online={c.is_online}/>
+                    <Avatar name={name} src={c.photo_url} size={52} online={c.is_online}/>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
                         <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 16, fontWeight: 600, color: 'var(--ink)' }}>{name}</div>

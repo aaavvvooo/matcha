@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Compass, Search, Heart, MessageCircle, CircleUser, LogOut } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
+import { useChat } from '../../context/ChatContext';
 import { useLogout } from '../../hooks/useLogout';
 import MatchaCup from '../ui/MatchaCup';
 import './BottomNav.css';
@@ -10,6 +11,7 @@ function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
+  const { unreadMessages } = useChat();
   const { user } = useAuth();
   const handleLogout = useLogout();
 
@@ -20,6 +22,9 @@ function BottomNav() {
     { path: '/chat',                  icon: MessageCircle, label: 'Chat' },
     { path: user ? `/profile/${user.id}` : '/profile/settings', icon: CircleUser, label: 'Profile' },
   ];
+
+  // Matches shows unread notifications, Chat shows unread messages.
+  const badgeFor = (item) => (item.path === '/matches' ? unreadCount : item.path === '/chat' ? unreadMessages : 0);
 
   const isActive = (item) => location.pathname === item.path ||
     (item.path === '/chat' && location.pathname.startsWith('/chat')) ||
@@ -36,6 +41,7 @@ function BottomNav() {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
+              aria-label={badgeFor(item) > 0 ? `${item.label}, ${badgeFor(item)} unread` : item.label}
               style={{
                 flex: 1,
                 display: 'flex',
@@ -53,7 +59,7 @@ function BottomNav() {
             >
               <Icon size={20} strokeWidth={active ? 2.25 : 1.75} fill={item.label === 'Matches' && active ? 'var(--spice)' : 'none'}/>
               <span style={{ fontSize: 10, fontWeight: active ? 600 : 400 }}>{item.label}</span>
-              {item.path === '/matches' && unreadCount > 0 && (
+              {badgeFor(item) > 0 && (
                 <div style={{
                   position: 'absolute',
                   top: 6,
@@ -71,7 +77,7 @@ function BottomNav() {
                   justifyContent: 'center',
                   border: '2px solid var(--white)',
                 }}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
+                  {badgeFor(item) > 9 ? '9+' : badgeFor(item)}
                 </div>
               )}
             </button>
@@ -95,7 +101,7 @@ function BottomNav() {
             >
               <Icon size={18} strokeWidth={active ? 2.25 : 1.75} fill={item.label === 'Matches' && active ? 'var(--spice)' : 'none'} className="icon"/>
               <span>{item.label}</span>
-              {item.path === '/matches' && unreadCount > 0 && (
+              {badgeFor(item) > 0 && (
                 <div style={{
                   position: 'absolute',
                   top: 8,
@@ -111,7 +117,7 @@ function BottomNav() {
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
+                  {badgeFor(item) > 9 ? '9+' : badgeFor(item)}
                 </div>
               )}
             </button>

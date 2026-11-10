@@ -18,6 +18,7 @@ from application.utils import (
     decode_token,
     create_password_reset_token,
 )
+from application.websocket.manager import presence_manager
 from application.database import Database
 from application.service.db_errors import map_integrity_errors
 
@@ -161,6 +162,10 @@ class AuthService:
 
         if username:
             await self.token_repo.delete_refresh_token(username)
+            # Open sockets were authenticated once; end them with the session.
+            user = await self.user_repo.get_user_by_username(username)
+            if user:
+                await presence_manager.close_user(user["id"])
 
     async def refresh(self, refresh_token: str):
         payload = decode_token(refresh_token)

@@ -82,3 +82,6 @@ coverage/
 */PLAN.md
 .markdownlint.json
 .taskmaster/
+
+# Claude Code agent worktrees
+.claude/worktrees/

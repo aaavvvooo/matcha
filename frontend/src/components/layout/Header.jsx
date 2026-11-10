@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
-import { Bell, LogOut } from 'lucide-react';
+import { Bell, MessageCircle, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { useChat } from '../../context/ChatContext';
 import { useLogout } from '../../hooks/useLogout';
 import MatchaCup from '../ui/MatchaCup';
 import './Header.css';
@@ -9,6 +10,7 @@ import './Header.css';
 function Header({ inApp }) {
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
+  const { unreadMessages } = useChat();
   const handleLogout = useLogout();
 
   const username = user?.username;
@@ -23,6 +25,16 @@ function Header({ inApp }) {
       <div className="site-header-actions">
         {user ? (
           <>
+            <Link
+              to="/chat"
+              className="site-header-icon"
+              aria-label={unreadMessages > 0 ? `Messages, ${unreadMessages} unread` : 'Messages'}
+            >
+              <MessageCircle size={20} strokeWidth={1.75} />
+              {unreadMessages > 0 && (
+                <span className="site-header-badge">{unreadMessages > 99 ? '99+' : unreadMessages}</span>
+              )}
+            </Link>
             <Link
               to="/notifications"
               className="site-header-icon"

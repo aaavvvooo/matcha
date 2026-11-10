@@ -14,7 +14,8 @@ async def _resolve_user(token: str, db: Database):
     user_repo = UserRepository(db)
     token_repo = TokenRepository(db)
     payload = decode_token(token)
-    if not payload:
+    # A refresh JWT is signed with the same key; it must not work as an access credential.
+    if not payload or payload.get("type") != "access":
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     token_hash = hashlib.sha256(token.encode()).hexdigest()

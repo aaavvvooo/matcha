@@ -18,6 +18,11 @@
   --ink4:    #a8978a;
   --white:   #fffdf9;
 
+  /* ── Error / danger ─────────────────────────────────────── */
+  --danger-bg:     #fde8e8;
+  --danger-fg:     #c04a4a;
+  --danger-border: #f5c5c5;
+
   /* ── Border Radius ───────────────────────────────────────── */
   --r-xs:   4px;
   --r-sm:   12px;

@@ -1,10 +1,10 @@
 # Matcha — Technical Design
 
-**Version:** 2.0 · **Updated:** 2026-11-07 (re-synced with the code)
+**Version:** 2.1 · **Updated:** 2026-11-10 (E5/E6 real-time built)
 
 Requirements: `docs/en.subject_matcha.pdf`. Roadmap and status: `docs/EPICS.md`.
-Sections marked **(planned)** describe the design for roadmap items not yet built; everything else describes the
-code as it is.
+Everything here describes the code as it is; sections for roadmap items not yet built are marked **(planned)**
+(none at the moment).
 
 ---
 
@@ -81,6 +81,7 @@ likes            (liker_id, liked_id) PK, created_at
 profile_views    (viewer_id, viewed_id) PK, viewed_at            -- one row per pair, viewed_at refreshed
 connections      (user_a_id, user_b_id) PK, CHECK user_a_id < user_b_id, created_at
 messages         id PK, sender_id FK, receiver_id FK, body TEXT, is_read, sent_at
+                 indexes ix_messages_pair (sender_id, receiver_id, id), ix_messages_unread (receiver_id, sender_id) WHERE is_read = false
 notifications    id PK, user_id FK, type VARCHAR(50), from_user FK NULL, is_read, created_at
 blocks           (blocker_id, blocked_id) PK
 reports          (reporter_id, reported_id) PK, created_at
@@ -110,11 +111,11 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 |---|---|---|
 | POST | `/register` | Sends verification email · 10/hour |
 | POST | `/verify-email` | Token in body |
-| POST | `/login` | Form body (username or email + password) · returns access token, sets refresh cookie · 5/min |
+| POST | `/login` | Form body (username or email + password) · body `{access_token, token_type}` only (the refresh token is never in a response body), sets the refresh and `access_token` cookies · 5/min |
 | GET | `/me` | Current user |
 | POST | `/forget-password` | Always same message (no user enumeration) · 3/min |
-| POST | `/logout` | Idempotent: blacklists a live access token, revokes the refresh token (username from access or refresh token), always clears both cookies |
-| POST | `/refresh` | Rotates refresh token (httpOnly, SameSite=Strict cookie) |
+| POST | `/logout` | Idempotent: blacklists a live access token, revokes the refresh token (username from access or refresh token), closes all of that user's WebSockets (1008 `logged_out`), always clears both cookies |
+| POST | `/refresh` | Rotates the refresh token (httpOnly, SameSite=Strict cookie); body `{access_token, token_type}` |
 | POST | `/reset-password` | Token + new password in body · 5/min |
 
 ### Own profile — `/profile`
@@ -150,49 +151,112 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 
 Both return `DiscoveryProfile[]`: `user_id`, `username`, `first_name`, `last_name`, `age`, `gender`, `sexual_orientation`, `bio`, `fame_rating`, `is_online`, `last_seen`, `location_label`, `distance_km` (whole km, min 1, NULL without positions), `shared_tags`, `tags` (names), `photos` (main first), `score`. No email.
 
-### Notifications — `/notifications` (planned, E6)
+### Notifications — `/notifications` (E6)
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/notifications` | Paginated, newest first, with `from_username`, `from_photo_url` |
-| POST | `/notifications/read` | Mark all read |
+| GET | `/notifications/unread-count` | `{"unread": n}`: all unread notifications (not just the first page), excluding senders blocked either way. 60/min |
+| GET | `/notifications` | Newest first. Params: `limit` (1–100, default 50), `offset` (≤10000). Items: `id`, `type`, `from_user`, `from_username`, `from_photo_url`, `is_read`, `created_at`. Notifications from users blocked in either direction are hidden. 60/min |
+| POST | `/notifications/read` | Marks all read → `{"updated": n}`. 60/min |
 
-### Chat — `/chat`
+The badge shows the server total: it is loaded from `/notifications/unread-count` and replaced by the `unread` field of every pushed `notification` frame (§7); mark-read sets it to 0.
+
+### Chat — `/chat` (E5)
 | Method | Path | Notes |
 |---|---|---|
-| WS | `/ws` | Exists — presence; chat + notifications planned (§7) |
-| GET | `/conversations` | (planned, E5) Connected users with last message + unread count |
-| GET | `/messages/{user_id}` | (planned, E5) Paginated history; 403 unless connected |
+| WS | `/ws` | Presence, notifications and chat (§7) |
+| GET | `/conversations` | Connected users who are not blocked either way, most recent activity (last message, else the connection) first. Items: `user_id`, `username`, `first_name`, `last_name`, `photo_url`, `is_online`, `last_seen`, `last_message` (body or null), `last_sender_id`, `sent_at` (of the last message, or null), `unread_count`, `connected_at`. 60/min |
+| GET | `/messages/{user_id}` | History of one thread, **oldest first**. Params: `limit` (1–100, default 50) returns the newest `limit` messages; `before_id` returns the page of messages older than that id (use the first id you hold). Items: `id`, `sender_id`, `receiver_id`, `body`, `sent_at`, `is_read`. Ids (`user_id`, `before_id`) must be 1–2147483647, else 422. Fetching the newest page (no `before_id`) marks that user's messages to you as read. 403 `"You are not connected with this user"` unless connected and unblocked (also for yourself). 120/min |
+| POST | `/messages/{user_id}/read` | Marks that user's messages as read → `{"updated": n}`; same 403 rule. The client calls it when a message arrives in the open thread. 120/min |
 
 ## 6. Authentication flow
 
 ```
 register → email link → POST /auth/verify-email → is_validated = true
-login    → access token (body) + refresh token (httpOnly cookie, hash stored in refresh_tokens)
+login    → access token (body) + refresh token (httpOnly cookie only, hash stored in refresh_tokens)
 request  → Bearer access token; blacklist checked in get_current_user
-expired  → axios interceptor → POST /auth/refresh → retry queued requests
-logout   → access token hash → token_blacklist; refresh cookie cleared
+expired  → axios interceptor → single-flight refresh in api/client.js (shared with the WebSocket) → retry
+logout   → access token hash → token_blacklist; refresh cookie cleared; user's sockets closed
+tokens   → JWTs carry type=access|refresh; every bearer/cookie/WS credential check requires type=access,
+           /auth/refresh requires type=refresh (a refresh JWT is never an access credential)
 ```
 
 ## 7. Real-time design
 
 One socket per browser tab at `/chat/ws`. The client sends `{"type":"auth","token":"<access>"}` as its first
 frame (token is never in the URL); the server closes with 1008 if it is missing, invalid, or blacklisted, or after
-10 s. Server pings every 25 s.
+10 s. Only an **access** JWT is accepted (a refresh JWT is refused), and it must not be blacklisted. On success the
+server sends `{"type":"auth_ok"}`; clients treat the socket as connected only then. Server pings every 25 s
+(`{"type":"ping"}`); the client may answer `{"type":"pong"}` (ignored).
 
-`PresenceManager` (`websocket/manager.py`) keeps `user_id → set[WebSocket]`; `users.is_online` flips on the first
-connect and back (with `last_seen = now()`) when the last socket closes.
+The token's `exp` is kept: when it passes (checked on every inbound frame and on the ping tick) the server closes the
+socket with 1008. Close reasons the client acts on: `auth_failed` (bad/blacklisted/refresh token, missing auth
+frame), `token_expired`, `logged_out` (logout), `too_many_connections` (more than **5** sockets per user; extra
+connections are closed after auth). Logout closes all of the user's sockets. On any 1008 other than
+`too_many_connections` the client gets a fresh token through the single-flight refresh in `api/client.js` and
+reconnects with exponential backoff (1 s to 30 s, reset by `auth_ok`); if the refresh is rejected (401) it stops and
+the session ends. `too_many_connections` just retries at the maximum backoff.
 
-**(planned, E6/E5)**
-- `PresenceManager.send_to_user(user_id, payload)` pushes to every open socket of a user.
-- `NotificationService.notify(user_id, type, from_user)`: skip if either side blocked the other; skip if the
-  recipient has unliked / disconnected from the sender where the subject requires it; insert the row; push
-  `{"type":"notification","event":type,"from_user","from_username","from_photo_url","id","created_at"}`.
-- Triggers: like (`like`), profile view (`view`), message (`message`), mutual like (`match`, to both),
-  unlike by a connected user (`unlike`).
-- Client → server `{"type":"message","to":id,"body":"..."}`: verify a connection exists and no block → persist →
-  push `{"type":"message","from","from_username","body","sent_at","id"}` to the recipient (and echo to the
-  sender's other tabs) → `notify(..., "message")`.
-- Single process, in-memory registry: acceptable for one-node evaluation; not multi-worker safe.
+`PresenceManager` (`websocket/manager.py`) keeps `user_id → set[WebSocket]` (max 5 per user); `users.is_online`
+flips on the first connect and back (with `last_seen = now()`) when the last socket closes. It also owns the
+per-user message rate limiter (created with the first socket, dropped with the last) and `close_user(user_id)`.
+`send_to_user(user_id, payload)` pushes to every open socket of a user, best effort and never raising (2 s per
+socket); a socket that times out or fails is closed and dropped so later pushes don't wait on it again. Returns
+how many sockets got it.
+
+**Server → client frames**
+- `{"type":"notification","id","event","from_user","from_username","from_photo_url","created_at","unread"}`
+  where `event` is `like` · `view` · `message` · `match` · `unlike` and `unread` is the recipient's total unread
+  count after this notification.
+- `{"type":"message","id","from","from_username","to","body","sent_at"}` — a stored chat message. Sent to the
+  recipient **and** to every socket of the sender (other tabs, and the sending tab learns the persisted id), so
+  clients de-duplicate by `id`. The sender's copy also carries `"ref"` when the client supplied one.
+- `{"type":"error","code","detail"[,"to"][,"ref"]}` — a rejected client frame; `detail` is safe to show, `to` is
+  echoed when the frame carried a valid id, `ref` when it carried a (valid) `ref`. The socket stays open.
+
+**Client → server `{"type":"message","to":<user id>,"body":"<text>"[,"ref":"<nonce>"]}`** (`ChatService.send_message`).
+`ref` is an optional client correlation id (string, 1–64 characters, otherwise ignored): the client keeps the text
+under it until the echo (same `ref`) arrives, or restores it into the input when an error carries it.
+1. `to` must be an integer in 1–2147483647 (not a bool), not the sender → `invalid_recipient`.
+2. `body` must be a string → `invalid_body`; after `strip()` it must be non-empty → `empty_body` and at most
+   **2000 characters** (`MAX_BODY_LENGTH`) → `body_too_long`. Bodies containing NUL or other control characters
+   (anything but `\n` and `\t`) or unpaired surrogates → `invalid_body`. The stored/pushed body is the stripped text.
+3. One `INSERT … SELECT … WHERE EXISTS(connection) AND NOT EXISTS(block either way)` statement stores the message
+   (`is_read=false`). No row ⇒ `not_connected` ("You are not connected with this user") — the same answer for
+   never connected, unliked, blocked, or a non-existent user. Being atomic, an unlike/block racing with a send
+   cannot let a message through.
+4. Push the `message` frame to the recipient and the sender, then `notify_safe(recipient, "message", sender)`.
+
+Other error codes: `invalid_frame` (not JSON, not an object, binary frame), `frame_too_large` (> 8192 characters),
+`unknown_type`, `rate_limited`, `server_error` (unexpected failure, logged server-side, generic detail).
+Limits, sliding window: any frame 60 per 10 s **per connection**; chat messages 10 per 10 s **per user** (shared by
+all their sockets); 5 sockets per user. Handling a frame never raises out of the receive loop; a bad frame gets an
+error frame and the socket is not closed. The 8192-character check is app-level; uvicorn runs with
+`--ws-max-size 16384` (Dockerfile and compose command) so bigger frames are refused before they are buffered.
+
+**Notifications** (`NotificationService.notify(to_user, type, from_user)` → id or `None`; every trigger calls
+`notify_safe`, which logs and swallows a failure so a like, view, unlike or message never fails or rolls back because
+its notification did). Suppressed (nothing
+stored or pushed) for: self actions; a block in either direction (E6.6); a `message` between users who are not
+connected (so a message notification can only follow a stored message); a repeated `view` from the same viewer
+within 60 minutes. Otherwise insert, then push the `notification` frame.
+- `like` → liked user, only when the like is new (a repeated like is a no-op).
+- `match` → both users, when a like completes a mutual like (replaces `like`). Only the request whose
+  `INSERT … ON CONFLICT DO NOTHING RETURNING` actually created the connection notifies, so simultaneous mutual likes
+  announce the match once.
+- `view` → viewed user, on a profile visit (not own, not blocked).
+- `unlike` → the unliked user, only if the two were connected and a like was actually removed.
+- `message` → recipient, for every stored message.
+Unlike and block both delete the `connections` row, which is what disables chat (E5.4); a later match restores it.
+
+**Frontend.** `api/client.js` owns the access token and the single-flight refresh; `AuthContext` mirrors it.
+`NotificationContext` owns the single socket (opened once per session, keyed on the user id, token read at each
+connect) and exposes `connected` (true from `auth_ok`), `subscribe(listener)` and `send(frame)`. `ChatContext` subscribes: it appends `message` frames (de-duplicated by id), counts unread per
+conversation (`unreadMessages` drives the badges in `BottomNav` and `Header`), shows `error` frames, reloads
+conversations on `match`/`unlike` notifications, a `not_connected` error and after a reconnect. A thread's history is requested only once the conversation list is loaded and contains the partner
+(no deliberate 403s); a partner missing from a loaded list shows the "no longer connected" state, a failed list
+load shows an error with retry instead.
+
+Single process, in-memory registry and rate-limit state: acceptable for one-node evaluation; not multi-worker safe.
 
 ## 8. Matching (E3, `repository/discovery_repo.py`)
 
@@ -261,7 +325,8 @@ library (auth, tokens, verification, reset are hand-written).
 ## 11. Frontend
 
 - **Contexts:** `AuthContext` (user + access token), `NotificationContext` (owns the single WS, unread count),
-  `ChatContext` (conversations/messages; sends over `NotificationContext`'s socket).
+  `ChatContext` (conversations, threads, unread count, chat errors; sends and receives over
+  `NotificationContext`'s socket via `send` / `subscribe`).
 - **API modules** in `src/api/`: `authApi` (fetch), the rest via `client.js` (axios + 401 → refresh).
 - **Routing:** `ProtectedRoute` redirects to `/login`; `/profile/setup` for incomplete profiles.
 - **Layout:** `Layout.jsx` renders `[BottomNav (side menu ≥860 px / tab bar below) + Header + <main>]` then

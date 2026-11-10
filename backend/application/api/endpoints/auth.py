@@ -135,7 +135,6 @@ async def login(
     )
     return {
         "access_token": access_token,
-        "refresh_token": refresh_token,
         "token_type": "bearer",
     }
 
@@ -223,7 +222,6 @@ async def refresh(request: Request, response: Response, db=Depends(get_db)):
     )
     return {
         "access_token": access_token,
-        "refresh_token": new_refresh_token,
         "token_type": "bearer",
     }
 

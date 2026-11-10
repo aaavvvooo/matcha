@@ -56,25 +56,25 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 | Block / unblock | ✅ | Exclusion from browse/search/notifications depends on E3, E6 |
 | "Liked you" / "connected" indicators | ✅ | |
 
-### E5 — Real-time Chat (IV.6) — ❌ backend missing · depends on E6.1
+### E5 — Real-time Chat (IV.6) — ✅
 
 | Feature | Status | Notes |
 |---|---|---|
-| E5.1 Send/receive messages over WS, connected users only, ≤10 s | ❌ | `/chat/ws` handles presence only; `messages` table exists |
-| E5.2 Conversations list + message history | ❌ | Frontend calls `/chat/conversations`, `/chat/messages/:id` |
-| E5.3 New-message indicator on every page | ❌ | `ChatContext.receiveMessage` never wired to WS |
-| E5.4 Chat disabled after unlike / block | ❌ | |
+| E5.1 Send/receive messages over WS, connected users only, ≤10 s | ✅ | `/chat/ws` `message` frames → `ChatService.send_message`; error frames, 2000-char cap, per-connection rate limits (DESIGN §7) |
+| E5.2 Conversations list + message history | ✅ | `GET /chat/conversations`, `GET /chat/messages/{id}` (`limit`, `before_id`), `POST /chat/messages/{id}/read`; indexes `ix_messages_pair`, `ix_messages_unread` |
+| E5.3 New-message indicator on every page | ✅ | `ChatContext.unreadMessages` → badge on the Chat tab (`BottomNav`) and a Messages icon in `Header`; live, cleared when the thread is opened |
+| E5.4 Chat disabled after unlike / block | ✅ | Unlike/block delete the connection; sends get `not_connected`, history 403, the thread shows "no longer connected" |
 
-### E6 — Real-time Notifications (IV.7) — ❌ backend missing
+### E6 — Real-time Notifications (IV.7) — ✅
 
 | Feature | Status | Notes |
 |---|---|---|
-| E6.1 Push to user's WS ≤10 s | ❌ | Add `send_to_user()` to `PresenceManager` (already tracks sockets) |
-| E6.2 Triggers: like, profile view, message, like-back (match), unlike by connection | ❌ | `create_notification` exists in repo, never called |
-| E6.3 REST: list + mark read | ❌ | Frontend calls `GET /notifications`, `POST /notifications/read` |
-| E6.4 Unread badge on every page | ⚠️ | UI ready, waiting on backend |
+| E6.1 Push to user's WS ≤10 s | ✅ | `PresenceManager.send_to_user()` |
+| E6.2 Triggers: like, profile view, message, like-back (match), unlike by connection | ✅ | `NotificationService.notify` from `SocialService` and `ChatService` |
+| E6.3 REST: list + mark read | ✅ | `GET /notifications` (`limit`, `offset`), `POST /notifications/read` |
+| E6.4 Unread badge on every page | ✅ | `NotificationContext.unreadCount` = server total (`GET /notifications/unread-count`, replaced by each pushed frame's `unread`); live pushes de-duplicated by server id |
 | E6.5 Notifications page reachable | ✅ | `/notifications` route (F4) |
-| E6.6 No notifications from blocked / unliked users | ❌ | |
+| E6.6 No notifications from blocked / unliked users | ✅ | `notify` skips blocked pairs and `message` between non-connected users; list hides blocked senders; unlike clears the connection |
 
 ### E7 — Security Hardening (General Instructions, VI.1) — ⚠️ · any breach = 0
 
@@ -91,7 +91,7 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 | Feature | Status | Notes |
 |---|---|---|
 | Header + main + footer on every page | ✅ | F3 |
-| No unhandled errors in console | ⚠️ | ErrorBoundary added (F5); missing E3/E5/E6 endpoints still 404 |
+| No unhandled errors in console | ⚠️ | ErrorBoundary added (F5); E3/E5/E6 endpoints exist; full console sweep is Phase 5 |
 | Mobile-friendly; latest Firefox + Chrome | ⚠️ | Unaudited |
 | ≥ 500 profiles in DB | ✅ | `scripts/seed_profiles.py --target 500` |
 
@@ -212,12 +212,12 @@ scripted smoke runs instead. Revisit only if regressions start costing time.
 - [x] E3.5 `GET /profiles/search` + SearchPage wiring (real tag list)
 
 ### Phase 4 — Real-time (track B, parallel with Phase 3)
-- [ ] E6.1 `PresenceManager.send_to_user()` push
-- [ ] E6.2 + E6.6 Notification triggers, block / unlike suppression
-- [ ] E6.3 Notification REST endpoints
-- [ ] E5.1 + E5.4 Chat messages over WS, connected users only
-- [ ] E5.2 Conversations + history endpoints
-- [ ] E5.3 Global new-message indicator
+- [x] E6.1 `PresenceManager.send_to_user()` push
+- [x] E6.2 + E6.6 Notification triggers, block / unlike suppression
+- [x] E6.3 Notification REST endpoints
+- [x] E5.1 + E5.4 Chat messages over WS, connected users only
+- [x] E5.2 Conversations + history endpoints
+- [x] E5.3 Global new-message indicator
 
 ### Phase 5 — Mandatory sign-off
 - [ ] E8 Mobile audit (320 / 375 / 768 px), Firefox + Chrome

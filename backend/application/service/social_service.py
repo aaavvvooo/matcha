@@ -5,6 +5,7 @@ from application.database import Database
 from application.repository.social_repo import SocialRepository
 from application.repository.profile_repo import ProfileRepository
 from application.repository.user_repo import UserRepository
+from application.service.notification_service import NotificationService
 from application.schema.users_schemas import (
     UserProfileResponse,
     LikeResponse,
@@ -38,6 +39,7 @@ class SocialService:
         self.social_repo = SocialRepository(db)
         self.profile_repo = ProfileRepository(db)
         self.user_repo = UserRepository(db)
+        self.notifications = NotificationService(db)
 
     async def get_user_profile(self, viewer_id: int, user_id: int) -> UserProfileResponse:
         profile = await self.profile_repo.get_profile(user_id)
@@ -59,6 +61,7 @@ class SocialService:
             if not is_blocked_by_viewer:
                 await self.social_repo.record_view(viewer_id, user_id)
                 await self.social_repo.recalculate_fame(user_id)
+                await self.notifications.notify_safe(user_id, "view", viewer_id)
 
         photos_rows = await self.profile_repo.get_user_photos(user_id)
         photos = [_with_photo_url(row, "url", PhotoResponse) for row in photos_rows]
@@ -113,19 +116,34 @@ class SocialService:
                 detail="Add a profile picture before liking other users",
             )
 
-        await self.social_repo.like_user(liker_id, liked_id)
+        is_new_like = await self.social_repo.like_user(liker_id, liked_id)
         await self.social_repo.recalculate_fame(liked_id)
 
         is_match = await self.social_repo.has_liked(liked_id, liker_id)
+        connection_created = False
         if is_match:
-            await self.social_repo.create_connection(liker_id, liked_id)
+            connection_created = await self.social_repo.create_connection(liker_id, liked_id)
+
+        # Repeated likes are no-ops and notify nobody. A like-back is a "match" for both
+        # sides instead of a plain "like". Only the request that actually created the
+        # connection announces the match, so simultaneous mutual likes notify once.
+        if is_match:
+            if connection_created:
+                await self.notifications.notify_safe(liked_id, "match", liker_id)
+                await self.notifications.notify_safe(liker_id, "match", liked_id)
+        elif is_new_like:
+            await self.notifications.notify_safe(liked_id, "like", liker_id)
 
         return LikeResponse(liked=True, is_match=is_match)
 
     async def unlike(self, liker_id: int, liked_id: int) -> LikeResponse:
-        await self.social_repo.unlike_user(liker_id, liked_id)
+        was_connected = await self.social_repo.are_connected(liker_id, liked_id)
+        removed = await self.social_repo.unlike_user(liker_id, liked_id)
         await self.social_repo.remove_connection(liker_id, liked_id)
         await self.social_repo.recalculate_fame(liked_id)
+        # Subject IV.7: notify when a connected user unlikes you.
+        if removed and was_connected:
+            await self.notifications.notify_safe(liked_id, "unlike", liker_id)
         return LikeResponse(liked=False, is_match=False)
 
     async def block(self, blocker_id: int, blocked_id: int):

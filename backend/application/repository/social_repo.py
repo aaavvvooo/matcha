@@ -100,14 +100,16 @@ class SocialRepository:
         return await self.db.fetch_all(query, user_id)
 
     # ── connections ────────────────────────────────────────────────────────
-    async def create_connection(self, a: int, b: int):
+    async def create_connection(self, a: int, b: int) -> bool:
+        """Returns True only for the call that actually inserted the row (idempotent under races)."""
         lo, hi = min(a, b), max(a, b)
         query = """
             INSERT INTO connections (user_a_id, user_b_id)
             VALUES ($1, $2)
             ON CONFLICT DO NOTHING
+            RETURNING user_a_id
         """
-        await self.db.execute(query, lo, hi)
+        return await self.db.fetch_one(query, lo, hi) is not None
 
     async def remove_connection(self, a: int, b: int):
         lo, hi = min(a, b), max(a, b)
@@ -195,28 +197,61 @@ class SocialRepository:
         """
         return await self.db.fetch_val(query, user_id, type, from_user)
 
-    async def get_notifications(self, user_id: int):
-        query = """
-            SELECT n.id, n.type, n.from_user, n.is_read, n.created_at,
-                   u.username AS from_username, p.url AS from_photo_url
-            FROM notifications n
-            LEFT JOIN users u ON u.id = n.from_user
-            LEFT JOIN photos p ON p.is_main = true AND p.user_id = n.from_user
-            WHERE n.user_id = $1
-            ORDER BY n.created_at DESC
-            LIMIT 100
-        """
-        return await self.db.fetch_all(query, user_id)
+    # Shared by the list and the single-row fetch used for live pushes.
+    _NOTIFICATION_SELECT = """
+        SELECT n.id, n.type, n.from_user, COALESCE(n.is_read, false) AS is_read, n.created_at,
+               u.username AS from_username, p.url AS from_photo_url
+        FROM notifications n
+        LEFT JOIN users u ON u.id = n.from_user
+        LEFT JOIN photos p ON p.is_main = true AND p.user_id = n.from_user
+    """
 
-    async def mark_notifications_read(self, user_id: int):
-        await self.db.execute(
-            "UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false",
+    async def get_notifications(self, user_id: int, limit: int = 50, offset: int = 0):
+        """Newest first; hides notifications from users blocked in either direction."""
+        query = self._NOTIFICATION_SELECT + """
+            WHERE n.user_id = $1
+              AND NOT EXISTS (
+                  SELECT 1 FROM blocks b
+                  WHERE (b.blocker_id = $1 AND b.blocked_id = n.from_user)
+                     OR (b.blocker_id = n.from_user AND b.blocked_id = $1))
+            ORDER BY n.created_at DESC, n.id DESC
+            LIMIT $2 OFFSET $3
+        """
+        return await self.db.fetch_all(query, user_id, limit, offset)
+
+    async def get_notification(self, notification_id: int):
+        return await self.db.fetch_one(self._NOTIFICATION_SELECT + " WHERE n.id = $1", notification_id)
+
+    async def has_recent_notification(
+        self, user_id: int, type: NotificationType, from_user: int, minutes: int
+    ) -> bool:
+        query = """
+            SELECT 1 FROM notifications
+            WHERE user_id = $1 AND type = $2 AND from_user = $3
+              AND created_at > now() - make_interval(mins => $4)
+            LIMIT 1
+        """
+        return await self.db.fetch_val(query, user_id, type, from_user, minutes) is not None
+
+    async def mark_notifications_read(self, user_id: int) -> int:
+        result = await self.db.execute(
+            "UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read IS NOT TRUE",
             user_id,
         )
+        # asyncpg returns the command tag, e.g. "UPDATE 3"
+        return int(result.split()[-1]) if result else 0
 
     async def unread_count(self, user_id: int) -> int:
+        """Unread notifications, excluding senders blocked either way (same rule as the list)."""
         return await self.db.fetch_val(
-            "SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false",
+            """
+            SELECT COUNT(*) FROM notifications n
+            WHERE n.user_id = $1 AND n.is_read IS NOT TRUE
+              AND NOT EXISTS (
+                  SELECT 1 FROM blocks b
+                  WHERE (b.blocker_id = $1 AND b.blocked_id = n.from_user)
+                     OR (b.blocker_id = n.from_user AND b.blocked_id = $1))
+            """,
             user_id,
         )
 
