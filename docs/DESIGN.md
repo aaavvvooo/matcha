@@ -87,6 +87,8 @@ reports          (reporter_id, reported_id) PK, created_at
 verification_tokens  id PK, user_id FK, token UQ, token_type, expires_at, used, created_at
 refresh_tokens   id PK, username UQ, token_hash, expires_at, created_at
 token_blacklist  id PK, token_hash UQ, expires_at, created_at
+oauth_accounts   id PK, user_id FK→users ON DELETE CASCADE, provider VARCHAR(20), provider_user_id VARCHAR(64),
+                 created_at, UQ(provider, provider_user_id), UQ(user_id, provider)   -- B1
 ```
 
 Value sets (shared by frontend, seed scripts, and matching; `Literal` types in
@@ -95,13 +97,14 @@ Value sets (shared by frontend, seed scripts, and matching; `Literal` types in
 - `gender`: `Man` · `Woman` · `Non-binary` · `Other`
 - `sexual_orientation`: `Heterosexual` · `Homosexual` · `Bisexual` · `Other` (NULL ⇒ treated as `Bisexual`)
 - `notifications.type`: `like` · `view` · `message` · `match` · `unlike`
+- `oauth_accounts.provider`: `42` · `github` (`ck_oauth_accounts_provider`; allowlist in `clients/oauth_client.py`)
 
 A profile counts as **complete** when `user_profiles.gender IS NOT NULL`; incomplete profiles are hidden everywhere.
 
 ## 5. HTTP API
 
 No `/api` prefix. Public routes: `/auth/register`, `/verify-email`, `/login`, `/forget-password`, `/refresh`,
-`/reset-password`. `/auth/logout` takes an optional Bearer token plus the refresh cookie and works even with an
+`/reset-password`, `/oauth/*`. `/auth/logout` takes an optional Bearer token plus the refresh cookie and works even with an
 expired token. `/profile/photo/*` is authenticated by the `access_token` cookie (so `<img src>` works). Everything
 else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 
@@ -116,6 +119,9 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 | POST | `/logout` | Idempotent: blacklists a live access token, revokes the refresh token (username from access or refresh token), always clears both cookies |
 | POST | `/refresh` | Rotates refresh token (httpOnly, SameSite=Strict cookie) |
 | POST | `/reset-password` | Token + new password in body · 5/min |
+| GET | `/oauth/providers` | `{"providers": [...]}` — only providers with credentials configured (B1) |
+| GET | `/oauth/{provider}/start` | `provider` ∈ `42`·`github` and configured, else 404 · 302 to the provider with `state` (+ PKCE S256 for GitHub) · sets the `oauth_flow` cookie · 20/min |
+| GET | `/oauth/{provider}/callback` | `code`, `state` (or provider `error`) · always 302 to `{FRONTEND_URL}/oauth/callback?status=ok\|verify_email` or `?error=<code>`; on success sets the same cookies as `/login` · 20/min |
 
 ### Own profile — `/profile`
 | Method | Path | Notes |
@@ -172,6 +178,54 @@ request  → Bearer access token; blacklist checked in get_current_user
 expired  → axios interceptor → POST /auth/refresh → retry queued requests
 logout   → access token hash → token_blacklist; refresh cookie cleared
 ```
+
+**OAuth sign-in (B1)** — hand-rolled with httpx (`clients/oauth_client.py`, `service/oauth_service.py`,
+`api/endpoints/oauth.py`); no OAuth/account library.
+
+```
+button (plain link) → GET /auth/oauth/{p}/start
+    state = 256-bit random; GitHub: code_verifier (86 chars) + S256 challenge
+    {provider, state, verifier, exp = now+10 min} stored in process memory under an opaque random id
+    Set-Cookie oauth_flow=<id>; HttpOnly; SameSite=Lax; Path=/auth/oauth; Max-Age=600 (Secure when https)
+    302 → provider authorize URL (redirect_uri = OAUTH_REDIRECT_BASE_URL + /auth/oauth/{p}/callback, never from the request)
+provider → GET /auth/oauth/{p}/callback?code&state      (cross-site top-level GET: Lax cookie is sent)
+    pop the flow entry (single use, whatever happens) → expired / missing / provider mismatch /
+      state ≠ (hmac.compare_digest) → error=invalid_state;  provider `error` → error=access_denied
+    exchange code server-side (10 s timeout, no redirects followed, + code_verifier) → profile
+      (42: /v2/me · GitHub: /user + /user/emails primary entry and its `verified` flag)
+    provider access token dropped; provider bodies, codes and tokens never logged or returned
+    linking (below) → AuthService.issue_session (same as /login: refresh hash in refresh_tokens)
+    302 → {FRONTEND_URL}/oauth/callback?status=ok, with Set-Cookie refresh_token / access_token
+         (httpOnly, SameSite=Strict, exactly as /login) and oauth_flow cleared
+SPA /oauth/callback → AuthProvider's page-load POST /auth/refresh (same-site XHR from :3000 to :8000, so the
+    Strict cookie is sent) → access token in memory → /profile/setup if !has_profile, else /browse
+```
+
+Tokens never appear in a URL. The landing navigation itself is cross-site-initiated, so it carries no Strict
+cookie; nothing relies on it — the session is picked up by the follow-up same-site XHR. In Compose the SPA
+(`localhost:3000`) and API (`localhost:8000`) are the same site (ports don't count), which the password login
+already relies on.
+
+Linking, keyed on the provider's stable numeric id (never login or email):
+1. `(provider, provider_user_id)` already linked → that user (refused with `email_unverified` while
+   `is_validated` is false — same rule as password login, so a pending email change can't be bypassed).
+2. Provider email matches a local user (`lower(email)`): linked only if the **provider marks the address
+   verified** and the local user `is_validated`. Unvalidated local user → `link_unverified`; unverified/absent
+   provider email → `email_in_use`, never linked. 42 exposes no verified flag, so 42 addresses are never used
+   for linking.
+3. Otherwise a new user + link in one transaction: `is_validated` only for a provider-verified email; else a
+   verification email is sent (`status=verify_email`, no session). Username from the provider login
+   (`[A-Za-z0-9_-]`, ≤40, `user` if shorter than 3) with `2`…`9` then random 6-digit suffixes, retried on the
+   unique index; names stripped of control/format characters and capped at 50; `hashed_password` is the Argon2
+   hash of a random 32-byte secret (unusable — "forgot password" sets a real one).
+
+Error codes (fixed; the SPA maps them to text): `access_denied`, `invalid_state`, `provider_error`, `no_email`,
+`email_in_use`, `link_unverified`, `already_linked`, `email_unverified`, `email_unavailable`, `server_error`.
+
+PKCE: GitHub yes (S256 only). 42: not documented in its public API docs, so not sent — it is a confidential
+client (secret only server-to-server) and `state` still binds the callback to the browser; flip `pkce=True`
+in `PROVIDERS` if 42 confirms support. The flow store is per-process memory (like the WS registry and the
+rate limiter): capped at 10 000 pending flows, lost on restart.
 
 ## 7. Real-time design
 
@@ -255,10 +309,14 @@ Stored in `user_profiles.fame_rating`. `profile_viewers` counts distinct viewers
 | Malicious upload | Type detected from magic bytes (`utils/image.py`), never client `content_type`; ≤5 MB read cap; all files validated before any is stored; served with `nosniff`; `upload_size_guard` (`main.py`) refuses oversized, chunked or anonymous upload bodies from the headers before Starlette parses them | ✅ |
 | Info leakage | `main.py` middleware logs unhandled errors and returns `{"detail":"Internal server error"}`; `/health` returns only `status` (`healthy`/`degraded`/`unhealthy`), database connectivity and `storage.ready` — no versions, hosts or errors | ✅ |
 | Secrets | `.env` gitignored | ✅ |
+| OAuth login CSRF / session fixation | 256-bit `state` stored server-side under an opaque httpOnly SameSite=Lax cookie id, compared in constant time, single use, 10 min TTL | ✅ |
+| OAuth code injection / interception | Code exchanged server-side with the client secret; PKCE S256 (GitHub); `redirect_uri` fixed from config; provider id in the flow must match the callback path (no mix-up) | ✅ |
+| OAuth account takeover | Link by email only when the provider marks it verified **and** the local account is validated; 42 emails never trusted; identities keyed on the provider's numeric id; one identity per provider per user | ✅ |
+| OAuth open redirect / token leakage | Callback redirects only to the fixed `{FRONTEND_URL}/oauth/callback` with `status`/`error` from a fixed set; tokens only in httpOnly cookies; provider token discarded; provider bodies/codes never logged; `provider` path param checked against a fixed allowlist (404) | ✅ |
 
 **Micro-framework rule (subject §III).** Decision 2026-11-07: keep FastAPI + Pydantic. Defense position: FastAPI is
 used as a router + request parser; there is no ORM at runtime (raw SQL in `repository/`), and no user-account
-library (auth, tokens, verification, reset are hand-written).
+library (auth, tokens, verification, reset and OAuth sign-in are hand-written).
 
 ## 11. Frontend
 
@@ -266,6 +324,8 @@ library (auth, tokens, verification, reset are hand-written).
   `ChatContext` (conversations/messages; sends over `NotificationContext`'s socket).
 - **API modules** in `src/api/`: `authApi` (fetch), the rest via `client.js` (axios + 401 → refresh).
 - **Routing:** `ProtectedRoute` redirects to `/login`; `/profile/setup` for incomplete profiles.
+  `/oauth/callback` (public) finishes OAuth sign-in from AuthProvider's page-load refresh; provider buttons
+  (`components/auth/OAuthButtons.jsx`) appear on Login/Register only for providers the API reports.
 - **Layout:** `Layout.jsx` renders `[BottomNav (side menu ≥860 px / tab bar below) + Header + <main>]` then
   `Footer` as the last row (under the tab bar on mobile, full width on desktop). The landing page `/` draws its
   own header/main/footer; signed-in users visiting `/` are redirected to `/browse`.

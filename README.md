@@ -44,6 +44,23 @@ Seeded accounts use emails ending in `@matcha-seed.dev` or `@matcha-seed-am.dev`
 | `STORAGE_BACKEND` | `minio` or `gcs`; Compose hardcodes `minio` for the backend, so set it only outside Compose |
 | `GCP_PROJECT_ID`, `GCS_BUCKET_NAME` | Only when `STORAGE_BACKEND=gcs` |
 | `NOMINATIM_URL`, `NOMINATIM_USER_AGENT`, `NOMINATIM_ACCEPT_LANGUAGE` | Optional geocoding overrides |
+| `OAUTH_REDIRECT_BASE_URL` | Public base URL of the API used in OAuth callback URLs (Compose: `http://localhost:8000`) |
+| `OAUTH_42_CLIENT_ID`, `OAUTH_42_CLIENT_SECRET` | Optional: "Continue with 42" (UID / SECRET of a 42 Intra app) |
+| `OAUTH_GITHUB_CLIENT_ID`, `OAUTH_GITHUB_CLIENT_SECRET` | Optional: "Continue with GitHub" (GitHub OAuth app) |
+
+**OAuth sign-in (optional).** A provider is enabled only when its id + secret, `OAUTH_REDIRECT_BASE_URL` and
+`FRONTEND_URL` are all set; otherwise its button is hidden and its routes return 404. Register one app per
+provider with exactly this callback URL (the backend's, not the frontend's):
+
+| Provider | Where | Callback / redirect URI |
+|---|---|---|
+| 42 Intra | intra.42.fr → Settings → API → *Register a new app* (scope `public`) | `http://localhost:8000/auth/oauth/42/callback` |
+| GitHub | github.com → Settings → Developer settings → *OAuth Apps* → *New OAuth App* | `http://localhost:8000/auth/oauth/github/callback` |
+
+Replace `http://localhost:8000` with `OAUTH_REDIRECT_BASE_URL` when deployed. Open the app as
+`http://localhost:3000` (not `127.0.0.1`) so the SPA and the API stay the same site for the session cookie.
+New accounts from 42 (which doesn't mark emails verified) or from a GitHub account whose primary email is
+unverified must confirm the address through the usual verification email before they can sign in.
 
 **Email delivery:** Brevo rejects API calls from IPs that aren't on the account's allowlist (`401 unrecognised IP
 address`). Before running on a new network (e.g. the defense machine), add its public IP to the authorised IPs in

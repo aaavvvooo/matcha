@@ -108,15 +108,18 @@ account-manager library.
 
 All ❌. Each bonus reuses mandatory infrastructure, so its dependencies must be done first.
 
-### B1 — OAuth sign-in · depends on E1
+### B1 — OAuth sign-in · depends on E1 · ✅ (2026-11-11)
 
-| Feature | Notes |
-|---|---|
-| B1.1 Provider registration (42 Intra, plus Google or GitHub); credentials in `.env` | |
-| B1.2 Authorize redirect + callback with `state` (CSRF) and PKCE | Hand-rolled with `httpx`, not a user-account-manager library |
-| B1.3 Account linking: `oauth_accounts` table; create user or link to existing verified email | Never auto-link to an unverified email |
-| B1.4 First OAuth login ⇒ generate username, redirect to profile setup | |
-| B1.5 Frontend: provider buttons on login/register, callback page | Tokens never placed in URLs |
+| Feature | Status | Notes |
+|---|---|---|
+| B1.1 Provider registration (42 Intra, plus Google or GitHub); credentials in `.env` | ✅ | 42 + GitHub; a provider without credentials is disabled (404, no button). Setup in README |
+| B1.2 Authorize redirect + callback with `state` (CSRF) and PKCE | ✅ | Hand-rolled with `httpx`, not a user-account-manager library. PKCE S256 for GitHub; 42 doesn't document PKCE (state only) |
+| B1.3 Account linking: `oauth_accounts` table; create user or link to existing verified email | ✅ | Never auto-link to an unverified email; 42 emails are never trusted for linking (no verified flag) |
+| B1.4 First OAuth login ⇒ generate username, redirect to profile setup | ✅ | |
+| B1.5 Frontend: provider buttons on login/register, callback page | ✅ | Tokens never placed in URLs; callback page reuses AuthProvider's page-load refresh |
+
+Verified with ruff/mypy/build and a mocked-provider smoke script against a scratch Postgres; a real provider
+round-trip needs registered OAuth apps (README).
 
 ### B2 — Photo gallery with editing · depends on E2, E7 (magic-byte check)
 
@@ -241,7 +244,7 @@ scripted smoke runs instead. Revisit only if regressions start costing time.
 - [ ] **B2 Gallery** — B2.1 drag-and-drop upload · B2.2 drag-to-reorder + order endpoint · B2.3 crop / rotate / filter editor
 - [ ] **B3 Map** — B3.1 precise GPS · B3.2 bounding-box endpoint · B3.3 neighbourhood-level privacy · B3.4 Leaflet map + mini cards
 - [ ] **B5 Dates** — B5.1 `dates` table · B5.2 propose / accept / decline / cancel · B5.3 notifications · B5.4 upcoming list · B5.5 reminder (optional)
-- [ ] **B1 OAuth** — B1.1 providers · B1.2 redirect + callback (state, PKCE) · B1.3 account linking · B1.4 first-login setup · B1.5 frontend buttons + callback page
+- [x] **B1 OAuth** — B1.1 providers · B1.2 redirect + callback (state, PKCE) · B1.3 account linking · B1.4 first-login setup · B1.5 frontend buttons + callback page
 - [ ] **B4 Video / audio** — B4.1 WebRTC signalling over WS · B4.2 call UI · B4.3 STUN + permission errors · B4.4 end call on unlike / block
 
 Parallel-safe tracks: Phase 3 ∥ Phase 4. Within Phase 4, E6.1 must land before chat. Bonus epics are independent of
