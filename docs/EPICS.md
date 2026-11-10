@@ -126,14 +126,14 @@ All ❌. Each bonus reuses mandatory infrastructure, so its dependencies must be
 | B2.2 Drag-to-reorder gallery + `PATCH` order endpoint | Photo order column already exists |
 | B2.3 Editor: crop, rotate, filters on `<canvas>`; result uploaded as a new image | Server re-validates the edited file |
 
-### B3 — Interactive user map · depends on E3
+### B3 — Interactive user map · depends on E3 — ✅
 
-| Feature | Notes |
-|---|---|
-| B3.1 Precise GPS via browser Geolocation API, with consent | |
-| B3.2 Map endpoint: users in a bounding box, same preference + block filters as browse | Reuse E3 query |
-| B3.3 Privacy: other users shown at neighbourhood precision (snapped / jittered) | |
-| B3.4 Leaflet + OpenStreetMap; marker ⇒ mini profile card ⇒ full profile | |
+| Feature | Status | Notes |
+|---|---|---|
+| B3.1 Precise GPS via browser Geolocation API, with consent | ✅ | Shared `LocationPicker` (button = consent) → `PATCH /profile/location`; denied / unavailable / timeout shown inline |
+| B3.2 Map endpoint: users in a bounding box, same preference + block filters as browse | ✅ | `GET /profiles/map`; shares `_ELIGIBLE` SQL with browse; `limit` ≤ 200; min < max else 400 (no antimeridian boxes) |
+| B3.3 Privacy: other users shown at neighbourhood precision (snapped / jittered) | ✅ | Box tested on, and response carries, the 0.02° snapped cell centre only; one marker per cell |
+| B3.4 Leaflet + OpenStreetMap; marker ⇒ mini profile card ⇒ full profile | ✅ | `/map`; implemented and builds, not yet click-tested in a browser (include in the E8 mobile audit) |
 
 ### B4 — Video / audio chat · depends on E5, E6.1
 
@@ -239,7 +239,7 @@ scripted smoke runs instead. Revisit only if regressions start costing time.
 
 ### Phase 6 — Bonus (only after Phase 5 is fully green)
 - [ ] **B2 Gallery** — B2.1 drag-and-drop upload · B2.2 drag-to-reorder + order endpoint · B2.3 crop / rotate / filter editor
-- [ ] **B3 Map** — B3.1 precise GPS · B3.2 bounding-box endpoint · B3.3 neighbourhood-level privacy · B3.4 Leaflet map + mini cards
+- [x] **B3 Map** — B3.1 precise GPS · B3.2 bounding-box endpoint · B3.3 neighbourhood-level privacy · B3.4 Leaflet map + mini cards
 - [ ] **B5 Dates** — B5.1 `dates` table · B5.2 propose / accept / decline / cancel · B5.3 notifications · B5.4 upcoming list · B5.5 reminder (optional)
 - [ ] **B1 OAuth** — B1.1 providers · B1.2 redirect + callback (state, PKCE) · B1.3 account linking · B1.4 first-login setup · B1.5 frontend buttons + callback page
 - [ ] **B4 Video / audio** — B4.1 WebRTC signalling over WS · B4.2 call UI · B4.3 STUN + permission errors · B4.4 end call on unlike / block
