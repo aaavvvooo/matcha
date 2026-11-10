@@ -25,7 +25,7 @@ Prerequisites: Docker with the Compose plugin.
    | API + OpenAPI docs | http://localhost:8000/docs |
    | MinIO console | http://localhost:9001 |
 
-Seeded accounts use emails ending in `@matcha-seed.dev` or `@matcha-seed-am.dev` and the password defined as `DEFAULT_PASSWORD` in
+Seeded accounts use emails ending in `@matcha-seed.example.org` or `@matcha-seed-am.example.org` (reserved, unregistrable domains; older `.dev` seeds are moved on the next start) and the password defined as `DEFAULT_PASSWORD` in
 `backend/scripts/seed_common.py`.
 
 ## Environment variables
@@ -59,8 +59,10 @@ provider with exactly this callback URL (the backend's, not the frontend's):
 
 Replace `http://localhost:8000` with `OAUTH_REDIRECT_BASE_URL` when deployed. Open the app as
 `http://localhost:3000` (not `127.0.0.1`) so the SPA and the API stay the same site for the session cookie.
-New accounts from 42 (which doesn't mark emails verified) or from a GitHub account whose primary email is
-unverified must confirm the address through the usual verification email before they can sign in.
+New accounts from 42 (which doesn't mark emails verified) must confirm the address through the usual
+verification email before they can sign in; GitHub sign-in requires a verified primary email on the GitHub
+account. OAuth needs the SPA and the API on the same site (true for Compose); see `docs/DESIGN.md` §6 for what a
+split production deployment would need.
 
 **Email delivery:** Brevo rejects API calls from IPs that aren't on the account's allowlist (`401 unrecognised IP
 address`). Before running on a new network (e.g. the defense machine), add its public IP to the authorised IPs in
