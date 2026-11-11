@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useNotifications } from '../../context/NotificationContext'
 import { getDates, acceptDate, declineDate, cancelDate } from '../../api/datesApi'
 import { formatDateTime } from '../../utils/dateTime'
-import { apiErrorMessage } from '../../utils/apiError'
+import { apiError } from '../../api/errors'
 import { displayName } from '../../utils/displayName'
 import Avatar from '../../components/ui/Avatar'
 import Btn from '../../components/ui/Btn'
@@ -223,7 +223,7 @@ export default function DatesPanel() {
     } catch (err) {
       const status = err?.response?.status
       const fallback = status === 404 ? 'This date no longer exists' : "That didn't work, please try again"
-      const message = apiErrorMessage(err, fallback)
+      const message = apiError(err, fallback)
       if (aliveRef.current) setErrors(e => ({ ...e, [id]: message }))
       // The date changed under us (409/403/404): show its real state.
       if (status === 409 || status === 403 || status === 404) reloadAll()

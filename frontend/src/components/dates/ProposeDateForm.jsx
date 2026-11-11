@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { proposeDate, MAX_TITLE, MAX_PLACE, MAX_NOTE } from '../../api/datesApi'
 import { localInputToIso, toLocalInputValue } from '../../utils/dateTime'
-import { apiErrorMessage } from '../../utils/apiError'
+import { apiError } from '../../api/errors'
 import Btn from '../ui/Btn'
 
 const fieldStyle = {
@@ -64,7 +64,7 @@ export default function ProposeDateForm({ inviteeId, inviteeName, onDone, onCanc
       setError(
         status === 403
           ? `You're no longer connected with ${inviteeName}.`
-          : apiErrorMessage(err, "Couldn't send the proposal, please try again")
+          : apiError(err, "Couldn't send the proposal, please try again")
       )
       setBusy(false)
     }
