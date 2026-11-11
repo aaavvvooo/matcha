@@ -59,6 +59,13 @@ export function refreshAccessToken() {
     _refreshPromise = axios
       .post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true })
       .then((res) => {
+        if (res.status === 204 || !res.data?.access_token) {
+          // 204: the refresh cookie is gone, so there is no session. Same outcome as a 401.
+          setClientToken(null)
+          const err = new Error('No session')
+          err.response = { status: 401 }
+          throw err
+        }
         setClientToken(res.data.access_token)
         return res.data.access_token
       })

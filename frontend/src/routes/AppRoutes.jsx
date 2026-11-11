@@ -46,6 +46,7 @@ function AppRoutes() {
       <Route path="/chat"           element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
       <Route path="/chat/:userId"   element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
       <Route path="/matches"        element={<ProtectedRoute><MatchesPage /></ProtectedRoute>} />
+      <Route path="/dates"          element={<ProtectedRoute><MatchesPage /></ProtectedRoute>} />
       <Route path="/notifications"  element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
     </Routes>
   );

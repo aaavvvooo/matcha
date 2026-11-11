@@ -27,6 +27,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     refreshToken()
       .then(async (data) => {
+        if (!data) return; // 204: no session cookie, stay signed out
         setAccessToken(data.access_token);
         const me = await getMe(data.access_token);
         setUser(me);

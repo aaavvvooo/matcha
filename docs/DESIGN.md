@@ -1,6 +1,6 @@
 # Matcha — Technical Design
 
-**Version:** 2.1 · **Updated:** 2026-11-10 (E5/E6 real-time built)
+**Version:** 2.2 · **Updated:** 2026-11-11 (B5 date scheduling built)
 
 Requirements: `docs/en.subject_matcha.pdf`. Roadmap and status: `docs/EPICS.md`.
 Everything here describes the code as it is; sections for roadmap items not yet built are marked **(planned)**
@@ -83,6 +83,12 @@ connections      (user_a_id, user_b_id) PK, CHECK user_a_id < user_b_id, created
 messages         id PK, sender_id FK, receiver_id FK, body TEXT, is_read, sent_at
                  indexes ix_messages_pair (sender_id, receiver_id, id), ix_messages_unread (receiver_id, sender_id) WHERE is_read = false
 notifications    id PK, user_id FK, type VARCHAR(50), from_user FK NULL, is_read, created_at
+dates            id PK, proposer_id FK→users CASCADE, invitee_id FK→users CASCADE, title VARCHAR(100), place VARCHAR(200),
+                 note VARCHAR(500) NULL, scheduled_at TIMESTAMPTZ, status VARCHAR(20) DEFAULT 'pending',
+                 reminder_sent_at TIMESTAMPTZ NULL, created_at, updated_at
+                 CHECKs ck_dates_distinct_users (proposer_id <> invitee_id), ck_dates_status;
+                 indexes ix_dates_proposer (proposer_id, scheduled_at), ix_dates_invitee (invitee_id, scheduled_at),
+                 ix_dates_reminder (scheduled_at) WHERE status = 'accepted' AND reminder_sent_at IS NULL
 blocks           (blocker_id, blocked_id) PK
 reports          (reporter_id, reported_id) PK, created_at
 verification_tokens  id PK, user_id FK, token UQ, token_type, expires_at, used, created_at
@@ -95,7 +101,12 @@ Value sets (shared by frontend, seed scripts, and matching; `Literal` types in
 `ck_user_profiles_sexual_orientation`, `ck_notifications_type`):
 - `gender`: `Man` · `Woman` · `Non-binary` · `Other`
 - `sexual_orientation`: `Heterosexual` · `Homosexual` · `Bisexual` · `Other` (NULL ⇒ treated as `Bisexual`)
-- `notifications.type`: `like` · `view` · `message` · `match` · `unlike`
+- `notifications.type`: `like` · `view` · `message` · `match` · `unlike` · `date_proposed` · `date_accepted` ·
+  `date_declined` · `date_cancelled` · `date_reminder`
+- `dates.status` (`ck_dates_status`): `pending` · `accepted` · `declined` · `cancelled`
+
+All timestamps in the schema are `timestamptz`; the API accepts and returns ISO 8601 UTC instants and the frontend
+renders them in the viewer's local timezone. `dates.scheduled_at` must be sent with an offset (a naive value is a 422).
 
 A profile counts as **complete** when `user_profiles.gender IS NOT NULL`; incomplete profiles are hidden everywhere.
 
@@ -115,7 +126,7 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 | GET | `/me` | Current user |
 | POST | `/forget-password` | Always same message (no user enumeration) · 3/min |
 | POST | `/logout` | Idempotent: blacklists a live access token, revokes the refresh token (username from access or refresh token), closes all of that user's WebSockets (1008 `logged_out`), always clears both cookies |
-| POST | `/refresh` | Rotates the refresh token (httpOnly, SameSite=Strict cookie); body `{access_token, token_type}` |
+| POST | `/refresh` | Rotates the refresh token (httpOnly, SameSite=Strict cookie); body `{access_token, token_type}`. **204 No Content** (empty body) when the request carries no `refresh_token` cookie (nothing to restore: a signed-out page load must not log a console error); 401 when a cookie is present but invalid, expired or revoked. 10/min |
 | POST | `/reset-password` | Token + new password in body · 5/min |
 
 ### Own profile — `/profile`
@@ -168,12 +179,33 @@ The badge shows the server total: it is loaded from `/notifications/unread-count
 | GET | `/messages/{user_id}` | History of one thread, **oldest first**. Params: `limit` (1–100, default 50) returns the newest `limit` messages; `before_id` returns the page of messages older than that id (use the first id you hold). Items: `id`, `sender_id`, `receiver_id`, `body`, `sent_at`, `is_read`. Ids (`user_id`, `before_id`) must be 1–2147483647, else 422. Fetching the newest page (no `before_id`) marks that user's messages to you as read. 403 `"You are not connected with this user"` unless connected and unblocked (also for yourself). 120/min |
 | POST | `/messages/{user_id}/read` | Marks that user's messages as read → `{"updated": n}`; same 403 rule. The client calls it when a message arrives in the open thread. 120/min |
 
+### Dates — `/dates` (B5)
+Only between users who are **currently connected** and not blocked either way. Item (`DateResponse`): `id`,
+`proposer_id`, `invitee_id`, `title`, `place`, `note` (or null), `scheduled_at`, `status`, `created_at`, `updated_at`,
+`with_user` (the *other* participant: `id`, `username`, `first_name`, `last_name`, `photo_url`).
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/dates` | Propose `{invitee_id, title, place, scheduled_at, note?}` → 201 + the date. Titles ≤100, places ≤200, notes ≤500 characters, trimmed; control characters / NUL / lone surrogates / bidi controls (U+202A–202E, U+2066–2069) / U+2028–2029 rejected (a note may contain newlines; the form turns a pasted tab into a space and refuses the rest before sending); unknown fields rejected; `scheduled_at` must carry a timezone, be in the future and at most 366 days ahead (422). Yourself → 400. Not connected, unliked, blocked or non-existent → the same 403 `"You are not connected with this user"` as chat. At most **3 pending** proposals per pair (either direction) and **20 pending** per proposer → 409; only pending dates that are still in the future count (an unanswered, expired proposal no longer blocks new ones). Both caps are exact under concurrency: one transaction takes an advisory lock on the proposer, then one on the pair. 10/min |
+| GET | `/dates` | The caller's dates, ordered by `scheduled_at` (`order=asc\|desc`, default asc), paginated (`limit` 1–100, default 50; `offset` ≤10000). Filters: `status` (`pending`·`accepted`·`declined`·`cancelled`), `upcoming` (`true` = `scheduled_at >= now` and pending/accepted; `false` = everything else; omitted = all). Dates with users blocked in either direction are hidden (past ones included). A pending date whose time has passed is *expired*: it appears under `upcoming=false` and the UI shows it as expired with no actions. 60/min |
+| POST | `/dates/{id}/accept` | Invitee only, from `pending`, date still in the future, pair still connected and unblocked. 30/min |
+| POST | `/dates/{id}/decline` | Invitee only, from `pending`. Possible without a connection (e.g. after an unlike that raced), but never across a block (404). 30/min |
+| POST | `/dates/{id}/cancel` | Proposer while `pending`; either participant once `accepted` and still in the future. Possible without a connection, but never across a block (404). 30/min |
+
+Each transition is one conditional `UPDATE … WHERE id=$1 AND status=… AND <actor rule> RETURNING`, so two racing
+requests cannot both win. Errors: 404 for a date the caller is not part of, for unknown ids, and for any date whose other participant is blocked
+in either direction (reads and transitions alike: no existence or profile leak),
+403 for the wrong role or (accept) a lost connection, 409 for an invalid transition (already accepted/declined/
+cancelled, or in the past). Ids are 1–2147483647, else 422. Every status change sends a notification to the other
+participant (§7); every transition returns the updated date.
+
 ## 6. Authentication flow
 
 ```
 register → email link → POST /auth/verify-email → is_validated = true
 login    → access token (body) + refresh token (httpOnly cookie only, hash stored in refresh_tokens)
 request  → Bearer access token; blacklist checked in get_current_user
+boot     → AuthContext calls POST /auth/refresh once: 200 restores the session, 204 (no cookie) leaves the user
+           signed out without any failed request, 401 (stale cookie) also signed out
 expired  → axios interceptor → single-flight refresh in api/client.js (shared with the WebSocket) → retry
 logout   → access token hash → token_blacklist; refresh cookie cleared; user's sockets closed
 tokens   → JWTs carry type=access|refresh; every bearer/cookie/WS credential check requires type=access,
@@ -205,7 +237,8 @@ how many sockets got it.
 
 **Server → client frames**
 - `{"type":"notification","id","event","from_user","from_username","from_photo_url","created_at","unread"}`
-  where `event` is `like` · `view` · `message` · `match` · `unlike` and `unread` is the recipient's total unread
+  where `event` is `like` · `view` · `message` · `match` · `unlike` · `date_proposed` · `date_accepted` ·
+  `date_declined` · `date_cancelled` · `date_reminder` and `unread` is the recipient's total unread
   count after this notification.
 - `{"type":"message","id","from","from_username","to","body","sent_at"}` — a stored chat message. Sent to the
   recipient **and** to every socket of the sender (other tabs, and the sending tab learns the persisted id), so
@@ -246,11 +279,31 @@ within 60 minutes. Otherwise insert, then push the `notification` frame.
 - `view` → viewed user, on a profile visit (not own, not blocked).
 - `unlike` → the unliked user, only if the two were connected and a like was actually removed.
 - `message` → recipient, for every stored message.
+- `date_proposed` → invitee; `date_accepted` / `date_declined` → proposer; `date_cancelled` → the other participant
+  (from_user = whoever acted); `date_reminder` → both participants (from_user = the other one).
 Unlike and block both delete the `connections` row, which is what disables chat (E5.4); a later match restores it.
+They also close the pair's dates: **every** pending date (expired ones too) and every accepted date still in the future
+become `cancelled` (`DateRepository.cancel_between`, idempotent). `SocialService.unlike` / `block` run the like
+and block rows, the connection delete and this cancel in **one transaction**, so a failure leaves everything as it
+was (no live date without a connection) and a retry still sends the `unlike` notification; notifications and fame
+are recalculated after commit. This is silent: the `unlike`
+notification already tells the other user and a block notifies nobody, so no extra `date_cancelled` is sent. Past accepted dates
+stay as history (hidden under a block). `date_*` notifications are subject to the same block suppression as any other.
+
+On shutdown the lifespan cancels both background loops and awaits them (`gather(..., return_exceptions=True)`) before closing the pool.
+
+**Date reminders (B5.5).** `main.py` starts `_date_reminder_loop` in the lifespan (cancelled on shutdown), modelled on
+`_token_cleanup_loop`: every 60 s it calls `DateService.send_due_reminders()`, and a failed run is logged
+(exception class + sqlstate only) and retried on the next tick so the loop never dies. The run claims accepted dates
+starting within the next **24 hours** whose pair is still connected and not blocked, at most 200 per statement
+(`ORDER BY scheduled_at … LIMIT 200 FOR UPDATE SKIP LOCKED`, up to 5 statements per run), with one `UPDATE … SET reminder_sent_at = now() WHERE
+status = 'accepted' AND reminder_sent_at IS NULL … RETURNING`, so a restart or a second loop cannot claim a date twice, then sends
+`date_reminder` to both participants. A date accepted less than 24 h ahead is reminded at the next tick.
 
 **Frontend.** `api/client.js` owns the access token and the single-flight refresh; `AuthContext` mirrors it.
 `NotificationContext` owns the single socket (opened once per session, keyed on the user id, token read at each
-connect) and exposes `connected` (true from `auth_ok`), `subscribe(listener)` and `send(frame)`. `ChatContext` subscribes: it appends `message` frames (de-duplicated by id), counts unread per
+connect) and exposes `connected` (true from `auth_ok`), `subscribe(listener)` and `send(frame)`. `DatesPanel` (the Dates tab of the Matches page, route `/dates`) subscribes too and reloads (debounced 300 ms, newest response wins) on every `date_*`
+notification and on `unlike`, and once after a *re*connect. `ChatContext` subscribes: it appends `message` frames (de-duplicated by id), counts unread per
 conversation (`unreadMessages` drives the badges in `BottomNav` and `Header`), shows `error` frames, reloads
 conversations on `match`/`unlike` notifications, a `not_connected` error and after a reconnect. A thread's history is requested only once the conversation list is loaded and contains the partner
 (no deliberate 403s); a partner missing from a loaded list shows the "no longer connected" state, a failed list
@@ -328,6 +381,13 @@ library (auth, tokens, verification, reset are hand-written).
   `ChatContext` (conversations, threads, unread count, chat errors; sends and receives over
   `NotificationContext`'s socket via `send` / `subscribe`).
 - **API modules** in `src/api/`: `authApi` (fetch), the rest via `client.js` (axios + 401 → refresh).
+- **Dates (B5):** `api/datesApi.js`; the list lives in the **Dates tab of the Matches page** (`/dates` renders
+  `MatchesPage` with that tab selected, so there is no 7th tab-bar item): upcoming dates (those waiting for your
+  answer first), a lazy "past and closed" history, accept / decline / cancel with inline 403/404/409 messages.
+  "Propose a date" is a button in the chat thread header (`components/dates/ProposeDateForm.jsx`), shown only for
+  partners in the loaded conversations list. The `datetime-local` value is read in local time and sent as
+  `toISOString()` (UTC). Titles/places/notes render as text only. `utils/notificationInfo.js` maps every notification
+  type to text and link (unknown types get a generic line); `date_*` notifications link to `/dates`.
 - **Routing:** `ProtectedRoute` redirects to `/login`; `/profile/setup` for incomplete profiles.
 - **Layout:** `Layout.jsx` renders `[BottomNav (side menu ≥860 px / tab bar below) + Header + <main>]` then
   `Footer` as the last row (under the tab bar on mobile, full width on desktop). The landing page `/` draws its

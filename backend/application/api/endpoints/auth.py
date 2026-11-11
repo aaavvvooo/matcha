@@ -201,7 +201,9 @@ async def logout(
 async def refresh(request: Request, response: Response, db=Depends(get_db)):
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
-        raise HTTPException(status_code=401, detail="Missing refresh token")
+        # No session to restore (signed-out page load): 204, not an error, so browsers don't log
+        # a failed request. A cookie that is present but invalid/expired/revoked is still a 401.
+        return Response(status_code=204)
     service = AuthService(db)
     access_token, new_refresh_token = await service.refresh(refresh_token)
     response.set_cookie(

@@ -28,6 +28,7 @@ function BottomNav() {
 
   const isActive = (item) => location.pathname === item.path ||
     (item.path === '/chat' && location.pathname.startsWith('/chat')) ||
+    (item.path === '/matches' && location.pathname === '/dates') ||
     (item.label === 'Profile' && location.pathname === '/profile/settings');
 
   return (

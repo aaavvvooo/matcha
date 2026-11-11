@@ -1,6 +1,7 @@
 from .database import database
 from .config import FRONTEND_URL
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -13,6 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from application.api.router import router
 from application.limiter import limiter
 from application.repository.token_repo import TokenRepository
+from application.service.date_service import DateService
 from application.service.profile_service import MAX_PHOTOS
 from application.utils.image import MAX_IMAGE_BYTES
 from typing import Any, cast
@@ -58,6 +60,23 @@ async def _token_cleanup_loop() -> None:
             )
 
 
+_REMINDER_INTERVAL_SECONDS = 60  # check for upcoming dates every minute
+
+
+async def _date_reminder_loop() -> None:
+    service = DateService(database)
+    while True:
+        try:
+            await service.send_due_reminders()
+        except Exception as e:
+            # One failed run (e.g. DB restart) must not kill the loop for good.
+            logger.error(
+                "Date reminders failed: %s sqlstate=%s",
+                type(e).__name__, getattr(e, "sqlstate", None),
+            )
+        await asyncio.sleep(_REMINDER_INTERVAL_SECONDS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await database.connect()
@@ -72,10 +91,15 @@ async def lifespan(app: FastAPI):
         "UPDATE users SET is_online = false WHERE is_online = true"
     )
     cleanup_task = asyncio.create_task(_token_cleanup_loop())
+    reminder_task = asyncio.create_task(_date_reminder_loop())
 
     yield
 
-    cleanup_task.cancel()
+    background_tasks = (cleanup_task, reminder_task)
+    for task in background_tasks:
+        task.cancel()
+    # Let them unwind before the pool goes away (a loop mid-query would hit a closed pool).
+    await asyncio.gather(*background_tasks, return_exceptions=True)
     await database.disconnect()
 
 
@@ -83,6 +107,17 @@ app = FastAPI(title="Matcha", lifespan=lifespan)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    """422 with location + message only. The default body echoes the rejected input, which can
+    carry text the JSON encoder cannot serialise (a lone surrogate would turn into a 500)."""
+    errors = [
+        {"loc": list(e.get("loc", ())), "msg": str(e.get("msg", "Invalid value")), "type": str(e.get("type", ""))}
+        for e in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 
 # Starlette parses the whole multipart body before the endpoint (or any

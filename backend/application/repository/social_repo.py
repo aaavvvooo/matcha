@@ -1,3 +1,7 @@
+from typing import Optional
+
+from asyncpg.connection import Connection
+
 from application.schema.value_sets import NotificationType
 from application.database import Database
 
@@ -17,9 +21,14 @@ class SocialRepository:
         row = await self.db.fetch_one(query, liker_id, liked_id)
         return row is not None
 
-    async def unlike_user(self, liker_id: int, liked_id: int) -> bool:
+    async def unlike_user(
+        self, liker_id: int, liked_id: int, transaction: Optional[Connection] = None
+    ) -> bool:
         query = "DELETE FROM likes WHERE liker_id = $1 AND liked_id = $2 RETURNING liker_id"
-        row = await self.db.fetch_one(query, liker_id, liked_id)
+        if transaction is not None:
+            row = await transaction.fetchrow(query, liker_id, liked_id)
+        else:
+            row = await self.db.fetch_one(query, liker_id, liked_id)
         return row is not None
 
     async def has_liked(self, liker_id: int, liked_id: int) -> bool:
@@ -111,17 +120,21 @@ class SocialRepository:
         """
         return await self.db.fetch_one(query, lo, hi) is not None
 
-    async def remove_connection(self, a: int, b: int):
+    async def remove_connection(self, a: int, b: int, transaction: Optional[Connection] = None):
         lo, hi = min(a, b), max(a, b)
-        await self.db.execute(
-            "DELETE FROM connections WHERE user_a_id = $1 AND user_b_id = $2", lo, hi
-        )
+        query = "DELETE FROM connections WHERE user_a_id = $1 AND user_b_id = $2"
+        if transaction is not None:
+            await transaction.execute(query, lo, hi)
+        else:
+            await self.db.execute(query, lo, hi)
 
-    async def are_connected(self, a: int, b: int) -> bool:
+    async def are_connected(self, a: int, b: int, transaction: Optional[Connection] = None) -> bool:
         lo, hi = min(a, b), max(a, b)
-        result = await self.db.fetch_val(
-            "SELECT 1 FROM connections WHERE user_a_id = $1 AND user_b_id = $2", lo, hi
-        )
+        query = "SELECT 1 FROM connections WHERE user_a_id = $1 AND user_b_id = $2"
+        if transaction is not None:
+            result = await transaction.fetchval(query, lo, hi)
+        else:
+            result = await self.db.fetch_val(query, lo, hi)
         return result is not None
 
     async def count_connections(self, user_id: int) -> int:
@@ -131,11 +144,14 @@ class SocialRepository:
         )
 
     # ── blocks ─────────────────────────────────────────────────────────────
-    async def block_user(self, blocker_id: int, blocked_id: int):
-        await self.db.execute(
-            "INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-            blocker_id, blocked_id,
-        )
+    async def block_user(
+        self, blocker_id: int, blocked_id: int, transaction: Optional[Connection] = None
+    ):
+        query = "INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING"
+        if transaction is not None:
+            await transaction.execute(query, blocker_id, blocked_id)
+        else:
+            await self.db.execute(query, blocker_id, blocked_id)
 
     async def unblock_user(self, blocker_id: int, blocked_id: int) -> bool:
         row = await self.db.fetch_one(

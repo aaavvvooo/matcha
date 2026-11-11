@@ -44,11 +44,14 @@ export async function logout(accessToken) {
   return json;
 }
 
+// Resolves with {access_token, token_type}, or null when there is no session to restore
+// (204: no refresh cookie). Rejects when the cookie is present but rejected (401) or the call fails.
 export async function refreshToken() {
   const res = await fetch(`${BASE_URL}/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
   });
+  if (res.status === 204) return null;
   const json = await res.json();
   if (!res.ok) throw new Error(errorMessage(json, 'Session expired'));
   return json;

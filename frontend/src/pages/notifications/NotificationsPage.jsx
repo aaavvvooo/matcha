@@ -2,15 +2,8 @@ import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useNotifications } from '../../context/NotificationContext'
 import Btn from '../../components/ui/Btn'
+import { notificationText, notificationLink } from '../../utils/notificationInfo'
 import './NotificationsPage.css'
-
-const TYPE_LABELS = {
-  like: 'liked your profile',
-  view: 'viewed your profile',
-  message: 'sent you a message',
-  match: 'matched with you',
-  unlike: 'unliked your profile',
-}
 
 function timeAgo(iso) {
   const diff = Date.now() - new Date(iso).getTime()
@@ -60,7 +53,10 @@ export default function NotificationsPage() {
                     ? <Link to={`/profile/${n.from_user}`}>{n.from_username}</Link>
                     : 'Someone'
                   }
-                  {' '}{TYPE_LABELS[n.type] || n.type}
+                  {' '}
+                  {notificationLink(n.type)
+                    ? <Link to={notificationLink(n.type)}>{notificationText(n.type)}</Link>
+                    : notificationText(n.type)}
                 </p>
                 <span className="notif-time">{timeAgo(n.created_at)}</span>
               </div>

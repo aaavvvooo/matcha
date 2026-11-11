@@ -6,6 +6,7 @@ from .endpoints.users import router as users_router
 from .endpoints.chat import router as chat_router
 from .endpoints.discovery import router as discovery_router
 from .endpoints.notifications import router as notifications_router
+from .endpoints.dates import router as dates_router
 
 
 router = APIRouter()
@@ -17,3 +18,4 @@ router.include_router(users_router, prefix="/users", tags=["Users"])
 router.include_router(discovery_router, prefix="/profiles", tags=["Discovery"])
 router.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 router.include_router(chat_router, prefix="/chat", tags=["Chat"])
+router.include_router(dates_router, prefix="/dates", tags=["Dates"])

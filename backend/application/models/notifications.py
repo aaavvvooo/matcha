@@ -7,7 +7,9 @@ class Notification(Base):
     __tablename__ = "notifications"
     __table_args__ = (
         CheckConstraint(
-            "type IN ('like', 'view', 'message', 'match', 'unlike')", name="ck_notifications_type"
+            "type IN ('like', 'view', 'message', 'match', 'unlike', 'date_proposed', 'date_accepted', "
+            "'date_declined', 'date_cancelled', 'date_reminder')",
+            name="ck_notifications_type",
         ),
     )
 

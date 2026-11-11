@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Sparkle } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Sparkle, CalendarPlus } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
 import Btn from '../../components/ui/Btn';
+import ProposeDateForm from '../../components/dates/ProposeDateForm';
 import { displayName } from '../../utils/displayName';
 
 const MAX_BODY = 2000; // keep in sync with MAX_BODY_LENGTH in backend chat_service.py
@@ -97,6 +98,8 @@ function ChatThreadView({
   onSend, onBack, onLoadOlder, onRetry, onDismissError,
 }) {
   const [input, setInput] = useState('');
+  const [proposing, setProposing] = useState(false);
+  const [dateSent, setDateSent] = useState(false);
   const endRef = useRef(null);
   const stickToEndRef = useRef(true);
   const name = displayName(partner, 'Unknown');
@@ -147,7 +150,43 @@ function ChatThreadView({
             </div>
           )}
         </div>
+        {!notConnected && (
+          <button
+            onClick={() => { setProposing(p => !p); setDateSent(false); }}
+            aria-label="Propose a date"
+            aria-expanded={proposing}
+            title="Propose a date"
+            style={{
+              background: proposing ? 'var(--cream2)' : 'none', border: '1.5px solid var(--sand)',
+              borderRadius: 'var(--r-full)', width: 38, height: 38, flexShrink: 0, cursor: 'pointer',
+              color: 'var(--spice)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <CalendarPlus size={18} strokeWidth={1.75} />
+          </button>
+        )}
       </div>
+
+      {/* Propose a date (only while connected: the partner comes from the loaded conversations) */}
+      {proposing && !notConnected && (
+        <div style={{ flexShrink: 0, maxHeight: '70%', overflowY: 'auto' }}>
+          <ProposeDateForm
+            inviteeId={partner.user_id}
+            inviteeName={name}
+            onCancel={() => setProposing(false)}
+            onDone={() => { setProposing(false); setDateSent(true); }}
+          />
+        </div>
+      )}
+      {dateSent && !proposing && !notConnected && (
+        <div role="status" style={{
+          padding: '10px 18px', background: 'var(--cream3)', color: 'var(--ink2)', fontSize: 13,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexShrink: 0,
+        }}>
+          <span>Date proposed to {name}. <Link to="/dates">See your dates</Link></span>
+          <button onClick={() => setDateSent(false)} aria-label="Dismiss" style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
+        </div>
+      )}
 
       {/* Messages */}
       <div style={{ flex: 1, overflow: 'auto', padding: '16px 16px 8px' }}>

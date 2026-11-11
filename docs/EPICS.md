@@ -148,11 +148,11 @@ All ❌. Each bonus reuses mandatory infrastructure, so its dependencies must be
 
 | Feature | Notes |
 |---|---|
-| B5.1 `dates` table: proposer, invitee, title, place, datetime, status | |
-| B5.2 Propose / accept / decline / cancel, connected users only | |
-| B5.3 Notification on every status change | Reuse E6 |
-| B5.4 Upcoming-dates list (calendar view optional) | |
-| B5.5 Reminder notification before the date | Optional |
+| B5.1 `dates` table: proposer, invitee, title, place, datetime, status | Done — migration `b5d4e7a2c910` |
+| B5.2 Propose / accept / decline / cancel, connected users only | Done — `/dates`, atomic transitions; unlike/block cancel future dates |
+| B5.3 Notification on every status change | Done — `date_*` types; reuses E6 |
+| B5.4 Upcoming-dates list (calendar view optional) | Done — Dates tab on Matches (`/dates`), propose form in chat |
+| B5.5 Reminder notification before the date | Done — 24 h window, 60 s loop |
 
 Suggested bonus order (cheapest first, highest reuse): B2 → B3 → B5 → B1 → B4.
 
@@ -229,7 +229,7 @@ scripted smoke runs instead. Revisit only if regressions start costing time.
 ### Phase 6 — Bonus (only after Phase 5 is fully green)
 - [ ] **B2 Gallery** — B2.1 drag-and-drop upload · B2.2 drag-to-reorder + order endpoint · B2.3 crop / rotate / filter editor
 - [ ] **B3 Map** — B3.1 precise GPS · B3.2 bounding-box endpoint · B3.3 neighbourhood-level privacy · B3.4 Leaflet map + mini cards
-- [ ] **B5 Dates** — B5.1 `dates` table · B5.2 propose / accept / decline / cancel · B5.3 notifications · B5.4 upcoming list · B5.5 reminder (optional)
+- [x] **B5 Dates** — B5.1 `dates` table · B5.2 propose / accept / decline / cancel · B5.3 notifications · B5.4 upcoming list · B5.5 reminder (optional)
 - [ ] **B1 OAuth** — B1.1 providers · B1.2 redirect + callback (state, PKCE) · B1.3 account linking · B1.4 first-login setup · B1.5 frontend buttons + callback page
 - [ ] **B4 Video / audio** — B4.1 WebRTC signalling over WS · B4.2 call UI · B4.3 STUN + permission errors · B4.4 end call on unlike / block
 

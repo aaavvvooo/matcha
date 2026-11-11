@@ -1,10 +1,14 @@
 from datetime import date, timezone
+from typing import cast
+
+from asyncpg.connection import Connection
 from fastapi import HTTPException, status
 
 from application.database import Database
 from application.repository.social_repo import SocialRepository
 from application.repository.profile_repo import ProfileRepository
 from application.repository.user_repo import UserRepository
+from application.service.date_service import DateService
 from application.service.notification_service import NotificationService
 from application.schema.users_schemas import (
     UserProfileResponse,
@@ -40,6 +44,7 @@ class SocialService:
         self.profile_repo = ProfileRepository(db)
         self.user_repo = UserRepository(db)
         self.notifications = NotificationService(db)
+        self.dates = DateService(db)
 
     async def get_user_profile(self, viewer_id: int, user_id: int) -> UserProfileResponse:
         profile = await self.profile_repo.get_profile(user_id)
@@ -137,9 +142,18 @@ class SocialService:
         return LikeResponse(liked=True, is_match=is_match)
 
     async def unlike(self, liker_id: int, liked_id: int) -> LikeResponse:
-        was_connected = await self.social_repo.are_connected(liker_id, liked_id)
-        removed = await self.social_repo.unlike_user(liker_id, liked_id)
-        await self.social_repo.remove_connection(liker_id, liked_id)
+        # Like, connection and dates go in ONE transaction: a failure leaves everything as it was
+        # (no live date without a connection) and a retry still sees was_connected and notifies.
+        pool = self.db.require_pool()
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                conn = cast(Connection, connection)
+                was_connected = await self.social_repo.are_connected(liker_id, liked_id, conn)
+                removed = await self.social_repo.unlike_user(liker_id, liked_id, conn)
+                await self.social_repo.remove_connection(liker_id, liked_id, conn)
+                # After the connection delete, so a racing proposal (which holds the connection
+                # row FOR SHARE) is committed and visible to this cancel.
+                await self.dates.cancel_between(liker_id, liked_id, conn)
         await self.social_repo.recalculate_fame(liked_id)
         # Subject IV.7: notify when a connected user unlikes you.
         if removed and was_connected:
@@ -149,10 +163,15 @@ class SocialService:
     async def block(self, blocker_id: int, blocked_id: int):
         if blocker_id == blocked_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot block yourself")
-        await self.social_repo.block_user(blocker_id, blocked_id)
-        await self.social_repo.unlike_user(blocker_id, blocked_id)
-        await self.social_repo.unlike_user(blocked_id, blocker_id)
-        await self.social_repo.remove_connection(blocker_id, blocked_id)
+        pool = self.db.require_pool()
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                conn = cast(Connection, connection)
+                await self.social_repo.block_user(blocker_id, blocked_id, conn)
+                await self.social_repo.unlike_user(blocker_id, blocked_id, conn)
+                await self.social_repo.unlike_user(blocked_id, blocker_id, conn)
+                await self.social_repo.remove_connection(blocker_id, blocked_id, conn)
+                await self.dates.cancel_between(blocker_id, blocked_id, conn)
         await self.social_repo.recalculate_fame(blocker_id)
         await self.social_repo.recalculate_fame(blocked_id)
         return {"blocked": True}
