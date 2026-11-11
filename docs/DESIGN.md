@@ -161,7 +161,11 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 | GET | `/browse` | Suggested list (§8), people already liked are skipped. Params: `sort_by` (`score`·`age`·`distance`·`fame`·`tags`), `order` (`asc`·`desc`, default per sort), `min_age`, `max_age` (18–120), `max_distance_km`, `min_fame`, `max_fame` (0–100), `tags` (comma-separated names, any match, case-insensitive, `#` optional), `limit` (≤50, default 20), `offset`. Requires a complete profile (403). 400 if `max_distance_km` is set and there is no reference position |
 | GET | `/search` | Same filters and sorts, liked people included; plus `location` (city, geocoded → replaces the viewer's position; 400 unknown, 503 geocoder down) |
 
-Both return `DiscoveryProfile[]`: `user_id`, `username`, `first_name`, `last_name`, `age`, `gender`, `sexual_orientation`, `bio`, `fame_rating`, `is_online`, `last_seen`, `location_label`, `distance_km` (whole km, min 1, NULL without positions), `shared_tags`, `tags` (names), `photos` (main first), `score`. No email.
+| GET | `/map` | (B3) Users in a viewport box. Params: `min_lat`, `max_lat` (−90…90), `min_lng`, `max_lng` (−180…180), `limit` (1–200, default 200). 422 for missing/non-numeric/out-of-range values; 400 unless `min_lat < max_lat` **and** `min_lng < max_lng` — boxes crossing the antimeridian are rejected (the client clamps to ±180). Same eligibility as browse (§8, one shared SQL fragment); requires a complete profile (403); rate limit 120/min. Ordered by fame then id, truncated at `limit` (the client says "zoom in" when it gets 200) |
+
+`/browse` and `/search` return `DiscoveryProfile[]`: `user_id`, `username`, `first_name`, `last_name`, `age`, `gender`, `sexual_orientation`, `bio`, `fame_rating`, `is_online`, `last_seen`, `location_label`, `distance_km` (whole km, min 1, NULL without positions), `shared_tags`, `tags` (names), `photos` (main first), `score`. No email.
+
+`/map` returns `MapUser[]`: `user_id`, `username`, `first_name`, `age`, `fame_rating`, `is_online`, `photo_url` (main photo, via `to_photo_url`), `latitude`, `longitude` (**grid-cell centre**, 4 decimals), `shared_tags`. No email, last name or true coordinates.
 
 ### Notifications — `/notifications` (E6)
 | Method | Path | Notes |
@@ -336,7 +340,14 @@ Interest rule, given a person's gender `g` and orientation `o` (NULL ⇒ `Bisexu
 `max_distance_km` filter, sorting and the score are computed, and `distance_km` is returned as whole km (min 1),
 so moving one's own position or searching other cities can't trilaterate anyone beyond a grid cell. Geocoding
 (Nominatim) goes through one process-wide gate (≥1 s between upstream calls, ≤10 queued, else 503) with a 24 h
-cache.
+cache. The 0.02° cell is ~2.2 km north–south and ~2.2·cos(latitude) km east–west (narrower at high latitudes, e.g.
+~1.5 km at 47°N); this holds for browse and the map alike.
+
+**Map privacy (B3.3)** — `GET /profiles/map` reuses the same eligibility and the same snapped position (`_ELIGIBLE`,
+`GRID_DEG`). The bounding box is tested against the *snapped* cell centre, and only that centre is returned, so
+changing the box (pan/zoom) can reveal at most which 0.02° cell someone is in — never a position inside it. People
+in one cell therefore share coordinates; the frontend draws one marker per cell (count badge) and lists the people
+in it in the bottom card. The viewer's own exact position (from `GET /profile/get`) is drawn for themself only.
 
 **Score** (default `sort_by=score`), computed in SQL:
 
@@ -411,6 +422,15 @@ library (auth, tokens, verification, reset are hand-written).
   stays for retry if the request fails. `hooks/useBlockFileDrops` cancels stray file drops so the browser never
   navigates to a dropped image.
   `ProfileSetupPage` uses the drop zone for its single photo.
+- **Map (B3):** `/map` → `pages/map/MapPage.jsx`, plain Leaflet 1.9 used imperatively in a `useEffect` (created once
+  after the viewer's profile loads, `map.remove()` on unmount) with OpenStreetMap tiles
+  (`https://tile.openstreetmap.org`, attribution control shown). Users are re-fetched on `moveend`, debounced 300 ms,
+  with the previous request aborted; the view is locked to the world (±180°, ±85°, no wrapping). Markers are
+  `L.divIcon`s built from DOM nodes (`textContent`, no HTML from user data); the mini profile card is React, rendered
+  outside Leaflet, with a button to `/profile/:id`. GPS goes through the shared `LocationPicker` →
+  `PATCH /profile/location` (explicit button = consent; denied / unavailable / timeout shown inline). No CSP or
+  security-header middleware exists in the backend, nginx config or `index.html`, so tile images are not blocked; if
+  a CSP is added, `img-src` must allow `https://tile.openstreetmap.org`.
 - **Errors:** `components/ErrorBoundary.jsx` wraps the whole app (render errors only — async errors must be
   handled where they occur).
 - **Design system:** tokens in `src/index.css` (cream / matcha palette, Playfair Display + DM Sans);

@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from application.clients import geocoding_client as geocoding
 from application.database import Database
 from application.repository.discovery_repo import DiscoveryRepository
-from application.schema.discovery_schemas import DiscoveryProfile, DiscoveryQuery, SearchQuery
+from application.schema.discovery_schemas import DiscoveryProfile, DiscoveryQuery, MapQuery, MapUser, SearchQuery
 from application.schema.profile_schemas import PhotoResponse
 from application.utils.photo_url import to_photo_url
 
@@ -33,6 +33,23 @@ class DiscoveryService:
         else:
             lat, lon = await self._viewer_position(viewer_id)
         return await self._find(viewer_id, lat, lon, q, exclude_liked=False)
+
+    async def map_users(self, viewer_id: int, q: MapQuery) -> list[MapUser]:
+        """Eligible users whose grid-snapped position falls inside the viewport box."""
+        if q.min_lat >= q.max_lat:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="min_lat must be less than max_lat"
+            )
+        if q.min_lng >= q.max_lng:
+            # Boxes crossing the antimeridian (min_lng > max_lng) are not supported.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="min_lng must be less than max_lng (areas crossing the antimeridian are not supported)",
+            )
+        rows = await self.repo.find_in_bounds(
+            viewer_id, q.min_lat, q.max_lat, q.min_lng, q.max_lng, q.limit
+        )
+        return [MapUser(**{**dict(r), "photo_url": to_photo_url(r["photo_url"])}) for r in rows]
 
     async def _viewer_position(self, viewer_id: int) -> tuple[Optional[float], Optional[float]]:
         row = await self.repo.get_viewer_location(viewer_id)

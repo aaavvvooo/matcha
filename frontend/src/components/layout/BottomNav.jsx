@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Compass, Search, Heart, MessageCircle, CircleUser, LogOut } from 'lucide-react';
+import { Compass, Search, Map as MapIcon, Heart, MessageCircle, CircleUser, LogOut } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
@@ -18,6 +18,7 @@ function BottomNav() {
   const NAV_ITEMS = [
     { path: '/browse',                icon: Compass, label: 'Discover' },
     { path: '/search',                icon: Search, label: 'Search' },
+    { path: '/map',                   icon: MapIcon, label: 'Map' },
     { path: '/matches',               icon: Heart, label: 'Matches' },
     { path: '/chat',                  icon: MessageCircle, label: 'Chat' },
     { path: user ? `/profile/${user.id}` : '/profile/settings', icon: CircleUser, label: 'Profile' },

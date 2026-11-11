@@ -46,32 +46,21 @@ def _interested(gender: str, orientation: str, target: str) -> str:
 _VIEWER_WANTS = _interested("v.gender", "v.orientation", "p.gender")
 _CANDIDATE_WANTS = _interested("p.gender", "COALESCE(p.sexual_orientation, 'Bisexual')", "v.gender")
 
-# $1 viewer id, $2 / $3 reference latitude / longitude (NULL => no distance).
-_BASE = f"""
-WITH viewer AS (
+# Shared by browse/search and the map, so every surface applies the same eligibility.
+# $1 is the viewer id.
+_VIEWER_CTES = """
+viewer AS (
     SELECT gender, COALESCE(sexual_orientation, 'Bisexual') AS orientation
     FROM user_profiles WHERE user_id = $1
 ),
 viewer_tags AS (
     SELECT tag_id FROM user_tags WHERE user_id = $1
-),
-candidates AS (
-    SELECT
-        u.id AS user_id, u.username, u.first_name, u.last_name,
-        COALESCE(u.is_online, false) AS is_online, u.last_seen,
-        p.bio, p.gender, p.sexual_orientation, p.location_label,
-        COALESCE(p.fame_rating, 0)::float8 AS fame_rating,
-        EXTRACT(YEAR FROM age(p.birth_date))::int AS age,
-        CASE
-            WHEN $2::float8 IS NULL OR $3::float8 IS NULL
-                 OR p.latitude IS NULL OR p.longitude IS NULL THEN NULL
-            ELSE 6371.0 * 2 * asin(LEAST(1.0, sqrt(
-                power(sin(radians(g.lat - $2::float8) / 2), 2)
-                + cos(radians($2::float8)) * cos(radians(g.lat))
-                  * power(sin(radians(g.lon - $3::float8) / 2), 2))))
-        END AS distance_km,
-        (SELECT count(*) FROM user_tags ut
-          WHERE ut.user_id = u.id AND ut.tag_id IN (SELECT tag_id FROM viewer_tags))::int AS shared_tags
+)"""
+
+# FROM + WHERE for "who may the viewer see": validated email, complete profile, main photo,
+# no block either way, mutual orientation, not self. Exposes `u`, `p`, `v` and `g` (the
+# candidate's grid-snapped position -- the only position any caller may expose or filter on).
+_ELIGIBLE = f"""
     FROM users u
     JOIN user_profiles p ON p.user_id = u.id
     CROSS JOIN viewer v
@@ -88,7 +77,31 @@ candidates AS (
           WHERE (b.blocker_id = $1 AND b.blocked_id = u.id)
              OR (b.blocker_id = u.id AND b.blocked_id = $1))
       AND {_VIEWER_WANTS}
-      AND {_CANDIDATE_WANTS}
+      AND {_CANDIDATE_WANTS}"""
+
+_SHARED_TAGS = """(SELECT count(*) FROM user_tags ut
+          WHERE ut.user_id = u.id AND ut.tag_id IN (SELECT tag_id FROM viewer_tags))::int"""
+
+# $1 viewer id, $2 / $3 reference latitude / longitude (NULL => no distance).
+_BASE = f"""
+WITH {_VIEWER_CTES},
+candidates AS (
+    SELECT
+        u.id AS user_id, u.username, u.first_name, u.last_name,
+        COALESCE(u.is_online, false) AS is_online, u.last_seen,
+        p.bio, p.gender, p.sexual_orientation, p.location_label,
+        COALESCE(p.fame_rating, 0)::float8 AS fame_rating,
+        EXTRACT(YEAR FROM age(p.birth_date))::int AS age,
+        CASE
+            WHEN $2::float8 IS NULL OR $3::float8 IS NULL
+                 OR p.latitude IS NULL OR p.longitude IS NULL THEN NULL
+            ELSE 6371.0 * 2 * asin(LEAST(1.0, sqrt(
+                power(sin(radians(g.lat - $2::float8) / 2), 2)
+                + cos(radians($2::float8)) * cos(radians(g.lat))
+                  * power(sin(radians(g.lon - $3::float8) / 2), 2))))
+        END AS distance_km,
+        {_SHARED_TAGS} AS shared_tags
+    {_ELIGIBLE}
 ),
 scored AS (
     SELECT c.*,
@@ -150,6 +163,40 @@ class DiscoveryRepository:
         query += f"ORDER BY {band}{column} {direction} NULLS LAST, c.user_id\n"
         query += f"LIMIT {bind(q.limit)} OFFSET {bind(q.offset)}"
         return await self.db.fetch_all(query, *params)
+
+    async def find_in_bounds(
+        self,
+        viewer_id: int,
+        min_lat: float,
+        max_lat: float,
+        min_lng: float,
+        max_lng: float,
+        limit: int,
+    ):
+        """Eligible users whose *snapped* position lies in the box (DESIGN.md §8, Location privacy).
+
+        Only the grid-cell centre is selected and filtered on, rounded so the value shown is
+        the value compared; true coordinates never leave this query.
+        """
+        return await self.db.fetch_all(
+            f"""
+WITH {_VIEWER_CTES}
+SELECT u.id AS user_id, u.username, u.first_name,
+       COALESCE(u.is_online, false) AS is_online,
+       COALESCE(p.fame_rating, 0)::float8 AS fame_rating,
+       EXTRACT(YEAR FROM age(p.birth_date))::int AS age,
+       (SELECT ph.url FROM photos ph WHERE ph.user_id = u.id AND ph.is_main LIMIT 1) AS photo_url,
+       round(g.lat::numeric, 4)::float8 AS latitude,
+       round(g.lon::numeric, 4)::float8 AS longitude,
+       {_SHARED_TAGS} AS shared_tags
+{_ELIGIBLE}
+  AND round(g.lat::numeric, 4)::float8 BETWEEN $2 AND $3
+  AND round(g.lon::numeric, 4)::float8 BETWEEN $4 AND $5
+ORDER BY COALESCE(p.fame_rating, 0) DESC, u.id
+LIMIT $6
+""",
+            viewer_id, min_lat, max_lat, min_lng, max_lng, limit,
+        )
 
     async def get_viewer_location(self, viewer_id: int):
         return await self.db.fetch_one(
