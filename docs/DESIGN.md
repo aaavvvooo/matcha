@@ -217,6 +217,8 @@ login    → access token (body) + refresh token (httpOnly cookie only, hash sto
 request  → Bearer access token; blacklist checked in get_current_user
 boot     → AuthContext calls refreshAccessToken() (api/client.js) once: 200 restores the session, 204 (no cookie)
            leaves the user signed out without any failed request, 401 (stale cookie) also signed out
+expiring → the axios request interceptor refreshes a token that expires within 30 s before sending (at most once a
+           minute per token), so an idle tab's next call doesn't produce a logged 401
 expired  → axios interceptor → single-flight refresh in api/client.js (shared with boot and the WebSocket) → retry;
            only a 401 from the refresh sends the user to /login (offline/429/5xx surface as the request's error)
 logout   → client token cleared first (socket closes, an in-flight refresh result is discarded), then the server

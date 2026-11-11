@@ -9,6 +9,9 @@ let _token = null
 // Bumped every time the session ends locally, so a refresh still in flight at that moment
 // can't put a token back (late refreshes must not re-sign-in a user who just logged out).
 let _epoch = 0
+// Local time the current token was set (see the request interceptor's proactive refresh).
+let _tokenSetAt = 0
+const PROACTIVE_REFRESH_MIN_AGE_MS = 60 * 1000
 const _listeners = new Set()
 
 function _emit() {
@@ -19,6 +22,7 @@ export function setClientToken(token) {
   if (token === _token) return
   if (!token) _epoch += 1
   _token = token
+  _tokenSetAt = Date.now()
   _emit()
 }
 
@@ -49,8 +53,18 @@ const client = axios.create({
   withCredentials: true, // always send the refresh_token cookie
 })
 
-// Attach Bearer token to every request
-client.interceptors.request.use((config) => {
+// Attach the Bearer token to every request. A token about to expire is refreshed first (same
+// single-flight call), so an idle tab's next request doesn't hit a 401 that the browser would log.
+// At most once a minute per token, so a client clock running ahead can't turn every request
+// into a refresh; anything the pre-check misses still goes through the 401 path below.
+client.interceptors.request.use(async (config) => {
+  if (_token && tokenExpiresSoon(_token) && Date.now() - _tokenSetAt > PROACTIVE_REFRESH_MIN_AGE_MS) {
+    try {
+      await refreshAccessToken()
+    } catch {
+      // Session gone or offline: send as is and let the response interceptor decide.
+    }
+  }
   if (_token) config.headers.Authorization = `Bearer ${_token}`
   return config
 })
