@@ -31,3 +31,15 @@ class MessageResponse(BaseModel):
 
 class MarkReadResponse(BaseModel):
     updated: int
+
+
+class IceServer(BaseModel):
+    """One RTCIceServer entry; username / credential only on TURN servers."""
+
+    urls: list[str]
+    username: Optional[str] = None
+    credential: Optional[str] = None
+
+
+class IceServersResponse(BaseModel):
+    ice_servers: list[IceServer]

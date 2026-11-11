@@ -19,3 +19,10 @@ class SlidingWindowLimiter:
             return False
         self._events.append(now)
         return True
+
+    def is_idle(self) -> bool:
+        """True when no event is still inside the window (the limiter can be dropped)."""
+        cutoff = time.monotonic() - self.window
+        while self._events and self._events[0] <= cutoff:
+            self._events.popleft()
+        return not self._events

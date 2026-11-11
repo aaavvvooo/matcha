@@ -63,3 +63,16 @@ class UserRepository:
         else:
             user = await transaction.fetchrow(query, user_id, *data.values())
         return user
+
+    # ── presence (websocket/manager.py) ────────────────────────────────────
+    async def set_online(self, user_id: int) -> None:
+        await self.db.execute("UPDATE users SET is_online = true WHERE id = $1", user_id)
+
+    async def set_offline(self, user_id: int) -> None:
+        await self.db.execute(
+            "UPDATE users SET is_online = false, last_seen = NOW() WHERE id = $1", user_id
+        )
+
+    async def reset_online_flags(self) -> None:
+        """Startup: no socket survives a restart, so nobody is online."""
+        await self.db.execute("UPDATE users SET is_online = false WHERE is_online = true")

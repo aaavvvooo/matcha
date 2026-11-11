@@ -138,14 +138,14 @@ round-trip needs registered OAuth apps (README).
 | B3.3 Privacy: other users shown at neighbourhood precision (snapped / jittered) | ✅ | Box tested on, and response carries, the 0.02° snapped cell centre only; one marker per cell |
 | B3.4 Leaflet + OpenStreetMap; marker ⇒ mini profile card ⇒ full profile | ✅ | `/map`; implemented and builds, not yet click-tested in a browser (include in the E8 mobile audit) |
 
-### B4 — Video / audio chat · depends on E5, E6.1
+### B4 — Video / audio chat · depends on E5, E6.1 — ✅
 
 | Feature | Notes |
 |---|---|
-| B4.1 WebRTC signalling (offer / answer / ICE) relayed over the existing WS, connected users only | |
-| B4.2 Call UI: incoming-call modal, accept / decline, mute, camera toggle, hang up | |
-| B4.3 STUN config (TURN optional); graceful handling of denied mic/camera | |
-| B4.4 Active call ends on unlike / block | |
+| B4.1 WebRTC signalling (offer / answer / ICE) relayed over the existing WS, connected users only | ✅ | `{"type":"call"}` frames, in-memory `CallManager`; DESIGN §7 |
+| B4.2 Call UI: incoming-call modal, accept / decline, mute, camera toggle, hang up | ✅ | `CallContext` mounted app-wide; start buttons in the chat header; no missed-call notification / history (not required) |
+| B4.3 STUN config (TURN optional); graceful handling of denied mic/camera | ✅ | `GET /chat/ice-servers`; `STUN_URL`, `TURN_*` in `.env`; inline errors, audio-only fallback |
+| B4.4 Active call ends on unlike / block | ✅ | Also on logout, token expiry, socket loss; connection re-checked on accept |
 
 ### B5 — Date scheduling · depends on E6
 
@@ -245,7 +245,7 @@ scripted smoke runs instead. Revisit only if regressions start costing time.
 - [x] **B3 Map** — B3.1 precise GPS · B3.2 bounding-box endpoint · B3.3 neighbourhood-level privacy · B3.4 Leaflet map + mini cards
 - [x] **B5 Dates** — B5.1 `dates` table · B5.2 propose / accept / decline / cancel · B5.3 notifications · B5.4 upcoming list · B5.5 reminder (optional)
 - [x] **B1 OAuth** — B1.1 providers · B1.2 redirect + callback (state, PKCE) · B1.3 account linking · B1.4 first-login setup · B1.5 frontend buttons + callback page
-- [ ] **B4 Video / audio** — B4.1 WebRTC signalling over WS · B4.2 call UI · B4.3 STUN + permission errors · B4.4 end call on unlike / block
+- [x] **B4 Video / audio** — B4.1 WebRTC signalling over WS · B4.2 call UI · B4.3 STUN + permission errors · B4.4 end call on unlike / block
 
 Parallel-safe tracks: Phase 3 ∥ Phase 4. Within Phase 4, E6.1 must land before chat. Bonus epics are independent of
 each other once their dependencies are done, but they all touch shared areas (WS, profile), so run them one at a time.

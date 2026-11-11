@@ -18,6 +18,7 @@ from application.schema.users_schemas import (
 )
 from application.schema.profile_schemas import PhotoResponse
 from application.utils.photo_url import to_photo_url
+from application.websocket.call_manager import call_manager
 
 
 def _with_photo_url(row, field: str, model):
@@ -154,6 +155,8 @@ class SocialService:
                 # After the connection delete, so a racing proposal (which holds the connection
                 # row FOR SHARE) is committed and visible to this cancel.
                 await self.dates.cancel_between(liker_id, liked_id, conn)
+        # The connection is gone: a ringing or running call between the two ends (B4.4).
+        await call_manager.end_between(liker_id, liked_id)
         await self.social_repo.recalculate_fame(liked_id)
         # Subject IV.7: notify when a connected user unlikes you.
         if removed and was_connected:
@@ -172,6 +175,7 @@ class SocialService:
                 await self.social_repo.unlike_user(blocked_id, blocker_id, conn)
                 await self.social_repo.remove_connection(blocker_id, blocked_id, conn)
                 await self.dates.cancel_between(blocker_id, blocked_id, conn)
+        await call_manager.end_between(blocker_id, blocked_id)
         await self.social_repo.recalculate_fame(blocker_id)
         await self.social_repo.recalculate_fame(blocked_id)
         return {"blocked": True}

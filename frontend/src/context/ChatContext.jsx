@@ -66,6 +66,19 @@ export function ChatProvider({ children }) {
     }
   }, [])
 
+  // Background refresh (online status, new rows): never flips a loaded list into the error state.
+  // Resolves to whether it worked, so the caller can back off.
+  const refreshConversations = useCallback(async () => {
+    try {
+      const data = await getConversations()
+      setConversations(data)
+      setConversationsState('ready')
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
   const clearUnread = useCallback((userId) => {
     setConversations(prev => prev.map(c => (c.user_id === userId && c.unread_count ? { ...c, unread_count: 0 } : c)))
   }, [])
@@ -162,6 +175,9 @@ export function ChatProvider({ children }) {
             return [updated, ...prev.filter(c => c.user_id !== partnerId)]
           })
         }
+      } else if (frame?.type === 'error' && frame.call_id) {
+        // Call errors belong to CallContext; only the "not connected" case also concerns the chat list.
+        if (frame.code === 'not_connected') loadConversations()
       } else if (frame?.type === 'error') {
         // Give the rejected text back (only when the server tied the error to one of our sends).
         const text = frame.ref ? pendingRef.current.get(frame.ref) : undefined
@@ -214,7 +230,7 @@ export function ChatProvider({ children }) {
     <ChatContext.Provider value={{
       conversations, conversationsState, messages, hasMore, threadState, chatError, activeUserId,
       unreadMessages, myId,
-      setActiveUserId, loadConversations, loadMessages, loadOlder, sendMessage,
+      setActiveUserId, loadConversations, refreshConversations, loadMessages, loadOlder, sendMessage,
       dismissChatError,
     }}>
       {children}

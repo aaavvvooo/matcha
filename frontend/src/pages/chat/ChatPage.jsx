@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Sparkle, CalendarPlus } from 'lucide-react';
+import { Sparkle, CalendarPlus, Phone, Video } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
+import { useCall } from '../../context/CallContext';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
 import Btn from '../../components/ui/Btn';
 import ProposeDateForm from '../../components/dates/ProposeDateForm';
 import { displayName } from '../../utils/displayName';
 
+const CONVERSATION_POLL_MS = 30000;
 const MAX_BODY = 2000; // keep in sync with MAX_BODY_LENGTH in backend chat_service.py
 
 function timeAgo(dateStr) {
@@ -100,6 +102,7 @@ function ChatThreadView({
   const [input, setInput] = useState('');
   const [proposing, setProposing] = useState(false);
   const [dateSent, setDateSent] = useState(false);
+  const { startCall, busy: inCall } = useCall();
   const endRef = useRef(null);
   const stickToEndRef = useRef(true);
   const name = displayName(partner, 'Unknown');
@@ -135,21 +138,38 @@ function ChatThreadView({
     <div className="screen" style={{ height: '100%', background: 'var(--cream2)', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{
-        padding: '12px 18px',
-        display: 'flex', gap: 14, alignItems: 'center',
+        padding: '12px 12px',
+        display: 'flex', gap: 8, alignItems: 'center',
         background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)',
         boxShadow: 'var(--shadow-sm)', flexShrink: 0,
       }}>
-        <button onClick={onBack} aria-label="Back to conversations" style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink3)', lineHeight: 1 }}>←</button>
+        <button onClick={onBack} aria-label="Back to conversations" style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink3)', lineHeight: 1, flexShrink: 0, padding: 0 }}>←</button>
         <Avatar name={name} src={partner.photo_url} size={42} online={notConnected ? undefined : partner.is_online}/>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 17, fontWeight: 600, color: 'var(--ink)' }}>{name}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 17, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
           {!notConnected && (
             <div style={{ fontSize: 11, color: partner.is_online ? 'var(--matcha2)' : 'var(--ink4)' }}>
               {partner.is_online ? '● online' : 'offline'}
             </div>
           )}
         </div>
+        {!notConnected && partner.is_online && ['audio', 'video'].map(media => (
+          <button
+            key={media}
+            onClick={() => startCall(partner, media)}
+            disabled={inCall}
+            aria-label={media === 'video' ? 'Start video call' : 'Start audio call'}
+            title={inCall ? 'You are already in a call' : (media === 'video' ? 'Video call' : 'Audio call')}
+            style={{
+              background: 'none', border: '1.5px solid var(--sand)',
+              borderRadius: 'var(--r-full)', width: 36, height: 36, flexShrink: 0,
+              cursor: inCall ? 'default' : 'pointer', opacity: inCall ? 0.5 : 1,
+              color: 'var(--matcha2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            {media === 'video' ? <Video size={18} strokeWidth={1.75} /> : <Phone size={18} strokeWidth={1.75} />}
+          </button>
+        ))}
         {!notConnected && (
           <button
             onClick={() => { setProposing(p => !p); setDateSent(false); }}
@@ -158,7 +178,7 @@ function ChatThreadView({
             title="Propose a date"
             style={{
               background: proposing ? 'var(--cream2)' : 'none', border: '1.5px solid var(--sand)',
-              borderRadius: 'var(--r-full)', width: 38, height: 38, flexShrink: 0, cursor: 'pointer',
+              borderRadius: 'var(--r-full)', width: 36, height: 36, flexShrink: 0, cursor: 'pointer',
               color: 'var(--spice)', display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
@@ -297,7 +317,7 @@ export default function ChatPage() {
   const navigate = useNavigate();
   const {
     conversations, conversationsState, messages, hasMore, threadState, chatError, myId,
-    setActiveUserId, loadConversations, loadMessages, loadOlder, sendMessage, dismissChatError,
+    setActiveUserId, loadConversations, refreshConversations, loadMessages, loadOlder, sendMessage, dismissChatError,
   } = useChat();
 
   const partnerId = routeUserId ? Number(routeUserId) : null;
@@ -313,6 +333,31 @@ export default function ChatPage() {
     dismissChatError();
     return () => setActiveUserId(null);
   }, [partnerId, validRoute, setActiveUserId, dismissChatError]);
+
+  // Online status comes with the conversation list, which is otherwise loaded once: refresh it
+  // while a thread is open so the call buttons follow whether the partner is online. Once when the
+  // thread opens (if the list is already there), then every 30 s while the tab is visible; after
+  // a failure the interval doubles (up to 5 min) instead of giving up.
+  const listReadyRef = useRef(false);
+  listReadyRef.current = listReady;
+  useEffect(() => {
+    if (!validRoute) return undefined;
+    let timer = null;
+    let delay = CONVERSATION_POLL_MS;
+    let stopped = false;
+    const run = async () => {
+      if (stopped) return;
+      if (!document.hidden) {
+        const ok = await refreshConversations();
+        if (stopped) return;
+        delay = ok ? CONVERSATION_POLL_MS : Math.min(delay * 2, 5 * 60 * 1000);
+      }
+      timer = setTimeout(run, delay);
+    };
+    if (listReadyRef.current) run();
+    else timer = setTimeout(run, delay);
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [validRoute, partnerId, refreshConversations]);
 
   // Load history (which also marks it read) only for someone we are connected to, once the
   // conversation list says so: asking for anyone else is a guaranteed 403 the browser logs.

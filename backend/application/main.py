@@ -15,9 +15,11 @@ from slowapi.errors import RateLimitExceeded
 from application.api.router import router
 from application.limiter import limiter
 from application.repository.token_repo import TokenRepository
+from application.repository.user_repo import UserRepository
 from application.service.date_service import DateService
 from application.service.profile_service import MAX_PHOTOS
 from application.utils.image import MAX_IMAGE_BYTES
+from application.websocket.call_manager import call_manager
 from typing import Any, cast
 
 # Application loggers have no handler under uvicorn's default config, so
@@ -120,9 +122,7 @@ async def lifespan(app: FastAPI):
         # Unreachable storage must not stop the app from listening -- that
         # turns a broken photo feature into a container that never starts.
         logger.exception("Photo storage unavailable; photo routes will fail")
-    await database.execute(
-        "UPDATE users SET is_online = false WHERE is_online = true"
-    )
+    await UserRepository(database).reset_online_flags()
     cleanup_task = asyncio.create_task(_token_cleanup_loop())
     reminder_task = asyncio.create_task(_date_reminder_loop())
 
@@ -133,6 +133,7 @@ async def lifespan(app: FastAPI):
         task.cancel()
     # Let them unwind before the pool goes away (a loop mid-query would hit a closed pool).
     await asyncio.gather(*background_tasks, return_exceptions=True)
+    call_manager.shutdown()
     await database.disconnect()
 
 

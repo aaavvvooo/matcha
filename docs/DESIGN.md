@@ -59,8 +59,8 @@ backend/application/
 
 Rules: endpoint → service → repository, with SQL in `repository/`. New domains get their own
 repo/service/endpoint file rather than growing an unrelated one. Existing exceptions (move them when touched):
-- SQL outside `repository/`: `main.py` (startup presence reset, `/health`), `websocket/manager.py` (presence),
-  `SocialService.get_user_profile` (`fame_rating` read).
+- SQL outside `repository/`: `main.py` (`/health` ping), `SocialService.get_user_profile` (`fame_rating` read).
+  (The presence updates of `websocket/manager.py` and the startup reset moved to `UserRepository`.)
 - Endpoints calling repositories directly: `auth.py` `/auth/me`, `photos.py` `/profile/photo/{key}`,
   `profile.py` upload photo-count check.
 - Dynamic `SET` clauses (`user_repo`, `profile_repo`) build column names with f-strings from code-defined keys;
@@ -185,7 +185,8 @@ The badge shows the server total: it is loaded from `/notifications/unread-count
 ### Chat — `/chat` (E5)
 | Method | Path | Notes |
 |---|---|---|
-| WS | `/ws` | Presence, notifications and chat (§7) |
+| WS | `/ws` | Presence, notifications, chat and call signalling (§7) |
+| GET | `/ice-servers` | B4: `{"ice_servers":[{"urls":[...],"username"?,"credential"?}]}` for `RTCPeerConnection`: the STUN server (`STUN_URL`, default `stun:stun.l.google.com:19302`) plus, only when `TURN_URL`, `TURN_USERNAME` and `TURN_CREDENTIAL` are all set, one TURN entry (`TURN_URL` may list several comma-separated URLs). Authenticated; 30/min. The TURN credential is static and reaches every signed-in user: use a relay with short-lived credentials in production |
 | GET | `/conversations` | Connected users who are not blocked either way, most recent activity (last message, else the connection) first. Items: `user_id`, `username`, `first_name`, `last_name`, `photo_url`, `is_online`, `last_seen`, `last_message` (body or null), `last_sender_id`, `sent_at` (of the last message, or null), `unread_count`, `connected_at`. 60/min |
 | GET | `/messages/{user_id}` | History of one thread, **oldest first**. Params: `limit` (1–100, default 50) returns the newest `limit` messages; `before_id` returns the page of messages older than that id (use the first id you hold). Items: `id`, `sender_id`, `receiver_id`, `body`, `sent_at`, `is_read`. Ids (`user_id`, `before_id`) must be 1–2147483647, else 422. Fetching the newest page (no `before_id`) marks that user's messages to you as read. 403 `"You are not connected with this user"` unless connected and unblocked (also for yourself). 120/min |
 | POST | `/messages/{user_id}/read` | Marks that user's messages as read → `{"updated": n}`; same 403 rule. The client calls it when a message arrives in the open thread. 120/min |
@@ -221,6 +222,8 @@ expiring → the axios request interceptor refreshes a token that expires within
            minute per token), so an idle tab's next call doesn't produce a logged 401
 expired  → axios interceptor → single-flight refresh in api/client.js (shared with boot and the WebSocket) → retry;
            only a 401 from the refresh sends the user to /login (offline/429/5xx surface as the request's error)
+ws token → the socket lives as long as the access token it last presented (§7): the client sends a fresh token in-band
+           (`{"type":"auth"}`) after every refresh and refreshes ahead of the socket's expiry even when idle
 logout   → client token cleared first (socket closes, an in-flight refresh result is discarded), then the server
            call: access token hash → token_blacklist; refresh row deleted, cookie cleared; user's sockets closed
 tokens   → JWTs carry type=access|refresh; every bearer/cookie/WS credential check requires type=access,
@@ -311,7 +314,15 @@ server sends `{"type":"auth_ok"}`; clients treat the socket as connected only th
 (`{"type":"ping"}`); the client may answer `{"type":"pong"}` (ignored).
 
 The token's `exp` is kept: when it passes (checked on every inbound frame and on the ping tick) the server closes the
-socket with 1008. Close reasons the client acts on: `auth_failed` (bad/blacklisted/refresh token, missing auth
+socket with 1008. **In-band re-auth:** an open socket accepts `{"type":"auth","token":"<fresh access token>"}` at any
+time. The token is validated exactly like the first frame (signature, `type == access`, not blacklisted) and must belong
+to the **same user** (another user's token closes the socket with 1008 `auth_failed`; an invalid or refresh token gets an
+`auth_failed` error frame and the socket stays); on success the socket's expiry becomes the new token's (never earlier
+than before) and `auth_ok` answers. It counts against the per-connection frame limit. The client does this on every
+`onTokenChange` and renews the token (`refreshAccessToken()`, single-flight) 2 minutes before the socket's token expires
+(or when 40% of its remaining life is left, for short-lived tokens), even in an idle tab, so a call is not cut by the 15-minute access
+token. A background tab whose timers are throttled harder than that still falls back to the close-and-reconnect path
+(the call would end then). Logout / `close_user` still close every socket. Close reasons the client acts on: `auth_failed` (bad/blacklisted/refresh token, missing auth
 frame), `token_expired`, `logged_out` (logout), `too_many_connections` (more than **5** sockets per user; extra
 connections are closed after auth). Logout closes all of the user's sockets. On any 1008 other than
 `too_many_connections` the client gets a fresh token through the single-flight refresh in `api/client.js` (once per
@@ -320,7 +331,7 @@ rejected (401) the session ends, and if the fresh token is rejected again the cl
 connect the client also refreshes a token that expires within 30 s. `too_many_connections` just retries at the maximum backoff.
 
 `PresenceManager` (`websocket/manager.py`) keeps `user_id → set[WebSocket]` (max 5 per user); `users.is_online`
-flips on the first connect and back (with `last_seen = now()`) when the last socket closes. It also owns the
+flips on the first connect and back (with `last_seen = now()`) when the last socket closes (through `UserRepository`). It also owns the
 per-user message rate limiter (created with the first socket, dropped with the last) and `close_user(user_id)`.
 `send_to_user(user_id, payload)` pushes to every open socket of a user, best effort and never raising (2 s per
 socket); a socket that times out or fails is closed and dropped so later pushes don't wait on it again. Returns
@@ -352,10 +363,72 @@ under it until the echo (same `ref`) arrives, or restores it into the input when
 
 Other error codes: `invalid_frame` (not JSON, not an object, binary frame), `frame_too_large` (> 8192 characters),
 `unknown_type`, `rate_limited`, `server_error` (unexpected failure, logged server-side, generic detail).
-Limits, sliding window: any frame 60 per 10 s **per connection**; chat messages 10 per 10 s **per user** (shared by
+Limits, sliding window: any frame except call `signal` 60 per 10 s **per connection**; `signal` frames 120 per 10 s per connection; chat messages 10 per 10 s **per user** (shared by
 all their sockets); 5 sockets per user. Handling a frame never raises out of the receive loop; a bad frame gets an
 error frame and the socket is not closed. The 8192-character check is app-level; uvicorn runs with
-`--ws-max-size 16384` (Dockerfile and compose command) so bigger frames are refused before they are buffered.
+`--ws-max-size 32768` (Dockerfile and compose command, twice the largest allowed frame) so bigger frames are refused
+before they are buffered. The one exception to the 8192 cap is a call `signal` frame (below): up to **16384** characters,
+with a separate per-connection limit. A frame is charged to a rate limiter **before** it is parsed: frames whose text
+contains `"signal"` (a substring test, no parsing) to the signal budget, all others to the general one; a frame over
+8192 characters without `"signal"` is refused unparsed, and one that merely mentions the word but is not a real signal is
+charged to the general budget as well.
+
+**Calls (B4): voice / video over the same socket.** WebRTC media is peer-to-peer; the server only relays the
+signalling (`CallService` validates and authorises, `CallManager` in `websocket/call_manager.py` holds the state).
+There is no second socket and no call history table (a missed call is only shown to the callee's open tabs; no
+notification type was added).
+
+*Client → server* `{"type":"call","action":A,"call_id":"<client uuid>","to":<user id>,...}`. `call_id` matches
+`^[A-Za-z0-9_-]{8,64}$`, `to` is an int4 and not the sender (`invalid_recipient`); unknown actions → `invalid_call`.
+- `invite` (+ `"media":"audio"|"video"`, else `invalid_media`): 6 per user per minute (`rate_limited`); call_id already in
+  use → `invalid_call`; caller already in a call → `busy` (`reason:"you_in_call"`). The call is then **registered for the
+  caller first** (state `checking`, nothing sent), and only after that is the pair checked (`can_chat`): not connected or
+  blocked either way, or no such user → `not_connected`, the same answer as chat. Registering first means an unlike /
+  block that commits meanwhile finds the call and ends it before it can ring (`end_between` covers both users). Only
+  after the check: callee in a call → `busy` (`peer_in_call`); callee has no open socket → `unavailable`; otherwise the
+  call rings **every** socket of the callee. Binding re-checks synchronously that the caller's (and, on accept, the
+  accepting) socket is still registered, so a socket closed during the database check never leaves a lingering call.
+- `accept` (callee, while ringing): the connection is checked again (lost → the call ends with `disconnected` and
+  the accepter gets `not_connected`). The **first** accept wins: that socket becomes the callee socket, the caller gets
+  `accept`, the callee's other sockets get `answered_elsewhere`.
+- `decline` / `busy` (callee, while ringing): the caller gets `decline` / `busy`, other callee tabs `answered_elsewhere`
+  (`outcome:"declined"`). `cancel` (caller, while ringing): callee sockets get `cancel`. `hangup`: ends an active call;
+  while ringing it acts as cancel (caller) or decline (callee).
+- `signal` + `"data"`: only after accept (else `call_not_active`), only between the two bound sockets.
+  `data` is exactly `{"kind":"offer"|"answer","sdp":str}` (SDP 1-12000 characters, starting `v=0`) or
+  `{"kind":"candidate","candidate":{candidate,sdpMid,sdpMLineIndex,usernameFragment}}` (candidate line starts
+  `candidate:`, at most 1024 characters, `sdpMLineIndex` 0-255 or null); extra keys, wrong types or oversize →
+  `invalid_signal`. Every string must be **ASCII without control characters** (an SDP may contain CR / LF): real
+  SDP / ICE text is, and a lone surrogate or other unencodable text must never reach the peer's socket encoder. Nothing
+  else is ever relayed. The end-of-candidates marker (an empty candidate) is not valid: clients skip it, and a client
+  does not end an active call on a single `invalid_signal`.
+- Every non-invite frame must name a known `call_id`, come from a participant (the caller's bound socket; the
+  callee's sockets while ringing, then only the accepting one) and carry the other participant in `to`; anything else,
+  including a foreign or finished call, → `unknown_call` (one answer for all, so call ids reveal nothing).
+
+*Server → client* `{"type":"call","action":...,"call_id",...}`: `invite` (`from`, `from_username`, `media`; stamped by the
+server, a client-supplied `from` is ignored), `ringing` (ack to the caller), `accept`, `decline`, `busy`, `unavailable`,
+`cancel`, `answered_elsewhere` (`outcome`), `signal` (`from`, `from_username`, `data`), `hangup` (`reason`, and `from`
+when the peer ended it). Errors are ordinary `error` frames carrying `call_id`. `hangup` reasons: `hangup` (peer ended),
+`timeout` (ringing for **45 s** with no answer: caller and every callee tab), `connection_lost` (a bound socket closed,
+the user logged out, the token expired or a push to the socket failed), `disconnected` (unlike or block, B4.4).
+
+*State* (`CallManager`, in memory, one process like the socket registry; same multi-instance caveat as below):
+`call_id → {caller, callee, media, state: checking|ringing|active, caller socket, callee socket once accepted}` plus
+`user → call`, so a user is in at most one call as either party. Created by `invite`, removed by hangup, decline,
+cancel, timeout, a bound socket's disconnect (hook on `PresenceManager.disconnect`, which `send_to_user` failures,
+logout's `close_user` and token expiry all go through; the hooks run before the presence UPDATE so the peer hears at once, and
+`PresenceManager` push / disconnect never raise: an unencodable payload is dropped without costing the recipient their
+socket, a failing UPDATE is logged) and `SocialService.unlike` / `block` (after their transaction
+commits, `end_between`). State is removed before anyone is notified, so a notification that drops a slow socket cannot
+see a half-removed call; the endpoint's cleanup is shielded from cancellation. Authorisation is checked at `invite` and
+`accept`; an active call's frames are authorised by the call state, which unlike / block tear down.
+*Limits:* `signal` frames: 120 per 10 s per connection (separate from the 60 per 10 s general limit, so an ICE burst of
+20-30 candidates never starves chat), plus per call and side 60 per 10 s and 600 in total. Size: a measured Chromium 156
+audio+video offer is **5.4 KB** of SDP (about 5.6 KB as a frame with JSON escaping), an answer 4.7 KB, and a Firefox 157
+offer **3.1 KB** (3.4 KB as a frame; all ASCII); the cap for
+`signal` frames is 16384 characters (about 3x headroom; the SDP itself is capped at 12000), nothing else may exceed
+8192. A frame over 16384 → `frame_too_large`. Safari offers were not measured.
 
 **Notifications** (`NotificationService.notify(to_user, type, from_user)` → id or `None`; every trigger calls
 `notify_safe`, which logs and swallows a failure so a like, view, unlike or message never fails or rolls back because
@@ -393,7 +466,7 @@ status = 'accepted' AND reminder_sent_at IS NULL … RETURNING`, so a restart or
 
 **Frontend.** `api/client.js` owns the access token and the single-flight refresh; `AuthContext` mirrors it.
 `NotificationContext` owns the single socket (opened once per session, keyed on the user id, token read at each
-connect) and exposes `connected` (true from `auth_ok`), `subscribe(listener)` and `send(frame)`. `DatesPanel` (the Dates tab of the Matches page, route `/dates`) subscribes too and reloads (debounced 300 ms, newest response wins) on every `date_*`
+connect) and exposes `connected` (true from `auth_ok`), `subscribe(listener)` and `send(frame)`. `CallContext` (B4) subscribes too. `DatesPanel` (the Dates tab of the Matches page, route `/dates`) subscribes too and reloads (debounced 300 ms, newest response wins) on every `date_*`
 notification and on `unlike`, and once after a *re*connect. `ChatContext` subscribes: it appends `message` frames (de-duplicated by id), counts unread per
 conversation (`unreadMessages` drives the badges in `BottomNav` and `Header`), shows `error` frames, reloads
 conversations on `match`/`unlike` notifications, a `not_connected` error and after a reconnect. A thread's history is requested only once the conversation list is loaded and contains the partner
@@ -477,6 +550,8 @@ Stored in `user_profiles.fame_rating`. `profile_viewers` counts distinct viewers
 | OAuth account takeover / pre-hijack | Link by email only when the provider marks it verified **and** the local account is validated; GitHub sign-up only with a verified primary email; 42 addresses never linked, and a new 42 account's link stays inert until our verification email is clicked; identities keyed on the provider's numeric id; one identity per provider per user | ✅ |
 | Codes in logs | uvicorn access-log query string redacted for `/auth/oauth/*/callback` (`main.py`); app logs carry only error tags/status codes | ✅ |
 | Seed account takeover | Seed users are validated, so their emails use the reserved `matcha-seed[-am].example.org` (RFC 2606) instead of registrable domains; old `.dev` seeds are moved on the next seed run | ✅ |
+| Call signalling abuse | Call frames only between connected, unblocked users (checked at invite and accept, call torn down on unlike / block); `from` stamped by the server; only the call's two bound sockets can act on a `call_id` (foreign / unknown ids get one generic error); SDP / ICE validated structurally with size caps, nothing else relayed; separate invite / signal / per-call rate limits; no exception text in frames | ✅ |
+| IP exposure through WebRTC | ICE candidates carry each peer's IP addresses (inherent to peer-to-peer media). They are produced and relayed only after the callee **accepts** (the caller creates its offer, and starts gathering, only on `accept`; the callee gathers only when answering), and only between connected, unblocked users. A TURN relay (`TURN_URL`) hides addresses from the peer at the cost of relaying the media through it. The public STUN server sees the user's address too | ⚠️ inherent, documented |
 | Per-IP rate limits behind a proxy | uvicorn runs without `--proxy-headers`/`--forwarded-allow-ips`, so behind Cloud Run's front end every client may share one key and per-IP limits collapse into a global one | ⚠️ known gap |
 | Same-site assumption | The Strict refresh cookie (session restore, OAuth hand-off) needs SPA and API on one site: true in Compose, false for the vercel.app / run.app production split (§6) | ⚠️ known gap |
 | OAuth open redirect / token leakage | Callback redirects only to the fixed `{FRONTEND_URL}/oauth/callback` with `status`/`error` from a fixed set; tokens only in httpOnly cookies; provider token discarded; provider bodies/codes never logged; `provider` path param checked against a fixed allowlist (404) | ✅ |
@@ -489,7 +564,27 @@ library (auth, tokens, verification, reset and OAuth sign-in are hand-written).
 
 - **Contexts:** `AuthContext` (user + access token), `NotificationContext` (owns the single WS, unread count),
   `ChatContext` (conversations, threads, unread count, chat errors; sends and receives over
-  `NotificationContext`'s socket via `send` / `subscribe`).
+  `NotificationContext`'s socket via `send` / `subscribe`), `CallContext` (B4, below).
+- **Calls (B4):** `context/CallContext.jsx` is mounted inside `ChatProvider`, so it works on every page, and renders
+  the incoming-call modal (`components/calls/IncomingCallModal.jsx`: caller name and photo as text, accept with video /
+  audio only / decline; focus-trapped, Escape declines, and focus starts on **Decline** with Accept ignored for the first
+  600 ms, so a user typing in the chat is never switched onto a call by a stray Space / Enter; a WebAudio ring only if
+  the page has had a user gesture),
+  the in-call overlay (`CallOverlay.jsx`: remote `<video>`, muted `playsInline` local preview, mute, camera, hang up,
+  timer, status "Connecting… / Reconnecting…", usable at 320 px) and a notice banner (`CallNotice.jsx`, `role=alert`
+  for errors). Start buttons (audio / video) are in the chat thread header, only for online partners from the loaded
+  conversations list (refreshed every 30 s while a thread is open). One call at a time per tab; the server also allows
+  one per user, so a second tab shows "already in a call" and a second ringing tab shows "answered in another tab".
+  The microphone / camera are opened **before** the invite is sent (caller) or the `accept` (callee), so a denied or
+  missing device (`NotAllowedError`, `NotFoundError`, `NotReadableError`, `OverconstrainedError`, no
+  `navigator.mediaDevices` on an insecure page) shows an inline message and the call is never started / is declined
+  rather than left ringing; a missing camera falls back to audio only. `getUserMedia` needs a secure context:
+  `http://localhost` qualifies, a LAN IP over plain http does not. The caller creates the offer only after `accept`;
+  candidates that arrive before the remote description wait; signals are applied in order; one ICE restart (caller) on
+  `failed` / persistent `disconnected`, then the call ends; 30 s without connecting ends it. Every end path
+  (hang up, decline, timeout, peer gone, socket drop, logout, unmount) stops all tracks, closes the connection and
+  clears `srcObject`; `pagehide` sends cancel / hang up. ICE servers come from `GET /chat/ice-servers`
+  (`api/chatApi.js`), falling back to the public STUN server.
 - **API modules** in `src/api/`: `authApi` (fetch), the rest via `client.js` (axios + 401 → refresh).
 - **Dates (B5):** `api/datesApi.js`; the list lives in the **Dates tab of the Matches page** (`/dates` renders
   `MatchesPage` with that tab selected, so there is no 7th tab-bar item): upcoming dates (those waiting for your

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from './AuthContext'
 import { getNotifications, getUnreadCount, markRead } from '../api/notificationsApi'
-import { getClientToken, refreshAccessToken, tokenExpiresSoon } from '../api/client'
+import { getClientToken, onTokenChange, refreshAccessToken, tokenExpiresSoon, tokenExpiryMs } from '../api/client'
 
 const NotificationContext = createContext(null)
 
@@ -12,6 +12,12 @@ const RECONNECT_MAX_MS = 30000
 // WebSocket close code and reasons set by the server (backend/application/api/endpoints/chat.py).
 const POLICY_VIOLATION = 1008
 const REASON_TOO_MANY = 'too_many_connections'
+// The socket lives as long as the access token it last presented. A fresh token is renewed this
+// long before the old one expires (or 40% of what is left, for short-lived tokens), so a call or
+// an idle tab does not wait for an unrelated request to refresh the token.
+const REFRESH_LEAD_MS = 120000
+const REFRESH_MIN_WAIT_MS = 5000
+const REFRESH_RETRY_MS = 15000
 
 export function NotificationProvider({ children }) {
   const { accessToken, user } = useAuth()
@@ -75,6 +81,43 @@ export function NotificationProvider({ children }) {
     // Set after a 1008-triggered refresh, cleared by the next auth_ok: if the fresh token is
     // rejected too, the session is gone (the next API call's 401 handling signs the user out).
     let refreshedForAuth = false
+    // In-band re-auth state: true from auth_ok to close; the token the server currently knows.
+    let authed = false
+    let presentedToken = null
+    let renewTimer = null
+
+    // Renew the access token shortly before the socket's one expires, even when nothing else
+    // calls the API (single-flight, shared with every other refresh). A new token reaches the
+    // server through the onTokenChange listener below.
+    const scheduleRenewal = () => {
+      clearTimeout(renewTimer)
+      renewTimer = null
+      const expiry = tokenExpiryMs(getClientToken())
+      if (stopped || !authed || expiry === null) return
+      const remaining = expiry - Date.now()
+      const wait = Math.max(REFRESH_MIN_WAIT_MS, remaining - Math.min(REFRESH_LEAD_MS, remaining * 0.4))
+      renewTimer = setTimeout(async () => {
+        try {
+          await refreshAccessToken()
+        } catch (err) {
+          // 401: the session is over (handled by the client). Otherwise (offline, 429) try again.
+          if (err?.response?.status !== 401 && !stopped && authed) {
+            clearTimeout(renewTimer)
+            renewTimer = setTimeout(scheduleRenewal, REFRESH_RETRY_MS)
+          }
+        }
+      }, wait)
+    }
+    const presentToken = (token) => {
+      const ws = wsRef.current
+      if (!token || !authed || !ws || ws.readyState !== WebSocket.OPEN) return
+      presentedToken = token
+      ws.send(JSON.stringify({ type: 'auth', token }))
+    }
+    const offTokenChange = onTokenChange((token) => {
+      if (token && token !== presentedToken) presentToken(token)
+      scheduleRenewal()
+    })
 
     const scheduleRetry = (wait) => {
       if (stopped) return
@@ -102,7 +145,8 @@ export function NotificationProvider({ children }) {
 
       // Read again at open: an axios refresh may have rotated the token while connecting.
       ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'auth', token: getClientToken() ?? token }))
+        presentedToken = getClientToken() ?? token
+        ws.send(JSON.stringify({ type: 'auth', token: presentedToken }))
       }
 
       ws.onmessage = (event) => {
@@ -113,6 +157,12 @@ export function NotificationProvider({ children }) {
           return // not JSON (e.g. a keep-alive frame): nothing to handle
         }
         if (msg?.type === 'auth_ok') {
+          // Also the answer to every re-auth frame: only the first one starts a healthy session.
+          authed = true
+          // The token may have been renewed while connecting: make the server aware of it.
+          const current = getClientToken()
+          if (current && current !== presentedToken) presentToken(current)
+          scheduleRenewal()
           // Healthy only now (not onopen: the server accepts first, then closes with 1008 on
           // a bad token), so the backoff and the one-refresh budget reset here.
           delay = RECONNECT_MIN_MS
@@ -137,6 +187,8 @@ export function NotificationProvider({ children }) {
       }
 
       ws.onclose = async (event) => {
+        authed = false
+        clearTimeout(renewTimer)
         if (wsRef.current === ws) {
           wsRef.current = null
           setConnected(false)
@@ -169,6 +221,9 @@ export function NotificationProvider({ children }) {
 
     return () => {
       stopped = true
+      authed = false
+      offTokenChange()
+      clearTimeout(renewTimer)
       clearTimeout(retryTimer)
       const ws = wsRef.current
       wsRef.current = null

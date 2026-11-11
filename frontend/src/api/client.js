@@ -36,16 +36,22 @@ export function onTokenChange(listener) {
   return () => _listeners.delete(listener)
 }
 
-// True when the JWT is missing, unreadable, or expires within `marginSeconds`.
-export function tokenExpiresSoon(token, marginSeconds = 30) {
-  if (!token) return true
+// The JWT's expiry as epoch milliseconds, or null when it is missing or unreadable.
+export function tokenExpiryMs(token) {
+  if (!token) return null
   try {
     const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
     const { exp } = JSON.parse(atob(part))
-    return typeof exp !== 'number' || exp * 1000 - Date.now() < marginSeconds * 1000
+    return typeof exp === 'number' ? exp * 1000 : null
   } catch {
-    return true
+    return null
   }
+}
+
+// True when the JWT is missing, unreadable, or expires within `marginSeconds`.
+export function tokenExpiresSoon(token, marginSeconds = 30) {
+  const expiry = tokenExpiryMs(token)
+  return expiry === null || expiry - Date.now() < marginSeconds * 1000
 }
 
 const client = axios.create({

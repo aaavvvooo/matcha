@@ -44,6 +44,8 @@ Seeded accounts use emails ending in `@matcha-seed.example.org` or `@matcha-seed
 | `STORAGE_BACKEND` | `minio` or `gcs`; Compose hardcodes `minio` for the backend, so set it only outside Compose |
 | `GCP_PROJECT_ID`, `GCS_BUCKET_NAME` | Only when `STORAGE_BACKEND=gcs` |
 | `NOMINATIM_URL`, `NOMINATIM_USER_AGENT`, `NOMINATIM_ACCEPT_LANGUAGE` | Optional geocoding overrides |
+| `STUN_URL` | Optional STUN server for calls (default `stun:stun.l.google.com:19302`) |
+| `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` | Optional TURN relay for calls (all three required; `TURN_URL` may list several comma-separated URLs) |
 | `OAUTH_REDIRECT_BASE_URL` | Public base URL of the API used in OAuth callback URLs (Compose: `http://localhost:8000`) |
 | `OAUTH_42_CLIENT_ID`, `OAUTH_42_CLIENT_SECRET` | Optional: "Continue with 42" (UID / SECRET of a 42 Intra app) |
 | `OAUTH_GITHUB_CLIENT_ID`, `OAUTH_GITHUB_CLIENT_SECRET` | Optional: "Continue with GitHub" (GitHub OAuth app) |
@@ -63,6 +65,13 @@ New accounts from 42 (which doesn't mark emails verified) must confirm the addre
 verification email before they can sign in; GitHub sign-in requires a verified primary email on the GitHub
 account. OAuth needs the SPA and the API on the same site (true for Compose); see `docs/DESIGN.md` §6 for what a
 split production deployment would need.
+
+**Voice / video calls.** Calls are peer-to-peer WebRTC, signalled over the chat WebSocket. Browsers only allow
+microphone and camera access on a secure context: open the app as `http://localhost:3000` (or over HTTPS). A LAN
+address such as `http://192.168.x.x:3000` is **not** secure, so calls will show "needs a secure page" there. Without a
+TURN server (`TURN_*` above, e.g. a coturn instance) two users behind strict NATs on different networks may not be able
+to connect; on one machine or LAN the public STUN server is enough. Exchanging connection candidates reveals each
+participant's IP address to the other, which only happens after the callee accepts.
 
 **Email delivery:** Brevo rejects API calls from IPs that aren't on the account's allowlist (`401 unrecognised IP
 address`). Before running on a new network (e.g. the defense machine), add its public IP to the authorised IPs in
