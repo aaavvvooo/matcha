@@ -26,7 +26,15 @@ Prerequisites: Docker with the Compose plugin.
    | MinIO console | http://localhost:9001 |
 
 Seeded accounts use emails ending in `@matcha-seed.example.org` or `@matcha-seed-am.example.org` (reserved, unregistrable domains; older `.dev` seeds are moved on the next start) and the password defined as `DEFAULT_PASSWORD` in
-`backend/scripts/seed_common.py`.
+`backend/scripts/seed_common.py`. **Never run the seed scripts against a public deployment:** every seeded account
+shares that published password.
+
+Postgres and MinIO are published on `127.0.0.1` only (same port numbers), so they are reachable from this machine but
+not from the network; the API talks to them over the Compose network.
+
+**After upgrading to migration `3c8e2b7f9a41`** (security hardening) every existing session is invalid: users simply sign
+in again. If two existing accounts differ only by letter case in their email or username, the migration stops with a
+message listing their ids and changes nothing; rename one of them and restart.
 
 ## Environment variables
 
@@ -40,7 +48,7 @@ Seeded accounts use emails ending in `@matcha-seed.example.org` or `@matcha-seed
 | `FRONTEND_URL` | Allowed CORS origin and base for email links |
 | `REACT_APP_API_URL` | API base URL used by the frontend |
 | `BREVO_API_KEY`, `FROM_EMAIL` | Transactional email (verification, password reset) |
-| `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_BUCKET` | Local photo storage |
+| `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_BUCKET` | Local photo storage. Required (the backend refuses to start without them); do **not** use MinIO's well-known defaults (`minioadmin` / `minioadmin123`): pick your own user and a long random password |
 | `STORAGE_BACKEND` | `minio` or `gcs`; Compose hardcodes `minio` for the backend, so set it only outside Compose |
 | `GCP_PROJECT_ID`, `GCS_BUCKET_NAME` | Only when `STORAGE_BACKEND=gcs` |
 | `NOMINATIM_URL`, `NOMINATIM_USER_AGENT`, `NOMINATIM_ACCEPT_LANGUAGE` | Optional geocoding overrides |
