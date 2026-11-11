@@ -18,6 +18,31 @@ BIO_TEMPLATES = [
 ]
 DEFAULT_PASSWORD = "Seed1234!"
 
+# Seed accounts are validated, so their mailboxes must be ones nobody can own:
+# subdomains of the RFC 2606 reserved example.org (accepted by the app's email
+# validator, unlike *.test). The old *.dev domains were registrable, so whoever
+# bought them could take seed accounts over via forgot-password or OAuth linking.
+SEED_DOMAIN = "matcha-seed.example.org"
+SEED_DOMAIN_AM = "matcha-seed-am.example.org"
+LEGACY_SEED_DOMAINS = {"matcha-seed.dev": SEED_DOMAIN, "matcha-seed-am.dev": SEED_DOMAIN_AM}
+
+
+async def migrate_legacy_seed_emails(db) -> None:
+    """Move seed rows created before the domain change onto the reserved domains,
+    so existing databases are fixed and "already seeded" counts stay correct."""
+    for legacy, new in LEGACY_SEED_DOMAINS.items():
+        status = await db.execute(
+            """
+            UPDATE users
+            SET email = left(email, length(email) - length($1)) || $2
+            WHERE email LIKE '%@' || $1
+            """,
+            legacy,
+            new,
+        )
+        if status and status != "UPDATE 0":
+            print(f"Moved seed accounts from @{legacy} to @{new}: {status}")
+
 _photo_bytes_cache: dict[str, bytes] = {}
 
 

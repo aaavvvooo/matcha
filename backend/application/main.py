@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import asyncio
 import logging
+import re
 
 import asyncpg
 from slowapi import _rate_limit_exceeded_handler
@@ -30,6 +31,37 @@ logging.basicConfig(
 for _noisy in ("httpx", "httpcore"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
+
+
+_OAUTH_CALLBACK_RE = re.compile(r"^(?P<path>[^?]*/auth/oauth/[^/?]+/callback)\?")
+
+
+class _RedactOAuthCallbackQuery(logging.Filter):
+    """Drop the query string (authorization code + state) from uvicorn access-log
+    lines for the OAuth callbacks; every other request is logged unchanged.
+
+    uvicorn logs `'%s - "%s %s HTTP/%s" %d'` with args
+    (client_addr, method, path_with_query, http_version, status).
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str):
+            match = _OAUTH_CALLBACK_RE.match(args[2])
+            if match:
+                record.args = (*args[:2], f"{match['path']}?[redacted]", *args[3:])
+        return True
+
+
+def _install_access_log_redaction() -> None:
+    access_logger = logging.getLogger("uvicorn.access")
+    if not any(isinstance(f, _RedactOAuthCallbackQuery) for f in access_logger.filters):
+        access_logger.addFilter(_RedactOAuthCallbackQuery())
+
+
+# uvicorn configures logging before importing the app, so the filter survives;
+# lifespan installs it again in case logging was reconfigured later.
+_install_access_log_redaction()
 
 
 def _db_error_in_chain(exc: BaseException) -> BaseException | None:
@@ -79,6 +111,7 @@ async def _date_reminder_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _install_access_log_redaction()
     await database.connect()
     from application.clients.storage import ensure_bucket
     try:

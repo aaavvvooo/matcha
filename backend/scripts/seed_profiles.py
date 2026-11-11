@@ -9,7 +9,7 @@ random male or female source profile (name/photo/dob) but keep their own
 gender in the DB. Profiles are spread evenly across the 4 genders.
 
 Idempotent: --target is the minimum number of seed profiles that should exist
-(marked by @matcha-seed.dev emails); already-seeded rows are left untouched
+(marked by @matcha-seed.example.org emails); already-seeded rows are left untouched
 and only the shortfall is created. Safe to run on every container start.
 
 Run inside the backend container, where POSTGRES_HOST/MINIO_ENDPOINT resolve:
@@ -37,6 +37,8 @@ from scripts.seed_common import (  # noqa: E402
     fetch_and_upload_photo,
     load_existing_tags,
     create_seed_user,
+    migrate_legacy_seed_emails,
+    SEED_DOMAIN,
 )
 
 NATIONALITIES = "au,br,ca,ch,de,dk,es,fi,fr,gb,ie,in,mx,nl,no,nz,rs,tr,ua,us"
@@ -59,9 +61,10 @@ async def count_seed_profiles(db: Database, gender_label: str) -> int:
         """
         SELECT COUNT(*) FROM users u
         JOIN user_profiles up ON up.user_id = u.id
-        WHERE u.email LIKE '%@matcha-seed.dev' AND up.gender = $1
+        WHERE u.email LIKE '%@' || $2 AND up.gender = $1
         """,
         gender_label,
+        SEED_DOMAIN,
     )
 
 
@@ -95,7 +98,7 @@ async def seed_gender(
             first = person["name"]["first"]
             last = person["name"]["last"]
             username = f"{person['login']['username']}_{person['login']['uuid'][:8]}"
-            email = f"{username}@matcha-seed.dev"
+            email = f"{username}@{SEED_DOMAIN}"
 
             user_id = await create_seed_user(
                 user_repo, db, first, last, username, email, hashed_password
@@ -149,6 +152,7 @@ async def seed_gender(
 async def seed(target: int, batch_size: int):
     db = Database()
     await db.connect()
+    await migrate_legacy_seed_emails(db)
     ensure_bucket()
 
     user_repo = UserRepository(db)

@@ -4,6 +4,7 @@ import { register } from '../../api/authApi';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
 import FormInput from '../../components/ui/FormInput';
+import OAuthButtons from '../../components/auth/OAuthButtons';
 
 const STEPS = [
   { title: 'Your name',      fields: ['firstName', 'lastName'],     placeholders: ['First name', 'Last name'],     types: ['text', 'text'] },
@@ -130,6 +131,7 @@ function RegisterPage() {
         <Btn onClick={handleNext} disabled={loading} style={{ marginTop: 'auto' }}>
           {loading ? 'Creating…' : step < STEPS.length - 1 ? 'Continue →' : 'Create account'}
         </Btn>
+        {step === 0 && <OAuthButtons />}
       </div>
 
       <div style={{ padding: '12px 24px 32px', textAlign: 'center', fontSize: 13, color: 'var(--ink3)' }}>

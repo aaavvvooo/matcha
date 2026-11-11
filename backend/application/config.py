@@ -18,3 +18,13 @@ BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 
 
 FRONTEND_URL = os.getenv("FRONTEND_URL")
+
+# OAuth sign-in (bonus B1). A provider is enabled only when its client id and
+# secret are set, together with OAUTH_REDIRECT_BASE_URL (the backend's public
+# base URL, e.g. http://localhost:8000) and FRONTEND_URL. The callback URL
+# registered with each provider is {OAUTH_REDIRECT_BASE_URL}/auth/oauth/<id>/callback.
+OAUTH_REDIRECT_BASE_URL = os.getenv("OAUTH_REDIRECT_BASE_URL")
+OAUTH_42_CLIENT_ID = os.getenv("OAUTH_42_CLIENT_ID")
+OAUTH_42_CLIENT_SECRET = os.getenv("OAUTH_42_CLIENT_SECRET")
+OAUTH_GITHUB_CLIENT_ID = os.getenv("OAUTH_GITHUB_CLIENT_ID")
+OAUTH_GITHUB_CLIENT_SECRET = os.getenv("OAUTH_GITHUB_CLIENT_SECRET")

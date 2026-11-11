@@ -94,6 +94,8 @@ reports          (reporter_id, reported_id) PK, created_at
 verification_tokens  id PK, user_id FK, token UQ, token_type, expires_at, used, created_at
 refresh_tokens   id PK, username UQ, token_hash, expires_at, created_at
 token_blacklist  id PK, token_hash UQ, expires_at, created_at
+oauth_accounts   id PK, user_id FK→users ON DELETE CASCADE, provider VARCHAR(20), provider_user_id VARCHAR(64),
+                 created_at, UQ(provider, provider_user_id), UQ(user_id, provider)   -- B1
 ```
 
 Value sets (shared by frontend, seed scripts, and matching; `Literal` types in
@@ -104,6 +106,7 @@ Value sets (shared by frontend, seed scripts, and matching; `Literal` types in
 - `notifications.type`: `like` · `view` · `message` · `match` · `unlike` · `date_proposed` · `date_accepted` ·
   `date_declined` · `date_cancelled` · `date_reminder`
 - `dates.status` (`ck_dates_status`): `pending` · `accepted` · `declined` · `cancelled`
+- `oauth_accounts.provider`: `42` · `github` (`ck_oauth_accounts_provider`; allowlist in `clients/oauth_client.py`)
 
 All timestamps in the schema are `timestamptz`; the API accepts and returns ISO 8601 UTC instants and the frontend
 renders them in the viewer's local timezone. `dates.scheduled_at` must be sent with an offset (a naive value is a 422).
@@ -113,7 +116,7 @@ A profile counts as **complete** when `user_profiles.gender IS NOT NULL`; incomp
 ## 5. HTTP API
 
 No `/api` prefix. Public routes: `/auth/register`, `/verify-email`, `/login`, `/forget-password`, `/refresh`,
-`/reset-password`. `/auth/logout` takes an optional Bearer token plus the refresh cookie and works even with an
+`/reset-password`, `/oauth/*`. `/auth/logout` takes an optional Bearer token plus the refresh cookie and works even with an
 expired token. `/profile/photo/*` is authenticated by the `access_token` cookie (so `<img src>` works). Everything
 else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 
@@ -128,6 +131,9 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 | POST | `/logout` | Idempotent: blacklists a live access token, revokes the refresh token (username from access or refresh token), closes all of that user's WebSockets (1008 `logged_out`), always clears both cookies |
 | POST | `/refresh` | Rotates the refresh token (httpOnly, SameSite=Strict cookie); body `{access_token, token_type}`. **204 No Content** (empty body) when the request carries no `refresh_token` cookie (nothing to restore: a signed-out page load must not log a console error); 401 when a cookie is present but invalid, expired or revoked. 10/min |
 | POST | `/reset-password` | Token + new password in body · 5/min |
+| GET | `/oauth/providers` | `{"providers": [...]}` — only providers with credentials configured (B1) |
+| GET | `/oauth/{provider}/start` | `provider` ∈ `42`·`github` and configured, else 404 · 302 to the provider with `state` (+ PKCE S256 for GitHub) · sets the `oauth_flow` cookie · 20/min |
+| GET | `/oauth/{provider}/callback` | `code`, `state` (or provider `error`) · always 302 to `{FRONTEND_URL}/oauth/callback?status=ok\|verify_email` or `?error=<code>`; on success sets the same cookies as `/login` · 20/min |
 
 ### Own profile — `/profile`
 | Method | Path | Notes |
@@ -218,6 +224,81 @@ logout   → client token cleared first (socket closes, an in-flight refresh res
 tokens   → JWTs carry type=access|refresh; every bearer/cookie/WS credential check requires type=access,
            /auth/refresh requires type=refresh (a refresh JWT is never an access credential)
 ```
+
+**OAuth sign-in (B1)** — hand-rolled with httpx (`clients/oauth_client.py`, `service/oauth_service.py`,
+`api/endpoints/oauth.py`); no OAuth/account library.
+
+```
+button (plain link) → GET /auth/oauth/{p}/start
+    state = 256-bit random; GitHub: code_verifier (86 chars) + S256 challenge
+    Set-Cookie oauth_flow=<b64url(json{p, s, v, e=now+10 min})>.<b64url(HMAC-SHA256(flow_key, payload))>;
+        HttpOnly; SameSite=Lax; Path=/auth/oauth; Max-Age=600 (Secure when https)
+        flow_key = HMAC-SHA256(JWT_SECRET_KEY, "matcha/oauth-flow-v1") — derived, never the JWT key itself
+    nothing is stored server-side
+    302 → provider authorize URL (redirect_uri = OAUTH_REDIRECT_BASE_URL + /auth/oauth/{p}/callback, never from the request)
+provider → GET /auth/oauth/{p}/callback?code&state      (cross-site top-level GET: Lax cookie is sent)
+    verify the cookie: ≤1 KB, one ".", strict base64url, MAC (hmac.compare_digest), exactly {p,s,v,e} with
+      typed/shaped values, not expired and not further than 10 min ahead; p == path provider;
+      state == query state (hmac.compare_digest) — any failure → error=invalid_state, before any provider call
+    provider `error` → error=access_denied
+    exchange code server-side (10 s timeout, no redirects followed, + code_verifier) → profile
+      (42: /v2/me · GitHub: /user + /user/emails primary entry, used only if `verified`)
+    provider access token dropped; provider bodies, codes and tokens never logged or returned; the callback's
+      query string is redacted from uvicorn access logs (`main.py` filter)
+    linking (below) → AuthService.issue_session (same as /login: refresh hash in refresh_tokens)
+    302 → {FRONTEND_URL}/oauth/callback?status=ok, with Set-Cookie refresh_token / access_token
+         (httpOnly, SameSite=Strict, exactly as /login); oauth_flow is cleared on every outcome
+SPA /oauth/callback → AuthProvider's page-load POST /auth/refresh (same-site XHR from :3000 to :8000, so the
+    Strict cookie is sent) → access token in memory → /profile/setup if !has_profile, else /browse
+```
+
+**Single use** rests on the browser dropping `oauth_flow` (cleared on every callback outcome, 10-minute expiry)
+plus the providers' single-use, short-lived authorization codes (and PKCE for GitHub): a callback URL replayed
+in the same browser finds no cookie; one replayed elsewhere has no valid cookie. The flow is stateless, so
+`/start` cannot exhaust server memory and any instance can serve the callback. The cookie also carries the PKCE
+`code_verifier`; that is acceptable because it is httpOnly, path-scoped, MAC-protected and sent only back to
+our own callback by the same browser that started the flow — an attacker who could read it could equally read
+the code.
+
+Tokens never appear in a URL. The landing navigation itself is cross-site-initiated, so it carries no Strict
+cookie; nothing relies on it — the session is picked up by the follow-up same-site XHR.
+
+**Deployment scope.** OAuth (like page-reload session restore, which uses the same Strict refresh cookie) works
+only when the SPA and the API are the **same site**. That holds in Compose / the evaluation setup:
+`localhost:3000` and `localhost:8000` are one site (ports don't count). It does **not** hold for the
+production workflow (`.github/workflows/deploy.yml`): SPA on `*.vercel.app`, API on Cloud Run `*.run.app`
+(separate public suffixes, so separate sites), where the browser never sends the Strict refresh cookie — this
+already breaks session restore on reload, and would break the OAuth hand-off the same way. Production would
+need both served under one registrable domain (custom domains, e.g. `app.example.com` + `api.example.com`, or a
+Vercel rewrite proxying the API under the SPA's origin), with `OAUTH_REDIRECT_BASE_URL`/`FRONTEND_URL` set to
+those URLs and https so the cookies get `Secure`.
+
+Linking, keyed on the provider's stable numeric id (never login or email):
+1. `(provider, provider_user_id)` already linked → that user (refused with `email_unverified` while
+   `is_validated` is false — same rule as password login, so a pending email change can't be bypassed).
+2. Provider email matches a local user (`lower(email)`): linked only if the **provider marks the address
+   verified** and the local user `is_validated`. Unvalidated local user → `link_unverified`; a 42 address (no
+   verified flag) → `email_in_use`, never linked.
+3. Otherwise a new user + link in one transaction:
+   - **GitHub** only with a *verified primary* email; an unverified or missing one → `no_email` (no account, no
+     link, no mail). Creating an unvalidated account for an address the GitHub user merely typed would let them
+     pre-register someone else's address with a GitHub link that survives the owner's later password reset.
+   - **42**: addresses are assigned by 42 to the student (they can't claim someone else's), but there is no
+     verified flag, so the account starts with `is_validated = false` and our verification email is sent
+     (`status=verify_email`, no session; `email_unavailable` if email isn't configured, checked before anything
+     is created). The link is inert until that mail is clicked (rule 1), and the only person who can click it
+     is the owner of the 42 mailbox, i.e. the same student — so no pre-hijack.
+   - Username from the provider login (`[A-Za-z0-9_-]`, ≤40, `user` if shorter than 3) with `2`…`9` then random
+     6-digit suffixes, retried on the unique index; names stripped of control/format characters and capped at
+     50; `hashed_password` is the Argon2 hash of a random 32-byte secret (unusable — "forgot password" sets a
+     real one).
+
+Error codes (fixed; the SPA maps them to text): `access_denied`, `invalid_state`, `provider_error`, `no_email`,
+`email_in_use`, `link_unverified`, `already_linked`, `email_unverified`, `email_unavailable`, `server_error`.
+
+PKCE: GitHub yes (S256 only). 42: not documented in its public API docs, so not sent — it is a confidential
+client (secret only server-to-server) and `state` still binds the callback to the browser; flip `pkce=True`
+in `PROVIDERS` if 42 confirms support.
 
 ## 7. Real-time design
 
@@ -317,7 +398,9 @@ conversations on `match`/`unlike` notifications, a `not_connected` error and aft
 (no deliberate 403s); a partner missing from a loaded list shows the "no longer connected" state, a failed list
 load shows an error with retry instead.
 
-Single process, in-memory registry and rate-limit state: acceptable for one-node evaluation; not multi-worker safe.
+In-memory registry and rate-limit state: correct only within one process. Fine for the Compose/evaluation setup (one
+uvicorn process); production (`deploy.yml`) allows up to 2 Cloud Run instances, where users on different instances
+would not see each other's presence/pushes. Same caveat for the SlowAPI counters (per instance).
 
 ## 8. Matching (E3, `repository/discovery_repo.py`)
 
@@ -387,10 +470,18 @@ Stored in `user_profiles.fame_rating`. `profile_viewers` counts distinct viewers
 | Malicious upload | Type detected from magic bytes (`utils/image.py`), never client `content_type`; ≤5 MB read cap; all files validated before any is stored; served with `nosniff`; `upload_size_guard` (`main.py`) refuses oversized, chunked or anonymous upload bodies from the headers before Starlette parses them | ✅ |
 | Info leakage | `main.py` middleware logs unhandled errors and returns `{"detail":"Internal server error"}`; `/health` returns only `status` (`healthy`/`degraded`/`unhealthy`), database connectivity and `storage.ready` — no versions, hosts or errors | ✅ |
 | Secrets | `.env` gitignored | ✅ |
+| OAuth login CSRF / session fixation | 256-bit `state` in a stateless HMAC-SHA256-sealed (derived key) httpOnly SameSite=Lax cookie, strict parsing, constant-time compare, 10 min TTL, cleared on every callback; single use = cookie clearing + providers' single-use codes (§6). No server state, so `/start` can't exhaust memory | ✅ |
+| OAuth code injection / interception | Code exchanged server-side with the client secret; PKCE S256 (GitHub); `redirect_uri` fixed from config; provider id in the flow must match the callback path (no mix-up) | ✅ |
+| OAuth account takeover / pre-hijack | Link by email only when the provider marks it verified **and** the local account is validated; GitHub sign-up only with a verified primary email; 42 addresses never linked, and a new 42 account's link stays inert until our verification email is clicked; identities keyed on the provider's numeric id; one identity per provider per user | ✅ |
+| Codes in logs | uvicorn access-log query string redacted for `/auth/oauth/*/callback` (`main.py`); app logs carry only error tags/status codes | ✅ |
+| Seed account takeover | Seed users are validated, so their emails use the reserved `matcha-seed[-am].example.org` (RFC 2606) instead of registrable domains; old `.dev` seeds are moved on the next seed run | ✅ |
+| Per-IP rate limits behind a proxy | uvicorn runs without `--proxy-headers`/`--forwarded-allow-ips`, so behind Cloud Run's front end every client may share one key and per-IP limits collapse into a global one | ⚠️ known gap |
+| Same-site assumption | The Strict refresh cookie (session restore, OAuth hand-off) needs SPA and API on one site: true in Compose, false for the vercel.app / run.app production split (§6) | ⚠️ known gap |
+| OAuth open redirect / token leakage | Callback redirects only to the fixed `{FRONTEND_URL}/oauth/callback` with `status`/`error` from a fixed set; tokens only in httpOnly cookies; provider token discarded; provider bodies/codes never logged; `provider` path param checked against a fixed allowlist (404) | ✅ |
 
 **Micro-framework rule (subject §III).** Decision 2026-11-07: keep FastAPI + Pydantic. Defense position: FastAPI is
 used as a router + request parser; there is no ORM at runtime (raw SQL in `repository/`), and no user-account
-library (auth, tokens, verification, reset are hand-written).
+library (auth, tokens, verification, reset and OAuth sign-in are hand-written).
 
 ## 11. Frontend
 
@@ -406,6 +497,8 @@ library (auth, tokens, verification, reset are hand-written).
   `toISOString()` (UTC). Titles/places/notes render as text only. `utils/notificationInfo.js` maps every notification
   type to text and link (unknown types get a generic line); `date_*` notifications link to `/dates`.
 - **Routing:** `ProtectedRoute` redirects to `/login`; `/profile/setup` for incomplete profiles.
+  `/oauth/callback` (public) finishes OAuth sign-in from AuthProvider's page-load refresh; provider buttons
+  (`components/auth/OAuthButtons.jsx`) appear on Login/Register only for providers the API reports.
 - **Layout:** `Layout.jsx` renders `[BottomNav (side menu ≥860 px / tab bar below) + Header + <main>]` then
   `Footer` as the last row (under the tab bar on mobile, full width on desktop). The landing page `/` draws its
   own header/main/footer; signed-in users visiting `/` are redirected to `/browse`.
@@ -439,5 +532,9 @@ library (auth, tokens, verification, reset are hand-written).
 ## 12. Known gaps
 
 Tracked in `docs/EPICS.md`. Architectural notes only:
-- WebSocket registry is in-memory (single process).
+- WebSocket registry and rate-limit counters are in-memory per process; production allows 2 Cloud Run
+  instances (§7).
+- Production splits SPA (vercel.app) and API (run.app) across sites, so the SameSite=Strict refresh cookie is
+  never sent there: session restore on reload and the OAuth hand-off need a same-site setup (§6).
+- uvicorn has no `--proxy-headers`/`--forwarded-allow-ips`, so behind a proxy per-IP limits collapse (§10).
 - No backend test suite yet (EPICS Phase 2).

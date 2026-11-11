@@ -129,11 +129,17 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Email not verified"
             )
-        access_token = create_access_token(data={"sub": user["username"]})
-        refresh_token = create_refresh_token(data={"sub": user["username"]})
+        return await self.issue_session(user["username"])
+
+    async def issue_session(self, username: str) -> tuple[str, str]:
+        """Mint an access + refresh pair and store the refresh hash. Shared by
+        password login and OAuth sign-in so both end in the same session state.
+        Callers must have authenticated the user and checked is_validated."""
+        access_token = create_access_token(data={"sub": username})
+        refresh_token = create_refresh_token(data={"sub": username})
         refresh_token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
         expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-        await self.token_repo.upsert_refresh_token(user["username"], refresh_token_hash, expires_at)
+        await self.token_repo.upsert_refresh_token(username, refresh_token_hash, expires_at)
         return access_token, refresh_token
 
     async def logout(self, access_token: str | None, refresh_token: str | None) -> None:

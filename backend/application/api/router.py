@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from .endpoints.auth import router as auth_router
+from .endpoints.oauth import router as oauth_router
 from .endpoints.profile import router as profile_router
 from .endpoints.photos import router as photo_router
 from .endpoints.users import router as users_router
@@ -12,6 +13,7 @@ from .endpoints.dates import router as dates_router
 router = APIRouter()
 
 router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+router.include_router(oauth_router, prefix="/auth/oauth", tags=["Authentication"])
 router.include_router(profile_router, prefix="/profile", tags=["Profile"])
 router.include_router(photo_router, prefix="/profile", tags=["Profile"])
 router.include_router(users_router, prefix="/users", tags=["Users"])

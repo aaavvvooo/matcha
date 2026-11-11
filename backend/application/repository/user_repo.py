@@ -15,20 +15,18 @@ class UserRepository:
         email,
         hashed_password,
         transaction: Optional[Connection] = None,
+        is_validated: bool = False,
     ):
         query = """
-            INSERT INTO users (first_name, last_name, username, email, hashed_password)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, first_name, last_name, username, email, created_at
+            INSERT INTO users (first_name, last_name, username, email, hashed_password, is_validated)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, first_name, last_name, username, email, created_at, is_validated
         """
+        args = (first_name, last_name, username, email, hashed_password, is_validated)
         if not transaction:
-            user = await self.db.fetch_one(
-                query, first_name, last_name, username, email, hashed_password
-            )
+            user = await self.db.fetch_one(query, *args)
         else:
-            user = await transaction.fetchrow(
-                query, first_name, last_name, username, email, hashed_password
-            )
+            user = await transaction.fetchrow(query, *args)
         return user
 
     async def get_user_by_email(self, email: str):

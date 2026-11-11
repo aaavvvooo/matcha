@@ -14,6 +14,7 @@ from .notifications import Notification
 from .dates import Date
 from .blocks import Block
 from .reports import Report
+from .oauth_accounts import OAuthAccount
 
 __all__ = [
     "User",
@@ -32,4 +33,5 @@ __all__ = [
     "Date",
     "Block",
     "Report",
+    "OAuthAccount",
 ]

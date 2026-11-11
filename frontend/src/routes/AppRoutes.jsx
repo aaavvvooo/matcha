@@ -8,6 +8,7 @@ import RegisterPage       from '../pages/auth/RegisterPage';
 import VerifyEmailPage    from '../pages/auth/VerifyEmailPage';
 import ForgotPasswordPage from '../pages/auth/ForgetPasswordPage';
 import ResetPasswordPage  from '../pages/auth/ResetPasswordPage';
+import OAuthCallbackPage  from '../pages/auth/OAuthCallbackPage';
 
 import ProfileSetupPage   from '../pages/profile/ProfileSetupPage';
 import ProfileEditPage    from '../pages/profile/ProfileEditPage';
@@ -33,6 +34,7 @@ function AppRoutes() {
       <Route path="/verify-email"    element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password"  element={<ResetPasswordPage />} />
+      <Route path="/oauth/callback"  element={<OAuthCallbackPage />} />
 
       {/* Protected */}
       <Route path="/profile/setup"    element={<ProtectedRoute><ProfileSetupPage /></ProtectedRoute>} />
