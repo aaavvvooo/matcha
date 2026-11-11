@@ -169,7 +169,12 @@ async def current_user(
 ):
     from application.repository.profile_repo import ProfileRepository
     response.headers["Cache-Control"] = "no-store"
-    user = dict(current_user["user"])
+    # Explicit allowlist: the row behind get_current_user also carries hashed_password.
+    row = current_user["user"]
+    user = {
+        key: row[key]
+        for key in ("id", "first_name", "last_name", "username", "email", "is_validated")
+    }
     profile_repo = ProfileRepository(db)
     profile = await profile_repo.get_profile(user["id"])
     user["has_profile"] = profile is not None and profile.get("gender") is not None
