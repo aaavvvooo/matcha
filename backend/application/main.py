@@ -19,6 +19,7 @@ from application.repository.user_repo import UserRepository
 from application.service.date_service import DateService
 from application.service.profile_service import MAX_PHOTOS
 from application.utils.image import MAX_IMAGE_BYTES
+from application.utils.tokens import decode_token, parse_session_claims
 from application.websocket.call_manager import call_manager
 from typing import Any, cast
 
@@ -114,8 +115,9 @@ async def _date_reminder_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _install_access_log_redaction()
+    from application.clients.storage import check_config, ensure_bucket
+    check_config()  # misconfiguration (e.g. MinIO credentials unset) stops startup with a clear error
     await database.connect()
-    from application.clients.storage import ensure_bucket
     try:
         await asyncio.to_thread(ensure_bucket)
     except Exception:
@@ -158,25 +160,46 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 # dependency) runs, so oversized uploads must be refused here, from the header.
 _UPLOAD_PATH = "/profile/upload-photo"
 _MAX_UPLOAD_BODY = MAX_PHOTOS * MAX_IMAGE_BYTES + 64 * 1024  # files + multipart overhead
+# Every other route takes small JSON / form bodies.
+_MAX_BODY = 64 * 1024
+_BODY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _has_live_access_token(request: Request) -> bool:
+    """Signature, type and expiry of the Bearer / cookie access token, without touching the DB
+    (the endpoint's dependency does the full check after the body is parsed)."""
+    auth = request.headers.get("authorization", "")
+    token = auth[7:].strip() if auth[:7].lower() == "bearer " else request.cookies.get("access_token")
+    if not token or len(token) > 4096:
+        return False
+    payload = decode_token(token)
+    return bool(payload) and payload.get("type") == "access" and parse_session_claims(payload) is not None
 
 
 @app.middleware("http")
-async def upload_size_guard(request: Request, call_next):
-    if request.method == "POST" and request.url.path == _UPLOAD_PATH:
+async def body_size_guard(request: Request, call_next):
+    if request.method in _BODY_METHODS:
         # Chunked bodies have no declared size, and h11 lets Transfer-Encoding
         # override a (small) Content-Length: refuse it so the length below is
         # the real body size, enforced by the server's HTTP framing.
         if "transfer-encoding" in request.headers:
             return JSONResponse(status_code=411, content={"detail": "Content-Length required"})
-        # Credentials are only verified after the body is parsed; at least make
-        # anonymous clients unable to trigger that parsing.
-        if "authorization" not in request.headers and "access_token" not in request.cookies:
-            return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+        is_upload = request.method == "POST" and request.url.path == _UPLOAD_PATH
         length = request.headers.get("content-length")
-        if length is None or not length.isdigit():
-            return JSONResponse(status_code=411, content={"detail": "Content-Length required"})
-        if int(length) > _MAX_UPLOAD_BODY:
-            return JSONResponse(status_code=413, content={"detail": "Upload too large"})
+        if is_upload:
+            # Credentials are fully verified only after the body is parsed; make sure a
+            # forged or expired token can't trigger that 25 MB parse.
+            if not _has_live_access_token(request):
+                return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+            if length is None or not (length.isascii() and length.isdigit()):
+                return JSONResponse(status_code=411, content={"detail": "Content-Length required"})
+            if int(length) > _MAX_UPLOAD_BODY:
+                return JSONResponse(status_code=413, content={"detail": "Upload too large"})
+        elif length is not None:
+            if not (length.isascii() and length.isdigit()):
+                return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length"})
+            if int(length) > _MAX_BODY:
+                return JSONResponse(status_code=413, content={"detail": "Request body too large"})
     return await call_next(request)
 
 
@@ -199,6 +222,24 @@ async def unhandled_error_middleware(request: Request, call_next):
         else:
             logger.exception("Unhandled error on %s %r", request.method, request.url.path)
         return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
+# Defence in depth for every API response (JSON, photos, errors). CORP is same-site so the SPA
+# (http://localhost:3000 and :8000 are one site) can still show photos with <img>.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cross-Origin-Resource-Policy": "same-site",
+}
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
 
 
 app.add_middleware(
