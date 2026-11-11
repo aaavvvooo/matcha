@@ -148,6 +148,7 @@ function ProfileSetupPage() {
             type="date"
             value={data.birth_date}
             max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+            min={new Date(new Date().setFullYear(new Date().getFullYear() - 120)).toISOString().split('T')[0]}
             onChange={e => setData(d => ({ ...d, birth_date: e.target.value }))}
             style={{
               width: '100%',
