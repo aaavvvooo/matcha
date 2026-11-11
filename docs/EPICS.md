@@ -82,7 +82,7 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 |---|---|---|
 | Hashed passwords, parameterised SQL | ✅ | argon2; asyncpg `$n` placeholders |
 | No internal details in error responses | ✅ | Error middleware (F1) |
-| Upload validation by content (magic bytes), not declared type | ✅ | `utils/image.py` (F2); request-size limit → R2 |
+| Upload validation by content (magic bytes), not declared type | ✅ | `utils/image.py` (F2); request-size guard in `main.py` (R2) |
 | Logout always ends the session | ✅ | Idempotent `/auth/logout` clears cookies + revokes refresh token even with an expired access token |
 | Rate limiting, CORS whitelist, secrets in `.env` (gitignored) | ✅ | |
 
@@ -199,6 +199,17 @@ against a scratch Postgres; no automated test suite (Phase 2 deferred).
 - [x] R13 E1 — **mandatory gap**: split `full_name` into `first_name` + `last_name` (migration with data backfill, register/update/profile schemas, RegisterPage + ProfileEditPage, seed scripts)
 - [x] R14 E8 — landing page shows invented stats ("2,847 members", "94% find a match"): derive from DB or remove
 - [x] R15 — share one `useLogout()` hook between Header and BottomNav; ErrorBoundary could reuse `components/ui/Btn`
+
+### PR #9–#11 review follow-ups (`/ecc:review-pr`, 2026-11-09)
+- [x] R16 E1 — README overstated email retries (4xx are not retried); logs now carry Brevo's error `code` so an un-allowlisted IP (401) is distinguishable from a bad key
+- [x] R17 E6/E8 — WebSocket reconnect looped every 1 s once the access token expired: axios refreshes never reached `AuthContext`; refresh is now single-flight in `api/client.js` and synced to React state, a 1008 close triggers one refresh, backoff resets only after a server frame
+- [x] R18 E2 — `update_profile` read tags on a second pooled connection inside its transaction (pool exhaustion / tag-cap race): read on `conn` under a profile row lock; storage clients get short timeouts so the photo lock is bounded; cleanup logs carry the object key
+- [x] R19 E8 — invalid `transition: <prop> var(--transition-base)` declarations (token is a full shorthand) dropped every hover transition; `.error-msg`/`.success-msg` use tokens; ProfileEditPage shows save errors (shared `api/errors.js`)
+- [x] R20 E3 — default `score` sort is banded by distance (≤25/100/500 km) so "same area first" holds; Search pages with "Load more", switches the sort chip only on success; Browse retry resumes after passed cards; tag-load failures shown; blank `location` → 422
+- [ ] R21 E2 — legacy rows whose gender the value-set migration NULLed can't finish setup (`/profile/set` is a plain INSERT → 409); fresh seeds unaffected. Fix: upsert when the existing row is incomplete
+- [ ] R22 E3 — Browse "shared tags" highlight is never fed (`RightPanel` `myTags`); discovery returns tag names but `/profile/get` returns ids
+- [ ] R23 E3 — one process-wide geocoder gate is shared by search and profile location; many unique-city searches can 503 onboarding
+- [ ] R24 E1 — `auth_service.refresh` reads then upserts the single refresh row non-atomically: two tabs refreshing with the same cookie → the loser gets 401 and is sent to /login (pre-existing; more likely now that the WebSocket refreshes on 1008). Fix: `UPDATE … WHERE token_hash = $old RETURNING` as the rotation check
 
 ### Phase 2 — Test harness — **deferred (2026-11-08)**
 Judged not worth the cost before the mandatory features exist; changes are verified with static checks and

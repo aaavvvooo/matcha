@@ -2,9 +2,13 @@ import axios from 'axios'
 
 const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000'
 
-// This module owns the access token. AuthContext mirrors it into React state via
-// onTokenChange; the WebSocket reads it with getClientToken() each time it connects.
+// This module is the single owner of the access token. AuthContext sets it on login/logout and
+// mirrors every change into React state via onTokenChange; the WebSocket reads it with
+// getClientToken() each time it connects. The refresh token never reaches JS (httpOnly cookie).
 let _token = null
+// Bumped every time the session ends locally, so a refresh still in flight at that moment
+// can't put a token back (late refreshes must not re-sign-in a user who just logged out).
+let _epoch = 0
 const _listeners = new Set()
 
 function _emit() {
@@ -13,6 +17,7 @@ function _emit() {
 
 export function setClientToken(token) {
   if (token === _token) return
+  if (!token) _epoch += 1
   _token = token
   _emit()
 }
@@ -50,21 +55,29 @@ client.interceptors.request.use((config) => {
   return config
 })
 
-// Single-flight refresh: the refresh cookie rotates on every use, so concurrent
-// callers (axios retries, the WebSocket) must share one request.
+function noSessionError() {
+  const err = new Error('No session')
+  err.response = { status: 401 }
+  return err
+}
+
+// Single-flight refresh — the only /auth/refresh caller in the app (boot restore, axios 401s
+// and the WebSocket all come here). The server rotates the refresh cookie on every use, so a
+// second parallel call would present a revoked cookie and end the session.
 let _refreshPromise = null
 
 export function refreshAccessToken() {
   if (!_refreshPromise) {
+    const epoch = _epoch
     _refreshPromise = axios
       .post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true })
       .then((res) => {
+        // Signed out while this was in flight: drop the result.
+        if (epoch !== _epoch) throw noSessionError()
         if (res.status === 204 || !res.data?.access_token) {
-          // 204: the refresh cookie is gone, so there is no session. Same outcome as a 401.
+          // 204: no refresh cookie, so there is no session. Same outcome as a 401.
           setClientToken(null)
-          const err = new Error('No session')
-          err.response = { status: 401 }
-          throw err
+          throw noSessionError()
         }
         setClientToken(res.data.access_token)
         return res.data.access_token
@@ -82,6 +95,12 @@ export function refreshAccessToken() {
   return _refreshPromise
 }
 
+// Resolves once any refresh in flight has settled (never rejects). Logout waits for it so the
+// server revokes the refresh token after, not before, a concurrent rotation.
+export function settleRefresh() {
+  return _refreshPromise ? _refreshPromise.then(() => undefined, () => undefined) : Promise.resolve()
+}
+
 // On 401: refresh the token (shared with every other 401 in flight), then retry the original
 client.interceptors.response.use(
   (res) => res,
@@ -90,13 +109,17 @@ client.interceptors.response.use(
 
     if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true
+      let token
       try {
-        const newToken = await refreshAccessToken()
-        original.headers.Authorization = `Bearer ${newToken}`
-        return client(original)
-      } catch {
-        window.location.href = '/login'
+        token = await refreshAccessToken()
+      } catch (refreshError) {
+        // Session over: back to sign-in. A transient refresh failure (offline, 429, 5xx)
+        // surfaces as the original error so the page can show its own error state.
+        if (refreshError?.response?.status === 401) window.location.href = '/login'
+        return Promise.reject(error)
       }
+      original.headers.Authorization = `Bearer ${token}`
+      return client(original)
     }
 
     return Promise.reject(error)

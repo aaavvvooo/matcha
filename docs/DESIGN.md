@@ -120,7 +120,7 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 ### Auth — `/auth`
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/register` | Sends verification email · 10/hour |
+| POST | `/register` | Sends verification email · 10/hour · 409 if username/email is taken |
 | POST | `/verify-email` | Token in body |
 | POST | `/login` | Form body (username or email + password) · body `{access_token, token_type}` only (the refresh token is never in a response body), sets the refresh and `access_token` cookies · 5/min |
 | GET | `/me` | Current user |
@@ -136,7 +136,7 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 | GET | `/get` | Own full profile |
 | PATCH | `/update` | Gender, orientation, bio, birth date, tags |
 | PATCH | `/location` | `{latitude, longitude}` (GPS) or `{city}` (geocoded) |
-| POST | `/upload-photo` | multipart `files[]`; JPEG/PNG/WebP, ≤5 MB, ≤5 total |
+| POST | `/upload-photo` | multipart `files[]`; JPEG/PNG/WebP, ≤5 MB each, ≤5 total. Refused before parsing: 411 (no `Content-Length` / chunked), 401 (no credentials), 413 (body > 5×5 MB + 64 KB) |
 | DELETE | `/delete-photos` | `{photo_ids: []}` |
 | POST | `/set-profpic` | `{photo_id}` |
 | GET | `/get-all-tags` | Tag autocomplete |
@@ -145,7 +145,7 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 ### Other users — `/users`
 | Method | Path | Notes |
 |---|---|---|
-| PATCH | `/me` | Name / email (email change ⇒ re-verify) |
+| PATCH | `/me` | Name / email (email change ⇒ re-verify) · 409 if username/email is taken |
 | GET | `/me/blocks` | My blocked list |
 | GET | `/{id}` | Public profile (no email); records a view; 403 if they blocked me |
 | POST / DELETE | `/{id}/like` | Like requires own photo; mutual ⇒ connection. Unlike removes connection |
@@ -204,10 +204,12 @@ participant (§7); every transition returns the updated date.
 register → email link → POST /auth/verify-email → is_validated = true
 login    → access token (body) + refresh token (httpOnly cookie only, hash stored in refresh_tokens)
 request  → Bearer access token; blacklist checked in get_current_user
-boot     → AuthContext calls POST /auth/refresh once: 200 restores the session, 204 (no cookie) leaves the user
-           signed out without any failed request, 401 (stale cookie) also signed out
-expired  → axios interceptor → single-flight refresh in api/client.js (shared with the WebSocket) → retry
-logout   → access token hash → token_blacklist; refresh cookie cleared; user's sockets closed
+boot     → AuthContext calls refreshAccessToken() (api/client.js) once: 200 restores the session, 204 (no cookie)
+           leaves the user signed out without any failed request, 401 (stale cookie) also signed out
+expired  → axios interceptor → single-flight refresh in api/client.js (shared with boot and the WebSocket) → retry;
+           only a 401 from the refresh sends the user to /login (offline/429/5xx surface as the request's error)
+logout   → client token cleared first (socket closes, an in-flight refresh result is discarded), then the server
+           call: access token hash → token_blacklist; refresh row deleted, cookie cleared; user's sockets closed
 tokens   → JWTs carry type=access|refresh; every bearer/cookie/WS credential check requires type=access,
            /auth/refresh requires type=refresh (a refresh JWT is never an access credential)
 ```
@@ -224,9 +226,10 @@ The token's `exp` is kept: when it passes (checked on every inbound frame and on
 socket with 1008. Close reasons the client acts on: `auth_failed` (bad/blacklisted/refresh token, missing auth
 frame), `token_expired`, `logged_out` (logout), `too_many_connections` (more than **5** sockets per user; extra
 connections are closed after auth). Logout closes all of the user's sockets. On any 1008 other than
-`too_many_connections` the client gets a fresh token through the single-flight refresh in `api/client.js` and
-reconnects with exponential backoff (1 s to 30 s, reset by `auth_ok`); if the refresh is rejected (401) it stops and
-the session ends. `too_many_connections` just retries at the maximum backoff.
+`too_many_connections` the client gets a fresh token through the single-flight refresh in `api/client.js` (once per
+healthy connection) and reconnects with exponential backoff (1 s to 30 s, reset by `auth_ok`); if the refresh is
+rejected (401) the session ends, and if the fresh token is rejected again the client stops reconnecting. Before each
+connect the client also refreshes a token that expires within 30 s. `too_many_connections` just retries at the maximum backoff.
 
 `PresenceManager` (`websocket/manager.py`) keeps `user_id → set[WebSocket]` (max 5 per user); `users.is_online`
 flips on the first connect and back (with `last_seen = now()`) when the last socket closes. It also owns the
@@ -344,8 +347,10 @@ fame_norm    = fame_rating / 100
 score        = 0.5 * proximity + 0.3 * shared_norm + 0.2 * fame_norm
 ```
 
-"Same area first" (subject IV.3) is enforced by the proximity weight. Explicit sorts (`age`, `distance`, `fame`,
-`tags`) replace the score; filters apply before sorting. Pagination by `limit`/`offset`.
+"Same area first" (subject IV.3) is enforced by ordering, not only by the weight: `sort_by=score` sorts by distance
+band first — ≤25 km, ≤100 km, ≤500 km, farther, unknown distance last (`AREA_BANDS_KM`) — and by score within a band,
+so shared tags or fame never lift a distant candidate above a nearby one. Explicit sorts (`age`, `distance`, `fame`,
+`tags`) replace the score and are not banded; filters apply before sorting. Pagination by `limit`/`offset`.
 
 ## 9. Fame rating
 
@@ -367,8 +372,8 @@ Stored in `user_profiles.fame_rating`. `profile_viewers` counts distinct viewers
 | CSRF | Refresh cookie httpOnly + SameSite=Strict; CORS whitelist | ✅ |
 | Brute force | SlowAPI limits on auth routes | ✅ |
 | Token replay | Access blacklist on logout; refresh rotation | ✅ |
-| Malicious upload | Type detected from magic bytes (`utils/image.py`), never client `content_type`; ≤5 MB read cap; all files validated before any is stored; served with `nosniff` | ✅ (request-size limit: R2) |
-| Info leakage | `main.py` middleware logs unhandled errors and returns `{"detail":"Internal server error"}`; `/health` reports only connectivity | ✅ |
+| Malicious upload | Type detected from magic bytes (`utils/image.py`), never client `content_type`; ≤5 MB read cap; all files validated before any is stored; served with `nosniff`; `upload_size_guard` (`main.py`) refuses oversized, chunked or anonymous upload bodies from the headers before Starlette parses them | ✅ |
+| Info leakage | `main.py` middleware logs unhandled errors and returns `{"detail":"Internal server error"}`; `/health` returns only `status` (`healthy`/`degraded`/`unhealthy`), database connectivity and `storage.ready` — no versions, hosts or errors | ✅ |
 | Secrets | `.env` gitignored | ✅ |
 
 **Micro-framework rule (subject §III).** Decision 2026-11-07: keep FastAPI + Pydantic. Defense position: FastAPI is

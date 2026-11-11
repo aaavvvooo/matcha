@@ -117,10 +117,13 @@ class ProfileService:
             async with pool.acquire() as connection:
                 async with connection.transaction():
                     conn = cast(Connection, connection)
+                    # Serialise concurrent PATCHes: each diffs tags against the
+                    # current set, so two unlocked ones could both pass the cap.
+                    await self.profile_repo.lock_profile(user_id, conn)
                     if updates:
                         await self.profile_repo.update_profile(user_id, updates, conn)
                     if tags is not None:
-                        current = set(await self.profile_repo.get_user_tag_ids(user_id))
+                        current = set(await self.profile_repo.get_user_tag_ids(user_id, conn))
                         desired = set(tags)
                         to_add = list(desired - current)
                         to_remove = list(current - desired)
@@ -254,7 +257,7 @@ class ProfileService:
             try:
                 await asyncio.to_thread(storage.delete_photo, key)
             except Exception as e:
-                logger.warning("Could not remove orphaned photo object: %s", type(e).__name__)
+                logger.warning("Could not remove orphaned photo object %s: %s", key, type(e).__name__)
 
     async def delete_photos(self, user_id: int, photo_ids: list[int]) -> list[int]:
         from application.clients.storage import delete_photo
@@ -279,6 +282,6 @@ class ProfileService:
                     except Exception as e:
                         # The row is gone, so the object is unreachable through the
                         # API, but it still holds a private image: make it visible.
-                        logger.error("Photo object not deleted from storage: %s", type(e).__name__)
+                        logger.error("Photo object %s not deleted from storage: %s", url, type(e).__name__)
         return deleted_ids
 

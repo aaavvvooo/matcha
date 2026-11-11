@@ -9,7 +9,6 @@ const WS_BASE = process.env.REACT_APP_WS_URL || 'ws://localhost:8000'
 
 const RECONNECT_MIN_MS = 1000
 const RECONNECT_MAX_MS = 30000
-
 // WebSocket close code and reasons set by the server (backend/application/api/endpoints/chat.py).
 const POLICY_VIOLATION = 1008
 const REASON_TOO_MANY = 'too_many_connections'
@@ -73,6 +72,9 @@ export function NotificationProvider({ children }) {
     let stopped = false
     let retryTimer = null
     let delay = RECONNECT_MIN_MS
+    // Set after a 1008-triggered refresh, cleared by the next auth_ok: if the fresh token is
+    // rejected too, the session is gone (the next API call's 401 handling signs the user out).
+    let refreshedForAuth = false
 
     const scheduleRetry = (wait) => {
       if (stopped) return
@@ -98,8 +100,9 @@ export function NotificationProvider({ children }) {
       const ws = new WebSocket(`${WS_BASE}/chat/ws`)
       wsRef.current = ws
 
+      // Read again at open: an axios refresh may have rotated the token while connecting.
       ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'auth', token }))
+        ws.send(JSON.stringify({ type: 'auth', token: getClientToken() ?? token }))
       }
 
       ws.onmessage = (event) => {
@@ -110,7 +113,10 @@ export function NotificationProvider({ children }) {
           return // not JSON (e.g. a keep-alive frame): nothing to handle
         }
         if (msg?.type === 'auth_ok') {
+          // Healthy only now (not onopen: the server accepts first, then closes with 1008 on
+          // a bad token), so the backoff and the one-refresh budget reset here.
           delay = RECONNECT_MIN_MS
+          refreshedForAuth = false
           setConnected(true)
           return
         }
@@ -141,12 +147,17 @@ export function NotificationProvider({ children }) {
           return
         }
         if (event.code === POLICY_VIOLATION) {
-          // Rejected or expired credentials: get a fresh token (shared single-flight
-          // refresh) before reconnecting; if the session is gone, stop and sign out.
+          // Rejected, expired or logged-out credentials: get a fresh token (shared
+          // single-flight refresh) once, then reconnect. A second rejection of a fresh token,
+          // or a refresh the server refuses (401: the client clears the session and
+          // AuthContext signs out), ends the retries. Offline / 429 / 5xx falls back to backoff.
+          if (refreshedForAuth) return
+          refreshedForAuth = true
           try {
             await refreshAccessToken()
           } catch (err) {
             if (err?.response?.status === 401) return
+            refreshedForAuth = false
           }
           if (stopped) return
         }

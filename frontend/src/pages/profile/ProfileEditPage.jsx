@@ -4,6 +4,7 @@ import { Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getMyProfile, updateProfile, getAllTags, uploadPhoto, deletePhotos, setProfilePic } from '../../api/profilesApi';
 import { updateMe } from '../../api/usersApi';
+import { apiError } from '../../api/errors';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
@@ -46,6 +47,7 @@ export default function ProfileEditPage() {
   });
   const [saved, setSaved] = useState(false);
   const [emailChangeNotice, setEmailChangeNotice] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [photoUploading, setPhotoUploading] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState(null);
@@ -133,6 +135,7 @@ export default function ProfileEditPage() {
   }
 
   async function handleSave() {
+    setSaveError(null);
     try {
       await updateProfile({
         bio: form.bio,
@@ -160,7 +163,9 @@ export default function ProfileEditPage() {
       } else {
         setTimeout(() => navigate(`/profile/${user.id}`), 800);
       }
-    } catch {}
+    } catch (err) {
+      setSaveError(apiError(err, 'Could not save your changes — try again'));
+    }
   }
 
   const name = displayName(form, user?.username || 'You');
@@ -324,6 +329,12 @@ export default function ProfileEditPage() {
               textAlign: 'center', marginBottom: 10,
             }}>
               A verification link was sent to your new email. Please confirm it to keep using your account.
+            </div>
+          )}
+
+          {saveError && (
+            <div className="error-msg" role="alert" style={{ marginBottom: 10 }}>
+              {saveError}
             </div>
           )}
 
