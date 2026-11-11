@@ -7,10 +7,15 @@
 
 {% block content %}
     <p>Hi <strong>{{ username }}</strong>,</p>
-    
+    {% if email_change %}
+    <p>You asked to use this address for your Matcha account.</p>
+
+    <p>Confirm it by clicking the button below. Until you do, your account keeps using its current address.</p>
+    {% else %}
     <p>Welcome to Matcha!</p>
     
     <p>To get started, please verify your email address by clicking the button below:</p>
+    {% endif %}
     
     <div class="button-container">
         <a href="{{ verification_url }}" class="button">
@@ -30,6 +35,6 @@
     
     <div class="info-box">
         <strong>🔒 Security Note:</strong><br>
-        If you didn't create a Matcha account, you can safely ignore this email. Your email address will not be used without verification.
+        {% if email_change %}If you didn't ask for this change, you can safely ignore this email: nothing changes without your confirmation.{% else %}If you didn't create a Matcha account, you can safely ignore this email. Your email address will not be used without verification.{% endif %}
     </div>
 {% endblock %}

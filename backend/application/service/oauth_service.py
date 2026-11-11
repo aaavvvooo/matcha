@@ -49,6 +49,7 @@ from application.config import JWT_SECRET_KEY
 from application.database import Database
 from application.repository import TokenRepository, UserRepository
 from application.repository.oauth_repo import OAuthRepository
+from application.schema.fields import USERNAME_RE
 from application.service.auth_service import AuthService
 from application.utils import create_verification_token, get_password_hash
 
@@ -57,7 +58,7 @@ logger = logging.getLogger(__name__)
 STATE_TTL_SECONDS = 600
 _MAX_STATE_LEN = 128
 _NAME_MAX = 50  # users.first_name / last_name VARCHAR(50)
-_USERNAME_BASE_MAX = 40  # leaves room for a numeric suffix under the 50-char limit
+_USERNAME_BASE_MAX = 24  # + a 6-digit suffix stays within the 30-character username rule
 
 # Fixed set of error codes the frontend maps to messages; nothing else is ever sent.
 # (Success is status=ok, or status=verify_email for a new account awaiting verification.)
@@ -200,16 +201,17 @@ def _clean_name(raw: str) -> str:
 
 
 def _username_base(login: str) -> str:
-    base = re.sub(r"[^A-Za-z0-9_-]", "", login)[:_USERNAME_BASE_MAX]
+    base = re.sub(r"[^A-Za-z0-9_.-]", "", login)[:_USERNAME_BASE_MAX]
     return base if len(base) >= 3 else "user"
 
 
 def _username_candidates(base: str):
-    yield base
-    for n in range(2, 10):
-        yield f"{base}{n}"
-    for _ in range(5):
-        yield f"{base}{secrets.randbelow(900_000) + 100_000}"
+    """Candidates that all satisfy the shared username rule (schema/fields.Username)."""
+    candidates = [base, *(f"{base}{n}" for n in range(2, 10))]
+    candidates += [f"{base}{secrets.randbelow(900_000) + 100_000}" for _ in range(5)]
+    for candidate in candidates:
+        if USERNAME_RE.fullmatch(candidate):
+            yield candidate
 
 
 def _normalise_email(raw: Optional[str]) -> Optional[str]:
@@ -219,7 +221,7 @@ def _normalise_email(raw: Optional[str]) -> Optional[str]:
         _, email = validate_email(raw)
     except (PydanticCustomError, ValueError):
         return None
-    return email
+    return email.lower()  # stored and compared lower-case, like every other address
 
 
 @dataclass
@@ -243,7 +245,7 @@ class OAuthService:
         if not user["is_validated"]:
             # Same rule as password login; also covers a pending email change.
             raise OAuthFlowError("email_unverified")
-        access, refresh = await AuthService(self.db).issue_session(user["username"])
+        access, refresh = await AuthService(self.db).issue_session(user["id"], user["token_version"])
         return OAuthResult(username=user["username"], access_token=access, refresh_token=refresh)
 
     async def _linked_session(self, provider: str, provider_user_id: str) -> OAuthResult:
@@ -324,11 +326,11 @@ class OAuthService:
                                 datetime.now(timezone.utc) + timedelta(days=1), conn,
                             )
             except asyncpg.UniqueViolationError as e:
-                if e.constraint_name == "ix_users_username":
+                if e.constraint_name in ("ix_users_username", "uq_users_username_lower"):
                     continue
                 if e.constraint_name == "uq_oauth_accounts_provider_user":
                     return await self._linked_session(provider.id, identity.provider_user_id)
-                if e.constraint_name == "ix_users_email":
+                if e.constraint_name in ("ix_users_email", "uq_users_email_lower"):
                     raise OAuthFlowError("email_in_use") from None
                 raise
             logger.info("OAuth: created user id=%s via %s", user["id"], provider.id)

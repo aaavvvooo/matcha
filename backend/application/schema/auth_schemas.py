@@ -1,4 +1,4 @@
-from application.schema.fields import PersonName
+from application.schema.fields import Email, Password, PersonName, Username
 from pydantic import BaseModel, EmailStr, Field, validator
 from datetime import datetime
 
@@ -6,10 +6,10 @@ from datetime import datetime
 class RegisterRequest(BaseModel):
     first_name: PersonName
     last_name: PersonName
-    username: str = Field(..., max_length=50)
-    email: EmailStr = Field(...)
-    password: str = Field(..., min_length=8, max_length=128)
-    confirm_password: str = Field(..., min_length=8, max_length=128)
+    username: Username
+    email: Email
+    password: Password
+    confirm_password: Password
 
     @validator("confirm_password")
     def passwords_match(cls, v, values):
@@ -41,7 +41,7 @@ class UserLogin(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    token: str
-    password: str = Field(min_length=8, max_length=128)
+    token: str = Field(..., max_length=64)
+    password: Password
 
     model_config = {"from_attributes": True}

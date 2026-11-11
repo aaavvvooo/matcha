@@ -1,8 +1,8 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict
 from datetime import datetime
 from typing import Optional
 
-from application.schema.fields import PersonName
+from application.schema.fields import Email, PersonName, Username
 from application.schema.profile_schemas import PhotoResponse
 from application.schema.value_sets import Gender, Orientation
 
@@ -53,8 +53,8 @@ class ViewerResponse(SimpleUserResponse):
 class UpdateMeRequest(BaseModel):
     first_name: Optional[PersonName] = None
     last_name: Optional[PersonName] = None
-    username: Optional[str] = Field(None, max_length=50)
-    email: Optional[EmailStr] = None
+    username: Optional[Username] = None
+    email: Optional[Email] = None
 
 
 class BlockResponse(BaseModel):
@@ -68,6 +68,9 @@ class MeResponse(BaseModel):
     username: str
     email: EmailStr
     is_validated: bool
+    # Email change: `email` stays the current, verified address until the link sent to
+    # `pending_email` is clicked.
     email_verification_sent: bool = False
+    pending_email: Optional[EmailStr] = None
 
     model_config = ConfigDict(from_attributes=True)
