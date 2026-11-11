@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Request, UploadFile, File, Form, HTTPException
 from typing import List, Optional
 
@@ -18,12 +20,15 @@ from application.service import ProfileService
 from application.service.profile_service import MAX_PHOTOS
 from application.repository.profile_repo import ProfileRepository
 from application.utils import get_current_user
-from application.utils.image import MAX_IMAGE_BYTES, detect_image_type
+from application.utils.image import MAX_IMAGE_BYTES, InvalidImage, sanitize_image
 from application.limiter import limiter
 from application.schema.fields import INT4_MAX
 
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+# Decoding is memory-hungry (a 16 MP image is ~64 MB as RGBA): at most two at a time per process.
+_DECODE_SLOTS = asyncio.Semaphore(2)
 
 
 @router.post("/set", response_model=ProfileResponse)
@@ -124,16 +129,20 @@ async def upload_photo(
     # lock in ProfileService.upload_photos.
     if replaces is None and await service.profile_repo.count_photos(user_id) >= MAX_PHOTOS:
         raise HTTPException(status_code=400, detail=f"Cannot exceed {MAX_PHOTOS} photos")
-    # Validate every file before storing any, so a bad file never leaves orphans in storage.
+    # Validate (decode + re-encode, utils/image.py) every file before storing any, so a bad
+    # file never leaves orphans in storage. Only the re-encoded bytes are kept: they are what
+    # gets stored, hashed into the object key and so compared for duplicates.
     validated: list[tuple[bytes, str]] = []
-    for file in files:
+    for index, file in enumerate(files, start=1):
         data = await file.read(MAX_IMAGE_BYTES + 1)
+        label = f"Photo {index}" if len(files) > 1 else "Photo"
         if len(data) > MAX_IMAGE_BYTES:
-            raise HTTPException(status_code=400, detail=f"{file.filename}: file size must not exceed 5 MB")
-        image_type = detect_image_type(data)
-        if image_type is None:
-            raise HTTPException(status_code=400, detail=f"{file.filename}: only JPEG, PNG and WebP images are allowed")
-        validated.append((data, image_type))
+            raise HTTPException(status_code=400, detail=f"{label}: file size must not exceed 5 MB")
+        try:
+            async with _DECODE_SLOTS:
+                validated.append(await asyncio.to_thread(sanitize_image, data))
+        except InvalidImage as e:
+            raise HTTPException(status_code=400, detail=f"{label}: {e}") from None
     if replaces is not None:
         data, image_type = validated[0]
         return [await service.replace_photo(user_id, replaces, data, image_type)]
