@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getMyProfile, updateProfile, getAllTags, uploadPhoto, deletePhotos, setProfilePic } from '../../api/profilesApi';
+import { getMyProfile, updateProfile, getAllTags, deletePhotos, setProfilePic } from '../../api/profilesApi';
 import { updateMe } from '../../api/usersApi';
 import { apiError } from '../../api/errors';
 import MatchaCup from '../../components/ui/MatchaCup';
@@ -14,6 +14,7 @@ import FormInput from '../../components/ui/FormInput';
 import LocationPicker from '../../components/ui/LocationPicker';
 import { displayName } from '../../utils/displayName';
 import { useLogout } from '../../hooks/useLogout';
+import PhotoGallery from './PhotoGallery';
 
 const GENDERS = ['Man', 'Woman', 'Non-binary', 'Other'];
 const ORIENTATIONS = ['Heterosexual', 'Homosexual', 'Bisexual', 'Other'];
@@ -49,7 +50,6 @@ export default function ProfileEditPage() {
   const [emailChangeNotice, setEmailChangeNotice] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [photoUploading, setPhotoUploading] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState(null);
   const [photoError, setPhotoError] = useState(null);
 
@@ -92,38 +92,19 @@ export default function ProfileEditPage() {
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  async function handlePhotoUpload(e) {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    setPhotoUploading(true);
-    setPhotoError(null);
-    try {
-      const newPhotos = await uploadPhoto(files);
-      const isFirst = (profile?.photos || []).length === 0;
-      setProfile(p => ({ ...p, photos: [...(p.photos || []), ...newPhotos] }));
-      if (isFirst && newPhotos.length > 0) {
-        await setProfilePic(newPhotos[0].id);
-        setProfile(p => ({ ...p, photos: p.photos.map((ph, i) => ({ ...ph, is_main: i === 0 })) }));
-      }
-    } catch (err) {
-      const msg = err?.response?.data?.detail || 'Failed to upload photo';
-      setPhotoError(msg);
-      setTimeout(() => setPhotoError(null), 4000);
-    } finally {
-      setPhotoUploading(false);
-      e.target.value = '';
-    }
-  }
-
   async function handlePhotoDelete(photoId) {
+    setPhotoError(null);
     try {
       await deletePhotos([photoId]);
       setProfile(p => ({ ...p, photos: p.photos.filter(ph => ph.id !== photoId) }));
       if (previewPhoto?.id === photoId) setPreviewPhoto(null);
-    } catch {}
+    } catch (err) {
+      setPhotoError(apiError(err, 'Could not delete the photo — try again'));
+    }
   }
 
   async function handleSetProfilePic(photo) {
+    setPhotoError(null);
     try {
       await setProfilePic(photo.id);
       setProfile(p => ({
@@ -131,7 +112,9 @@ export default function ProfileEditPage() {
         photos: p.photos.map(ph => ({ ...ph, is_main: ph.id === photo.id })),
       }));
       setPreviewPhoto(ph => ({ ...ph, is_main: true }));
-    } catch {}
+    } catch (err) {
+      setPhotoError(apiError(err, 'Could not set the profile picture — try again'));
+    }
   }
 
   async function handleSave() {
@@ -199,59 +182,15 @@ export default function ProfileEditPage() {
           </Section>
 
           <Section>
-            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 12 }}>
-              Photos <span style={{ color: 'var(--ink4)', fontWeight: 400 }}>({profile?.photos?.length || 0}/5)</span>
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {Array.from({ length: 5 }).map((_, i) => {
-                const photo = profile?.photos?.[i];
-                return photo ? (
-                  <div key={i} style={{ position: 'relative', width: 64, height: 64 }}>
-                    <div
-                      onClick={() => setPreviewPhoto(photo)}
-                      style={{
-                        width: 64, height: 64, borderRadius: 'var(--r-sm)',
-                        background: `url(${photo.url}) center/cover`,
-                        border: `1.5px solid ${photo.is_main ? 'var(--spice)' : 'var(--clay)'}`,
-                        cursor: 'pointer',
-                      }}
-                    />
-                    {photo.is_main && (
-                      <div style={{
-                        position: 'absolute', bottom: 2, right: 2,
-                        width: 10, height: 10, borderRadius: '50%',
-                        background: 'var(--spice)', border: '1.5px solid #fff',
-                      }}/>
-                    )}
-                    <button
-                      onClick={() => handlePhotoDelete(photo.id)}
-                      style={{
-                        position: 'absolute', top: -6, right: -6,
-                        width: 18, height: 18, borderRadius: '50%',
-                        background: 'var(--rose)', border: 'none', color: '#fff',
-                        fontSize: 10, cursor: 'pointer', display: 'flex',
-                        alignItems: 'center', justifyContent: 'center', lineHeight: 1,
-                      }}
-                    >×</button>
-                  </div>
-                ) : (profile?.photos?.length || 0) === i ? (
-                  <label key={i} style={{
-                    width: 64, height: 64, borderRadius: 'var(--r-sm)',
-                    background: 'var(--cream)', border: '1.5px dashed var(--sand)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 22, color: 'var(--sand)', cursor: photoUploading ? 'wait' : 'pointer',
-                  }}>
-                    {photoUploading ? '…' : '+'}
-                    <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={handlePhotoUpload} style={{ display: 'none' }} disabled={photoUploading}/>
-                  </label>
-                ) : (
-                  <div key={i} style={{
-                    width: 64, height: 64, borderRadius: 'var(--r-sm)',
-                    background: 'var(--cream)', border: '1.5px dashed var(--cream3)',
-                  }}/>
-                );
-              })}
-            </div>
+            <PhotoGallery
+              photos={profile?.photos || []}
+              onPhotosChange={(photos) => setProfile(p => ({ ...p, photos }))}
+              onOpen={setPreviewPhoto}
+              onDelete={handlePhotoDelete}
+            />
+            {photoError && (
+              <div className="error-msg" role="alert" style={{ marginTop: 10 }}>{photoError}</div>
+            )}
           </Section>
 
           <Section>
@@ -341,18 +280,6 @@ export default function ProfileEditPage() {
           <Btn onClick={handleSave} style={{ width: '100%' }}>
             {saved ? <><Check size={16}/> Saved!</> : 'Save changes'}
           </Btn>
-        </div>
-      )}
-
-      {photoError && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--rose)', color: '#fff', padding: '12px 20px',
-          borderRadius: 'var(--r-sm)', fontSize: 14, fontWeight: 500,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.25)', zIndex: 2000,
-          maxWidth: '90vw', textAlign: 'center', pointerEvents: 'none',
-        }}>
-          {photoError}
         </div>
       )}
 

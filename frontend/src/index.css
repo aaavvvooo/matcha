@@ -143,3 +143,14 @@ input:focus, textarea:focus {
 @media (min-width: 860px) {
   .mobile-only { display: none !important; }
 }
+
+/* ── Photo gallery (B2) ──────────────────────────────────────── */
+.photo-dropzone:focus-visible,
+.photo-tile-btn:focus-visible,
+[role="dialog"] [tabindex="0"]:focus-visible {
+  outline: 2px solid var(--spice);
+  outline-offset: 2px;
+}
+.photo-tile[draggable="true"] { cursor: grab; }
+.photo-tile.dragging { opacity: 0.4; }
+.photo-tile.drop-target img, .photo-tile.drop-target .photo-thumb { outline: 2px dashed var(--spice); outline-offset: 2px; }

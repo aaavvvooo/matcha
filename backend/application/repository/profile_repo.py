@@ -206,6 +206,40 @@ class ProfileRepository:
             rows = await self.db.fetch_all(query, user_id, urls)
         return [row["url"] for row in rows]
 
+    async def get_photo(self, user_id: int, photo_id: int, transaction: Connection):
+        return await transaction.fetchrow(
+            'SELECT id, url, "order", is_main FROM photos WHERE id = $1 AND user_id = $2',
+            photo_id, user_id,
+        )
+
+    async def insert_photo(
+        self, user_id: int, url: str, order: int, is_main: bool, transaction: Connection
+    ):
+        return await transaction.fetchrow(
+            """
+            INSERT INTO photos (user_id, url, "order", is_main)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, user_id, url, "order", is_main
+            """,
+            user_id, url, order, is_main,
+        )
+
+    async def repoint_profile_picture(
+        self, user_id: int, old_id: int, new_id: int, transaction: Connection
+    ) -> None:
+        await transaction.execute(
+            """
+            UPDATE user_profiles SET profile_picture_id = $3, updated_at = NOW()
+            WHERE user_id = $1 AND profile_picture_id = $2
+            """,
+            user_id, old_id, new_id,
+        )
+
+    async def delete_photo_row(self, user_id: int, photo_id: int, transaction: Connection) -> None:
+        await transaction.execute(
+            "DELETE FROM photos WHERE id = $1 AND user_id = $2", photo_id, user_id
+        )
+
     async def get_photos_urls(
         self, user_id: int, photo_ids: list[int], transaction: Optional[Connection] = None
     ) -> list[str]:
@@ -247,6 +281,29 @@ class ProfileRepository:
             user_id,
         )
         return [row["id"] for row in deleted]
+
+    async def get_photo_ids(self, user_id: int, transaction: Connection) -> list[int]:
+        rows = await transaction.fetch(
+            'SELECT id FROM photos WHERE user_id = $1 ORDER BY "order"', user_id
+        )
+        return [row["id"] for row in rows]
+
+    async def set_photo_order(self, user_id: int, photo_ids: list[int], transaction: Connection):
+        """Renumber the user's photos 1..n following photo_ids (one statement).
+
+        is_main and profile_picture_id are deliberately untouched.
+        """
+        rows = await transaction.fetch(
+            """
+            UPDATE photos p
+            SET "order" = o.new_order, updated_at = NOW()
+            FROM unnest($2::int[]) WITH ORDINALITY AS o(id, new_order)
+            WHERE p.id = o.id AND p.user_id = $1
+            RETURNING p.id, p.user_id, p.url, p."order", p.is_main
+            """,
+            user_id, photo_ids,
+        )
+        return sorted(rows, key=lambda r: r["order"])
 
     async def add_tags(
         self, user_id: int, tag_ids: list[int], transaction: Optional[Connection] = None

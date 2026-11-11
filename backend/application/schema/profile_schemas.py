@@ -48,6 +48,10 @@ class DeletePhotosRequest(BaseModel):
     photo_ids: list[DbId] = Field(..., min_length=1, max_length=50)
 
 
+class ReorderPhotosRequest(BaseModel):
+    # Cap well above the 5-photo limit; the exact-set check lives in the service.
+    photo_ids: list[DbId] = Field(..., max_length=50)
+
 
 class ProfileRequest(BaseModel):
     user_id: int
