@@ -1,17 +1,20 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, StringConstraints
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
-from application.schema.fields import DbId
+from application.schema.fields import BirthDate, DbId, SafeMultiline, SafeText
 from application.schema.value_sets import Gender, Orientation
+
+Bio = Annotated[str, StringConstraints(max_length=500), SafeMultiline]
+City = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255), SafeText]
 
 
 class SetProfileRequest(BaseModel):
     # The owner always comes from the access token, never from the body.
     model_config = ConfigDict(extra="ignore")
 
-    bio: Optional[str] = Field(None, max_length=500)
-    birth_date: Optional[datetime] = None
+    bio: Optional[Bio] = None
+    birth_date: Optional[BirthDate] = None
     gender: Gender
     sexual_orientation: Optional[Orientation] = None
     # Photos are added only through /profile/upload-photo, which derives the storage
@@ -20,8 +23,8 @@ class SetProfileRequest(BaseModel):
 
 
 class UpdateProfileRequest(BaseModel):
-    bio: Optional[str] = Field(None, max_length=500)
-    birth_date: Optional[datetime] = None
+    bio: Optional[Bio] = None
+    birth_date: Optional[BirthDate] = None
     gender: Optional[Gender] = None
     sexual_orientation: Optional[Orientation] = None
     tags: Optional[list[DbId]] = Field(None, max_length=100)
@@ -31,7 +34,7 @@ class SetLocationRequest(BaseModel):
     """Either (latitude, longitude) for GPS consent, or city for manual entry."""
     latitude: Optional[float] = Field(None, ge=-90, le=90)
     longitude: Optional[float] = Field(None, ge=-180, le=180)
-    city: Optional[str] = Field(None, min_length=1, max_length=255)
+    city: Optional[City] = None
 
 
 class LocationResponse(BaseModel):
@@ -47,6 +50,10 @@ class SetProfilePicRequest(BaseModel):
 class DeletePhotosRequest(BaseModel):
     photo_ids: list[DbId] = Field(..., min_length=1, max_length=50)
 
+
+class ReorderPhotosRequest(BaseModel):
+    # Cap well above the 5-photo limit; the exact-set check lives in the service.
+    photo_ids: list[DbId] = Field(..., max_length=50)
 
 
 class ProfileRequest(BaseModel):

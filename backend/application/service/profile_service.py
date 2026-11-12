@@ -250,6 +250,92 @@ class ProfileService:
             photos.append(PhotoResponse(**photo))
         return photos
 
+    async def replace_photo(
+        self, user_id: int, old_id: int, data: bytes, content_type: str
+    ) -> PhotoResponse:
+        """Swap one of the caller's photos for a new image, all or nothing.
+
+        The new row takes over the old row's position and main-photo status, and
+        the old row is deleted in the same transaction, so the original disappears
+        only if the replacement commits. Net photo count is unchanged, so the cap
+        can't be exceeded. Content identical to a photo already in the gallery
+        (including the one being replaced) is refused with 409 and nothing changes.
+        """
+        from application.clients import storage
+
+        pool = self.db.require_pool()
+        async with pool.acquire() as connection:
+            conn = cast(Connection, connection)
+            key = storage.photo_key(user_id, data)
+            stored: list[str] = []
+            try:
+                async with connection.transaction():
+                    await self.profile_repo.lock_user_photos(user_id, conn)
+                    old = await self.profile_repo.get_photo(user_id, old_id, conn)
+                    if old is None:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="The photo to replace was not found",
+                        )
+                    if await self.profile_repo.get_existing_urls(user_id, [key], conn):
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="This image is already in your gallery",
+                        )
+                    stored.append(await asyncio.to_thread(storage.upload_photo, user_id, data, content_type))
+                    row = await self.profile_repo.insert_photo(
+                        user_id, stored[0], old["order"], old["is_main"], conn
+                    )
+                    await self.profile_repo.repoint_profile_picture(user_id, old_id, row["id"], conn)
+                    await self.profile_repo.delete_photo_row(user_id, old_id, conn)
+            except BaseException:
+                # Nothing references the new key (409 above rules out an existing row),
+                # and the rollback restored the original. Shielded so a client
+                # disconnect still cleans up.
+                await asyncio.shield(self._remove_objects(stored))
+                raise
+
+            # Committed. The old object is removed afterwards, under the lock again so
+            # an upload of identical bytes can't re-reference it between check and delete.
+            async with connection.transaction():
+                await self.profile_repo.lock_user_photos(user_id, conn)
+                if not await self.profile_repo.get_existing_urls(user_id, [old["url"]], conn):
+                    await self._remove_objects([old["url"]])
+
+        photo = dict(row)
+        photo["url"] = to_photo_url(photo["url"])
+        return PhotoResponse(**photo)
+
+    async def reorder_photos(self, user_id: int, photo_ids: list[int]) -> list[PhotoResponse]:
+        """Set the gallery order. photo_ids must be exactly the caller's photo ids.
+
+        Which photo is the profile picture is the is_main flag, not the order, so
+        reordering never changes it.
+        """
+        pool = self.db.require_pool()
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                conn = cast(Connection, connection)
+                # Same lock as upload/delete: the id set can't change under us.
+                await self.profile_repo.lock_user_photos(user_id, conn)
+                current = await self.profile_repo.get_photo_ids(user_id, conn)
+                if (
+                    not photo_ids
+                    or len(set(photo_ids)) != len(photo_ids)
+                    or set(photo_ids) != set(current)
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="photo_ids must list each of your photos exactly once",
+                    )
+                rows = await self.profile_repo.set_photo_order(user_id, photo_ids, conn)
+        photos = []
+        for row in rows:
+            photo = dict(row)
+            photo["url"] = to_photo_url(photo["url"])
+            photos.append(PhotoResponse(**photo))
+        return photos
+
     async def _remove_objects(self, keys: list[str]) -> None:
         from application.clients import storage
 

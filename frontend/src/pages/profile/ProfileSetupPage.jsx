@@ -4,6 +4,8 @@ import { Check, Sparkle } from 'lucide-react';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
 import LocationPicker from '../../components/ui/LocationPicker';
+import PhotoDropZone from '../../components/ui/PhotoDropZone';
+import { apiError } from '../../api/errors';
 import { setProfile, getAllTags, uploadPhoto, setProfilePic } from '../../api/profilesApi';
 
 const STEPS = [
@@ -37,9 +39,7 @@ function ProfileSetupPage() {
     getAllTags().then(setAvailableTags).catch(() => {});
   }, []);
 
-  async function handlePhotoUpload(e) {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
+  async function handlePhotoFiles(files) {
     setPhotoUploading(true);
     setPhotoError(null);
     try {
@@ -49,10 +49,9 @@ function ProfileSetupPage() {
       }
       setPhotoUploaded(true);
     } catch (err) {
-      setPhotoError(err?.response?.data?.detail || 'Failed to upload photo');
+      setPhotoError(apiError(err, 'Failed to upload photo'));
     } finally {
       setPhotoUploading(false);
-      e.target.value = '';
     }
   }
 
@@ -149,6 +148,7 @@ function ProfileSetupPage() {
             type="date"
             value={data.birth_date}
             max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+            min={new Date(new Date().setFullYear(new Date().getFullYear() - 120)).toISOString().split('T')[0]}
             onChange={e => setData(d => ({ ...d, birth_date: e.target.value }))}
             style={{
               width: '100%',
@@ -267,28 +267,27 @@ function ProfileSetupPage() {
               </div>
             ) : (
               <>
-                <label style={{
-                  width: 140, height: 140, borderRadius: 'var(--r-md)',
-                  background: 'var(--white)', border: '1.5px dashed var(--sand)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 32, color: 'var(--sand)', cursor: photoUploading ? 'wait' : 'pointer',
-                }}>
-                  {photoUploading ? '…' : '+'}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handlePhotoUpload}
-                    style={{ display: 'none' }}
-                    disabled={photoUploading}
-                  />
-                </label>
+                <PhotoDropZone
+                  slots={1}
+                  multiple={false}
+                  busy={photoUploading}
+                  onFiles={handlePhotoFiles}
+                  onErrors={errs => setPhotoError(errs[0] || null)}
+                  label="Add a photo: drop a file here or press Enter to browse"
+                  style={{ width: 200, minHeight: 140, background: 'var(--white)' }}
+                >
+                  <span style={{ fontSize: 32, color: 'var(--sand)', lineHeight: 1 }} aria-hidden="true">
+                    {photoUploading ? '…' : '+'}
+                  </span>
+                  <span>Drop a photo or click</span>
+                </PhotoDropZone>
                 <div style={{ fontSize: 12, color: 'var(--ink4)', textAlign: 'center' }}>
                   Tap to upload a photo of yourself.
                 </div>
               </>
             )}
             {photoError && (
-              <div style={{ fontSize: 12, color: 'var(--rose)', textAlign: 'center' }}>{photoError}</div>
+              <div role="alert" style={{ fontSize: 12, color: 'var(--rose)', textAlign: 'center' }}>{photoError}</div>
             )}
           </div>
         )}

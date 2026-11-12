@@ -1,8 +1,10 @@
 import hashlib
+from typing import Any
+
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, HTTPException, Request
 from application.database import Database, get_db
-from application.utils import decode_token
+from application.utils.tokens import decode_token, parse_session_claims
 from application.repository.user_repo import UserRepository
 from application.repository.token_repo import TokenRepository
 
@@ -10,23 +12,37 @@ from application.repository.token_repo import TokenRepository
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
-async def _resolve_user(token: str, db: Database):
-    user_repo = UserRepository(db)
-    token_repo = TokenRepository(db)
+async def resolve_access_token(token: str, db: Database) -> tuple[Any, dict] | None:
+    """(user row, JWT payload) for a live access token, else None.
+
+    Shared by REST (Bearer and the photo cookie) and the WebSocket (first frame and re-auth).
+    The token must be an access JWT (a refresh JWT is signed with the same key), not
+    blacklisted, carry an id-based subject plus the user's current token version (a password
+    reset bumps it), and belong to a validated account.
+    """
     payload = decode_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if not payload or payload.get("type") != "access":
+        return None
+    claims = parse_session_claims(payload)
+    if claims is None:
+        return None
+    user_id, version = claims
 
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    if await token_repo.is_token_blacklisted(token_hash):
-        raise HTTPException(status_code=401, detail="Token has been revoked")
+    if await TokenRepository(db).is_token_blacklisted(token_hash):
+        return None
 
-    username = payload.get("sub")
-    if username is None:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
-    user = await user_repo.get_user_by_username(username)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+    user = await UserRepository(db).get_user_by_id(user_id)
+    if not user or not user["is_validated"] or user["token_version"] != version:
+        return None
+    return user, payload
+
+
+async def _resolve_user(token: str, db: Database):
+    resolved = await resolve_access_token(token, db)
+    if resolved is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    user, _payload = resolved
     return {"user": user, "token": token}
 
 

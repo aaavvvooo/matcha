@@ -56,25 +56,25 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 | Block / unblock | ✅ | Exclusion from browse/search/notifications depends on E3, E6 |
 | "Liked you" / "connected" indicators | ✅ | |
 
-### E5 — Real-time Chat (IV.6) — ❌ backend missing · depends on E6.1
+### E5 — Real-time Chat (IV.6) — ✅
 
 | Feature | Status | Notes |
 |---|---|---|
-| E5.1 Send/receive messages over WS, connected users only, ≤10 s | ❌ | `/chat/ws` handles presence only; `messages` table exists |
-| E5.2 Conversations list + message history | ❌ | Frontend calls `/chat/conversations`, `/chat/messages/:id` |
-| E5.3 New-message indicator on every page | ❌ | `ChatContext.receiveMessage` never wired to WS |
-| E5.4 Chat disabled after unlike / block | ❌ | |
+| E5.1 Send/receive messages over WS, connected users only, ≤10 s | ✅ | `/chat/ws` `message` frames → `ChatService.send_message`; error frames, 2000-char cap, per-connection rate limits (DESIGN §7) |
+| E5.2 Conversations list + message history | ✅ | `GET /chat/conversations`, `GET /chat/messages/{id}` (`limit`, `before_id`), `POST /chat/messages/{id}/read`; indexes `ix_messages_pair`, `ix_messages_unread` |
+| E5.3 New-message indicator on every page | ✅ | `ChatContext.unreadMessages` → badge on the Chat tab (`BottomNav`) and a Messages icon in `Header`; live, cleared when the thread is opened |
+| E5.4 Chat disabled after unlike / block | ✅ | Unlike/block delete the connection; sends get `not_connected`, history 403, the thread shows "no longer connected" |
 
-### E6 — Real-time Notifications (IV.7) — ❌ backend missing
+### E6 — Real-time Notifications (IV.7) — ✅
 
 | Feature | Status | Notes |
 |---|---|---|
-| E6.1 Push to user's WS ≤10 s | ❌ | Add `send_to_user()` to `PresenceManager` (already tracks sockets) |
-| E6.2 Triggers: like, profile view, message, like-back (match), unlike by connection | ❌ | `create_notification` exists in repo, never called |
-| E6.3 REST: list + mark read | ❌ | Frontend calls `GET /notifications`, `POST /notifications/read` |
-| E6.4 Unread badge on every page | ⚠️ | UI ready, waiting on backend |
+| E6.1 Push to user's WS ≤10 s | ✅ | `PresenceManager.send_to_user()` |
+| E6.2 Triggers: like, profile view, message, like-back (match), unlike by connection | ✅ | `NotificationService.notify` from `SocialService` and `ChatService` |
+| E6.3 REST: list + mark read | ✅ | `GET /notifications` (`limit`, `offset`), `POST /notifications/read` |
+| E6.4 Unread badge on every page | ✅ | `NotificationContext.unreadCount` = server total (`GET /notifications/unread-count`, replaced by each pushed frame's `unread`); live pushes de-duplicated by server id |
 | E6.5 Notifications page reachable | ✅ | `/notifications` route (F4) |
-| E6.6 No notifications from blocked / unliked users | ❌ | |
+| E6.6 No notifications from blocked / unliked users | ✅ | `notify` skips blocked pairs and `message` between non-connected users; list hides blocked senders; unlike clears the connection |
 
 ### E7 — Security Hardening (General Instructions, VI.1) — ⚠️ · any breach = 0
 
@@ -85,13 +85,14 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 | Upload validation by content (magic bytes), not declared type | ✅ | `utils/image.py` (F2); request-size guard in `main.py` (R2) |
 | Logout always ends the session | ✅ | Idempotent `/auth/logout` clears cookies + revokes refresh token even with an expired access token |
 | Rate limiting, CORS whitelist, secrets in `.env` (gitignored) | ✅ | |
+| Full-app security scan fixes (2026-11-12) | ✅ | Branch `fix/security-scan`, migration `3c8e2b7f9a41`. H1 email change pending until the new address confirms + typed tokens + case-insensitive email/username + validated-only sessions · H2 Jinja autoescape + username rule · H3 JWT `sub` = user id, `refresh_tokens.user_id` · H4 photos served by sniffed type with sandbox CSP, no MinIO default creds, MinIO/Postgres on 127.0.0.1 · M1 reset ends all sessions (`token_version`) · M2 Pillow re-encode (no EXIF/GPS, bomb cap) · M3 per-account mail cooldowns · M4 axios / react-router bumps · L1 L2 L4 L5 L8 L9 L12. Known gaps kept in DESIGN §10: refresh reuse family revocation, login CSRF, public `/docs`, shared seed password, geocoder queue starvation, register 409 enumeration |
 
 ### E8 — Layout & Platform Compliance (General Instructions) — ⚠️
 
 | Feature | Status | Notes |
 |---|---|---|
 | Header + main + footer on every page | ✅ | F3 |
-| No unhandled errors in console | ⚠️ | ErrorBoundary added (F5); missing E3/E5/E6 endpoints still 404 |
+| No unhandled errors in console | ⚠️ | ErrorBoundary added (F5); E3/E5/E6 endpoints exist; full console sweep is Phase 5 |
 | Mobile-friendly; latest Firefox + Chrome | ⚠️ | Unaudited |
 | ≥ 500 profiles in DB | ✅ | `scripts/seed_profiles.py --target 500` |
 
@@ -108,51 +109,54 @@ account-manager library.
 
 All ❌. Each bonus reuses mandatory infrastructure, so its dependencies must be done first.
 
-### B1 — OAuth sign-in · depends on E1
+### B1 — OAuth sign-in · depends on E1 · ✅ (2026-11-11)
 
-| Feature | Notes |
-|---|---|
-| B1.1 Provider registration (42 Intra, plus Google or GitHub); credentials in `.env` | |
-| B1.2 Authorize redirect + callback with `state` (CSRF) and PKCE | Hand-rolled with `httpx`, not a user-account-manager library |
-| B1.3 Account linking: `oauth_accounts` table; create user or link to existing verified email | Never auto-link to an unverified email |
-| B1.4 First OAuth login ⇒ generate username, redirect to profile setup | |
-| B1.5 Frontend: provider buttons on login/register, callback page | Tokens never placed in URLs |
+| Feature | Status | Notes |
+|---|---|---|
+| B1.1 Provider registration (42 Intra, plus Google or GitHub); credentials in `.env` | ✅ | 42 + GitHub; a provider without credentials is disabled (404, no button). Setup in README |
+| B1.2 Authorize redirect + callback with `state` (CSRF) and PKCE | ✅ | Hand-rolled with `httpx`, not a user-account-manager library. PKCE S256 for GitHub; 42 doesn't document PKCE (state only) |
+| B1.3 Account linking: `oauth_accounts` table; create user or link to existing verified email | ✅ | Never auto-link to an unverified email; 42 emails are never trusted for linking (no verified flag) |
+| B1.4 First OAuth login ⇒ generate username, redirect to profile setup | ✅ | |
+| B1.5 Frontend: provider buttons on login/register, callback page | ✅ | Tokens never placed in URLs; callback page reuses AuthProvider's page-load refresh |
+
+Verified with ruff/mypy/build and a mocked-provider smoke script against a scratch Postgres; a real provider
+round-trip needs registered OAuth apps (README).
 
 ### B2 — Photo gallery with editing · depends on E2, E7 (magic-byte check)
 
 | Feature | Notes |
 |---|---|
-| B2.1 Drag-and-drop upload zone (native HTML5 DnD) | Same 5-photo limit and server validation |
-| B2.2 Drag-to-reorder gallery + `PATCH` order endpoint | Photo order column already exists |
-| B2.3 Editor: crop, rotate, filters on `<canvas>`; result uploaded as a new image | Server re-validates the edited file |
+| B2.1 Drag-and-drop upload zone (native HTML5 DnD) ✅ | Same 5-photo limit and server validation |
+| B2.2 Drag-to-reorder gallery + `PATCH` order endpoint ✅ | Photo order column already exists |
+| B2.3 Editor: crop, rotate, filters on `<canvas>`; result uploaded as a new image ✅ | Server re-validates the edited file |
 
-### B3 — Interactive user map · depends on E3
+### B3 — Interactive user map · depends on E3 — ✅
+
+| Feature | Status | Notes |
+|---|---|---|
+| B3.1 Precise GPS via browser Geolocation API, with consent | ✅ | Shared `LocationPicker` (button = consent) → `PATCH /profile/location`; denied / unavailable / timeout shown inline |
+| B3.2 Map endpoint: users in a bounding box, same preference + block filters as browse | ✅ | `GET /profiles/map`; shares `_ELIGIBLE` SQL with browse; `limit` ≤ 200; min < max else 400 (no antimeridian boxes) |
+| B3.3 Privacy: other users shown at neighbourhood precision (snapped / jittered) | ✅ | Box tested on, and response carries, the 0.02° snapped cell centre only; one marker per cell |
+| B3.4 Leaflet + OpenStreetMap; marker ⇒ mini profile card ⇒ full profile | ✅ | `/map`; implemented and builds, not yet click-tested in a browser (include in the E8 mobile audit) |
+
+### B4 — Video / audio chat · depends on E5, E6.1 — ✅
 
 | Feature | Notes |
 |---|---|
-| B3.1 Precise GPS via browser Geolocation API, with consent | |
-| B3.2 Map endpoint: users in a bounding box, same preference + block filters as browse | Reuse E3 query |
-| B3.3 Privacy: other users shown at neighbourhood precision (snapped / jittered) | |
-| B3.4 Leaflet + OpenStreetMap; marker ⇒ mini profile card ⇒ full profile | |
-
-### B4 — Video / audio chat · depends on E5, E6.1
-
-| Feature | Notes |
-|---|---|
-| B4.1 WebRTC signalling (offer / answer / ICE) relayed over the existing WS, connected users only | |
-| B4.2 Call UI: incoming-call modal, accept / decline, mute, camera toggle, hang up | |
-| B4.3 STUN config (TURN optional); graceful handling of denied mic/camera | |
-| B4.4 Active call ends on unlike / block | |
+| B4.1 WebRTC signalling (offer / answer / ICE) relayed over the existing WS, connected users only | ✅ | `{"type":"call"}` frames, in-memory `CallManager`; DESIGN §7 |
+| B4.2 Call UI: incoming-call modal, accept / decline, mute, camera toggle, hang up | ✅ | `CallContext` mounted app-wide; start buttons in the chat header; no missed-call notification / history (not required) |
+| B4.3 STUN config (TURN optional); graceful handling of denied mic/camera | ✅ | `GET /chat/ice-servers`; `STUN_URL`, `TURN_*` in `.env`; inline errors, audio-only fallback |
+| B4.4 Active call ends on unlike / block | ✅ | Also on logout, token expiry, socket loss; connection re-checked on accept |
 
 ### B5 — Date scheduling · depends on E6
 
 | Feature | Notes |
 |---|---|
-| B5.1 `dates` table: proposer, invitee, title, place, datetime, status | |
-| B5.2 Propose / accept / decline / cancel, connected users only | |
-| B5.3 Notification on every status change | Reuse E6 |
-| B5.4 Upcoming-dates list (calendar view optional) | |
-| B5.5 Reminder notification before the date | Optional |
+| B5.1 `dates` table: proposer, invitee, title, place, datetime, status | Done — migration `b5d4e7a2c910` |
+| B5.2 Propose / accept / decline / cancel, connected users only | Done — `/dates`, atomic transitions; unlike/block cancel future dates |
+| B5.3 Notification on every status change | Done — `date_*` types; reuses E6 |
+| B5.4 Upcoming-dates list (calendar view optional) | Done — Dates tab on Matches (`/dates`), propose form in chat |
+| B5.5 Reminder notification before the date | Done — 24 h window, 60 s loop |
 
 Suggested bonus order (cheapest first, highest reuse): B2 → B3 → B5 → B1 → B4.
 
@@ -223,12 +227,12 @@ scripted smoke runs instead. Revisit only if regressions start costing time.
 - [x] E3.5 `GET /profiles/search` + SearchPage wiring (real tag list)
 
 ### Phase 4 — Real-time (track B, parallel with Phase 3)
-- [ ] E6.1 `PresenceManager.send_to_user()` push
-- [ ] E6.2 + E6.6 Notification triggers, block / unlike suppression
-- [ ] E6.3 Notification REST endpoints
-- [ ] E5.1 + E5.4 Chat messages over WS, connected users only
-- [ ] E5.2 Conversations + history endpoints
-- [ ] E5.3 Global new-message indicator
+- [x] E6.1 `PresenceManager.send_to_user()` push
+- [x] E6.2 + E6.6 Notification triggers, block / unlike suppression
+- [x] E6.3 Notification REST endpoints
+- [x] E5.1 + E5.4 Chat messages over WS, connected users only
+- [x] E5.2 Conversations + history endpoints
+- [x] E5.3 Global new-message indicator
 
 ### Phase 5 — Mandatory sign-off
 - [ ] E8 Mobile audit (320 / 375 / 768 px), Firefox + Chrome
@@ -238,11 +242,11 @@ scripted smoke runs instead. Revisit only if regressions start costing time.
 - [ ] Seed ≥500 profiles on the eval database
 
 ### Phase 6 — Bonus (only after Phase 5 is fully green)
-- [ ] **B2 Gallery** — B2.1 drag-and-drop upload · B2.2 drag-to-reorder + order endpoint · B2.3 crop / rotate / filter editor
-- [ ] **B3 Map** — B3.1 precise GPS · B3.2 bounding-box endpoint · B3.3 neighbourhood-level privacy · B3.4 Leaflet map + mini cards
-- [ ] **B5 Dates** — B5.1 `dates` table · B5.2 propose / accept / decline / cancel · B5.3 notifications · B5.4 upcoming list · B5.5 reminder (optional)
-- [ ] **B1 OAuth** — B1.1 providers · B1.2 redirect + callback (state, PKCE) · B1.3 account linking · B1.4 first-login setup · B1.5 frontend buttons + callback page
-- [ ] **B4 Video / audio** — B4.1 WebRTC signalling over WS · B4.2 call UI · B4.3 STUN + permission errors · B4.4 end call on unlike / block
+- [x] **B2 Gallery** — B2.1 drag-and-drop upload · B2.2 drag-to-reorder + order endpoint · B2.3 crop / rotate / filter editor
+- [x] **B3 Map** — B3.1 precise GPS · B3.2 bounding-box endpoint · B3.3 neighbourhood-level privacy · B3.4 Leaflet map + mini cards
+- [x] **B5 Dates** — B5.1 `dates` table · B5.2 propose / accept / decline / cancel · B5.3 notifications · B5.4 upcoming list · B5.5 reminder (optional)
+- [x] **B1 OAuth** — B1.1 providers · B1.2 redirect + callback (state, PKCE) · B1.3 account linking · B1.4 first-login setup · B1.5 frontend buttons + callback page
+- [x] **B4 Video / audio** — B4.1 WebRTC signalling over WS · B4.2 call UI · B4.3 STUN + permission errors · B4.4 end call on unlike / block
 
 Parallel-safe tracks: Phase 3 ∥ Phase 4. Within Phase 4, E6.1 must land before chat. Bonus epics are independent of
 each other once their dependencies are done, but they all touch shared areas (WS, profile), so run them one at a time.

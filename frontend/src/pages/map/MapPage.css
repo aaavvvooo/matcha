@@ -1,0 +1,268 @@
+.map-page {
+  position: absolute;
+  inset: 0;
+  background: var(--cream2);
+}
+
+/* own stacking context: Leaflet panes use z-index up to 1000 and must stay under the overlays */
+.map-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  isolation: isolate;
+  background: var(--cream2);
+  font-family: var(--font-body);
+}
+
+.map-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ── Status banner ─────────────────────────── */
+.map-status {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  max-width: calc(100% - 128px);
+  padding: 8px 14px;
+  border-radius: var(--r-full);
+  background: var(--white);
+  border: 1px solid var(--cream3);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink2);
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.map-status--soft {
+  color: var(--ink3);
+}
+
+.map-status--error {
+  color: var(--rose);
+  border-color: var(--rose);
+}
+
+/* ── Floating controls ─────────────────────── */
+.map-fab {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 600;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1.5px solid var(--sand);
+  background: var(--white);
+  color: var(--spice);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.map-fab:hover {
+  background: var(--cream2);
+}
+
+.map-icon-btn {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--cream2);
+  color: var(--ink3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.map-panel,
+.map-card {
+  position: absolute;
+  z-index: 700;
+  background: var(--white);
+  border: 1px solid var(--cream3);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  color: var(--ink);
+}
+
+.map-panel {
+  top: 64px;
+  right: 12px;
+  left: 12px;
+  max-width: 380px;
+  margin-left: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.map-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.map-panel-note {
+  font-size: 12px;
+  color: var(--ink3);
+}
+
+/* mini profile card: bottom sheet */
+.map-card {
+  left: 12px;
+  right: 12px;
+  bottom: 28px;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 12px 12px 8px;
+  max-height: 55%;
+  overflow-y: auto;
+}
+
+.map-card-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.map-card-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 34px;
+}
+
+.map-card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.map-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.map-card-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-card-meta {
+  font-size: 12px;
+  color: var(--ink3);
+}
+
+@media (max-width: 400px) {
+  .map-card-row .map-card-meta {
+    white-space: normal;
+  }
+}
+
+/* ── Markers (Leaflet divIcon) ─────────────── */
+.map-pin-wrap {
+  background: none;
+  border: none;
+}
+
+.map-pin {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+}
+
+.map-pin-face {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--cream3);
+  color: var(--spice2);
+  border: 3px solid var(--white);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.map-pin-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.map-pin-online {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--matcha);
+  border: 2px solid var(--white);
+}
+
+.map-pin-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--spice);
+  color: var(--white);
+  border: 2px solid var(--white);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.map-self {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--matcha2);
+  color: var(--white);
+  border: 3px solid var(--white);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Leaflet's attribution control sits under the tab bar on small screens otherwise */
+.map-canvas .leaflet-control-attribution {
+  font-size: 10px;
+}

@@ -5,7 +5,7 @@ import Header from './Header';
 import Footer from './Footer';
 import './Layout.css';
 
-const PUBLIC_PATHS = ['/', '/login', '/register', '/verify-email', '/forgot-password', '/reset-password'];
+const PUBLIC_PATHS = ['/', '/login', '/register', '/verify-email', '/forgot-password', '/reset-password', '/oauth/callback'];
 
 function Layout({ children }) {
   const location = useLocation();

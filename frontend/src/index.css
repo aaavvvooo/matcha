@@ -18,6 +18,11 @@
   --ink4:    #a8978a;
   --white:   #fffdf9;
 
+  /* ── Error / danger ─────────────────────────────────────── */
+  --danger-bg:     #fde8e8;
+  --danger-fg:     #c04a4a;
+  --danger-border: #f5c5c5;
+
   /* ── Border Radius ───────────────────────────────────────── */
   --r-xs:   4px;
   --r-sm:   12px;
@@ -138,3 +143,14 @@ input:focus, textarea:focus {
 @media (min-width: 860px) {
   .mobile-only { display: none !important; }
 }
+
+/* ── Photo gallery (B2) ──────────────────────────────────────── */
+.photo-dropzone:focus-visible,
+.photo-tile-btn:focus-visible,
+[role="dialog"] [tabindex="0"]:focus-visible {
+  outline: 2px solid var(--spice);
+  outline-offset: 2px;
+}
+.photo-tile[draggable="true"] { cursor: grab; }
+.photo-tile.dragging { opacity: 0.4; }
+.photo-tile.drop-target img, .photo-tile.drop-target .photo-thumb { outline: 2px dashed var(--spice); outline-offset: 2px; }

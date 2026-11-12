@@ -1,45 +1,41 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { login as loginApi, logout as logoutApi, getMe } from '../api/authApi';
-import { setClientToken, refreshAccessToken, onTokenRefreshed } from '../api/client';
+import {
+  getClientToken,
+  onTokenChange,
+  refreshAccessToken,
+  setClientToken,
+  settleRefresh,
+} from '../api/client';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [accessToken, setAccessToken] = useState(null);
+  // Mirror of the API client's token (api/client.js owns it): login/logout set it there, and
+  // refreshes by axios 401s or the WebSocket arrive here through onTokenChange. A null token
+  // (logout, or a refresh the server rejected) is the end of the session.
+  const [accessToken, setAccessToken] = useState(getClientToken);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const accessTokenRef = useRef(null);
-  accessTokenRef.current = accessToken;
-  // True from the start of logout(); a re-render mid-logout would otherwise put
-  // the old token back into accessTokenRef before the guard below reads it.
-  const loggingOutRef = useRef(false);
 
-  // Keep axios client in sync with the current token
-  useEffect(() => {
-    setClientToken(accessToken);
-  }, [accessToken]);
+  useEffect(() => onTokenChange((token) => {
+    setAccessToken(token);
+    if (!token) setUser(null);
+  }), []);
 
-  // A refresh done by the axios client (on a 401) or the WebSocket must reach
-  // React state too, or logout/getMe would keep using the expired token.
-  // Ignored once signed out, so a refresh still in flight at logout can't
-  // bring the session back.
+  // Runs once when the app first loads — tries to restore session through the client's
+  // single-flight refresh (204/401 = no session; the OAuth callback page relies on this too).
   useEffect(() => {
-    onTokenRefreshed((token) => {
-      if (accessTokenRef.current && !loggingOutRef.current) setAccessToken(token);
-    });
-    return () => onTokenRefreshed(null);
-  }, []);
-
-  // Runs once when the app first loads — tries to restore session
-  useEffect(() => {
+    let restored = false;
     refreshAccessToken()
       .then(async (token) => {
-        setAccessToken(token);
+        restored = true;
         const me = await getMe(token);
         setUser(me);
       })
       .catch(() => {
-        // No active session, that's fine
+        // No session is fine. A token without a user (getMe failed) is not a usable session.
+        if (restored) setClientToken(null);
       })
       .finally(() => {
         setLoading(false);
@@ -48,8 +44,7 @@ export function AuthProvider({ children }) {
 
   async function login(username, password) {
     const data = await loginApi(username, password);
-    loggingOutRef.current = false;
-    setAccessToken(data.access_token);
+    setClientToken(data.access_token);
     const me = await getMe(data.access_token);
     setUser(me);
     return me;
@@ -58,22 +53,24 @@ export function AuthProvider({ children }) {
   // Always end the local session, even if the server call fails (expired token,
   // network error) — logout must never leave the user stuck or throw to the caller.
   async function logout() {
-    loggingOutRef.current = true; // stop late refreshes from re-signing in
+    const token = getClientToken();
+    // Signs out locally first: closes the socket and discards any refresh still in flight.
+    setClientToken(null);
     try {
-      await logoutApi(accessToken);
+      // Let a concurrent rotation land first, so the server revokes the newest refresh token.
+      await settleRefresh();
+      await logoutApi(token);
     } catch {
       // server-side blacklisting failed; the token still expires on its own
-    } finally {
-      setAccessToken(null);
-      setUser(null);
     }
   }
 
   // Re-fetches /auth/me — used to revalidate has_profile before entering a
   // protected route, since profile deletion isn't reflected in stale state.
   const refreshUser = useCallback(async () => {
-    if (!accessTokenRef.current) return null;
-    const me = await getMe(accessTokenRef.current);
+    const token = getClientToken();
+    if (!token) return null;
+    const me = await getMe(token);
     setUser(me);
     return me;
   }, []);

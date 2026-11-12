@@ -80,6 +80,19 @@ export async function resetPassword(token, password) {
   return json;
 }
 
+// OAuth sign-in (B1). Only ids the backend reports as configured are shown.
+export async function getOAuthProviders() {
+  const res = await fetch(`${BASE_URL}/auth/oauth/providers`, { credentials: 'include' });
+  const json = await res.json();
+  if (!res.ok) throw new Error(errorMessage(json, 'Could not load sign-in options'));
+  return Array.isArray(json?.providers) ? json.providers : [];
+}
+
+// Plain top-level navigation target: the backend redirects to the provider.
+export function oauthStartUrl(provider) {
+  return `${BASE_URL}/auth/oauth/${encodeURIComponent(provider)}/start`;
+}
+
 export async function getMe(accessToken) {
   const res = await fetch(`${BASE_URL}/auth/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },

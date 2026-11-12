@@ -2,7 +2,7 @@ const VARIANTS = {
   primary:   { background: 'var(--spice)',  color: '#fff', boxShadow: '0 4px 16px rgba(194,120,74,.35)', border: 'none' },
   secondary: { background: 'var(--cream2)', color: 'var(--ink2)', border: '1.5px solid var(--sand)' },
   ghost:     { background: 'transparent',   color: 'var(--ink3)', border: 'none', padding: '10px 16px' },
-  danger:    { background: '#fde8e8',       color: '#c04a4a', border: '1.5px solid #f5c5c5' },
+  danger:    { background: 'var(--danger-bg)', color: 'var(--danger-fg)', border: '1.5px solid var(--danger-border)' },
   matcha:    { background: 'var(--matcha)', color: '#fff', boxShadow: '0 4px 16px rgba(107,143,94,.35)', border: 'none' },
 };
 

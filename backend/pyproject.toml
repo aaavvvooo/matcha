@@ -32,6 +32,7 @@ dependencies = [
     "boto3>=1.35.0",
     "httpx>=0.28.1",
     "google-cloud-storage>=2.18.0",
+    "pillow>=13.0.0",
 ]
 
 [dependency-groups]

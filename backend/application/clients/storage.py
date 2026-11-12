@@ -18,8 +18,10 @@ from typing import Iterator
 BACKEND = os.getenv("STORAGE_BACKEND", "minio").lower()
 
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
-MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER", "minioadmin")
-MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin123")
+# No credential fallbacks: a well-known default would let anyone with network access to MinIO
+# write into the bucket. Unset credentials fail at startup (ensure_bucket) with a clear error.
+MINIO_ACCESS_KEY = os.getenv("MINIO_ROOT_USER") or None
+MINIO_SECRET_KEY = os.getenv("MINIO_ROOT_PASSWORD") or None
 
 BUCKET = (
     os.getenv("GCS_BUCKET_NAME", "")
@@ -68,9 +70,17 @@ _IO_TIMEOUT_S = 15
 # ── MinIO ────────────────────────────────────────────────────────────────
 
 
+class StorageConfigError(RuntimeError):
+    """Storage is misconfigured (e.g. MinIO credentials unset)."""
+
+
 def _get_s3():
     global _s3_client
     if _s3_client is None:
+        if not MINIO_ACCESS_KEY or not MINIO_SECRET_KEY:
+            raise StorageConfigError(
+                "MINIO_ROOT_USER and MINIO_ROOT_PASSWORD must be set (in .env) when STORAGE_BACKEND=minio"
+            )
         import boto3
         from botocore.client import Config
 
@@ -212,6 +222,17 @@ def _gcs_delete(key: str) -> None:
 
 
 _bucket_ready = False
+
+
+def check_config() -> None:
+    """Fail fast at startup on missing settings (connectivity is checked by ensure_bucket)."""
+    if BACKEND == "gcs":
+        if not BUCKET:
+            raise StorageConfigError("GCS_BUCKET_NAME is required when STORAGE_BACKEND=gcs")
+    elif not MINIO_ACCESS_KEY or not MINIO_SECRET_KEY:
+        raise StorageConfigError(
+            "MINIO_ROOT_USER and MINIO_ROOT_PASSWORD must be set (in .env) when STORAGE_BACKEND=minio"
+        )
 
 
 def ensure_bucket() -> None:

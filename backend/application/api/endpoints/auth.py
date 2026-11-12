@@ -16,7 +16,7 @@ from application.schema import (
 from application.database import get_db, Database
 from application.service import AuthService
 from application.clients.email_client import EmailClient
-from application.config import BREVO_API_KEY
+from application.config import BREVO_API_KEY, SECURE_COOKIES
 from application.utils import get_current_user
 from application.utils.tokens import ACCESS_TOKEN_EXPIRE_MINUTES
 from application.limiter import limiter
@@ -38,6 +38,26 @@ def _get_email_client() -> EmailClient:
             )
         _email_client = EmailClient(api_key=BREVO_API_KEY)
     return _email_client
+
+
+def set_session_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    """Session cookies shared by password login, refresh and OAuth sign-in."""
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=SECURE_COOKIES,
+        samesite="strict",
+        max_age=7 * 24 * 60 * 60,
+    )
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=SECURE_COOKIES,
+        samesite="strict",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
 
 
 def _describe_email_error(e: Exception) -> str:
@@ -134,25 +154,9 @@ async def login(
     access_token, refresh_token = await service.login(
         form_data.username, form_data.password
     )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=False,
-        samesite="strict",
-        max_age=7 * 24 * 60 * 60,
-    )
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=False,
-        samesite="strict",
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    )
+    set_session_cookies(response, access_token, refresh_token)
     return {
         "access_token": access_token,
-        "refresh_token": refresh_token,
         "token_type": "bearer",
     }
 
@@ -164,11 +168,19 @@ async def current_user(
     db: Database = Depends(get_db),
 ):
     from application.repository.profile_repo import ProfileRepository
+    from application.repository.token_repo import TokenRepository
     response.headers["Cache-Control"] = "no-store"
-    user = dict(current_user["user"])
+    # Explicit allowlist: the row behind get_current_user also carries hashed_password.
+    row = current_user["user"]
+    user = {
+        key: row[key]
+        for key in ("id", "first_name", "last_name", "username", "email", "is_validated")
+    }
     profile_repo = ProfileRepository(db)
     profile = await profile_repo.get_profile(user["id"])
     user["has_profile"] = profile is not None and profile.get("gender") is not None
+    # Address of an unconfirmed email change (null when none): `email` is still the one in force.
+    user["pending_email"] = await TokenRepository(db).get_pending_email(user["id"])
     return user
 
 
@@ -209,8 +221,8 @@ async def logout(
     except Exception:
         # Server-side revocation failed; still end the browser session below.
         logger.exception("Logout: token revocation failed")
-    response.delete_cookie("refresh_token", httponly=True, samesite="strict")
-    response.delete_cookie("access_token", httponly=True, samesite="strict")
+    response.delete_cookie("refresh_token", httponly=True, samesite="strict", secure=SECURE_COOKIES)
+    response.delete_cookie("access_token", httponly=True, samesite="strict", secure=SECURE_COOKIES)
     return {"message": "Successfully logged out"}
 
 
@@ -219,28 +231,14 @@ async def logout(
 async def refresh(request: Request, response: Response, db=Depends(get_db)):
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
-        raise HTTPException(status_code=401, detail="Missing refresh token")
+        # No session to restore (signed-out page load): 204, not an error, so browsers don't log
+        # a failed request. A cookie that is present but invalid/expired/revoked is still a 401.
+        return Response(status_code=204)
     service = AuthService(db)
     access_token, new_refresh_token = await service.refresh(refresh_token)
-    response.set_cookie(
-        key="refresh_token",
-        value=new_refresh_token,
-        httponly=True,
-        secure=False,
-        samesite="strict",
-        max_age=7 * 24 * 60 * 60,
-    )
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=False,
-        samesite="strict",
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    )
+    set_session_cookies(response, access_token, new_refresh_token)
     return {
         "access_token": access_token,
-        "refresh_token": new_refresh_token,
         "token_type": "bearer",
     }
 

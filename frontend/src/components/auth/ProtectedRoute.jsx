@@ -14,6 +14,9 @@ function Spinner() {
 
 function ProtectedRoute({ children }) {
   const { accessToken, user, loading, refreshUser } = useAuth();
+  // Keyed on sign-in state, not the token: a silent refresh must not re-run the profile
+  // check, which shows the spinner and would unmount the page (and its live state).
+  const signedIn = Boolean(accessToken);
   const location = useLocation();
   const exempt = PROFILE_EXEMPT_PATHS.includes(location.pathname);
   const [checkingProfile, setCheckingProfile] = useState(!exempt);
@@ -22,7 +25,7 @@ function ProtectedRoute({ children }) {
   // Revalidate has_profile when the authenticated user changes (login/logout),
   // not on every route navigation — profile edits update `user` directly.
   useEffect(() => {
-    if (exempt || !accessToken) {
+    if (exempt || !signedIn) {
       setCheckingProfile(false);
       return;
     }
@@ -31,10 +34,10 @@ function ProtectedRoute({ children }) {
       .then(me => setHasProfile(Boolean(me?.has_profile)))
       .catch(() => setHasProfile(true)) // network hiccup — don't lock the user out
       .finally(() => setCheckingProfile(false));
-  }, [accessToken, user?.id, exempt, refreshUser]);
+  }, [signedIn, user?.id, exempt, refreshUser]);
 
   if (loading || checkingProfile) return <Spinner />;
-  if (!accessToken) return <Navigate to="/login" />;
+  if (!signedIn) return <Navigate to="/login" />;
   if (!exempt && !hasProfile) return <Navigate to="/profile/setup" />;
 
   return children;

@@ -9,7 +9,7 @@ random male or female source profile) and overrides their location with real
 Armenian city coordinates + a Latin-script "City, Armenia" label.
 
 Idempotent per gender: --count is the minimum number of Armenia-seed profiles
-that should exist per gender (marked by @matcha-seed-am.dev emails).
+that should exist per gender (marked by @matcha-seed-am.example.org emails).
 
 Run inside the backend container:
     docker compose exec backend python scripts/seed_armenia_profiles.py --count 50
@@ -36,6 +36,8 @@ from scripts.seed_common import (  # noqa: E402
     fetch_and_upload_photo,
     load_existing_tags,
     create_seed_user,
+    migrate_legacy_seed_emails,
+    SEED_DOMAIN_AM,
 )
 
 # Source nationality pool for name/photo/dob only — none of these affect the
@@ -76,9 +78,10 @@ async def count_seed_profiles(db: Database, gender_label: str) -> int:
         """
         SELECT COUNT(*) FROM users u
         JOIN user_profiles up ON up.user_id = u.id
-        WHERE u.email LIKE '%@matcha-seed-am.dev' AND up.gender = $1
+        WHERE u.email LIKE '%@' || $2 AND up.gender = $1
         """,
         gender_label,
+        SEED_DOMAIN_AM,
     )
 
 
@@ -108,7 +111,7 @@ async def seed_gender(
             first = person["name"]["first"]
             last = person["name"]["last"]
             username = f"am_{person['login']['username']}_{person['login']['uuid'][:8]}"
-            email = f"{username}@matcha-seed-am.dev"
+            email = f"{username}@{SEED_DOMAIN_AM}"
 
             user_id = await create_seed_user(
                 user_repo, db, first, last, username, email, hashed_password
@@ -154,6 +157,7 @@ async def seed_gender(
 async def seed(count: int):
     db = Database()
     await db.connect()
+    await migrate_legacy_seed_emails(db)
     ensure_bucket()
 
     user_repo = UserRepository(db)

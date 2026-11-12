@@ -8,6 +8,7 @@ import RegisterPage       from '../pages/auth/RegisterPage';
 import VerifyEmailPage    from '../pages/auth/VerifyEmailPage';
 import ForgotPasswordPage from '../pages/auth/ForgetPasswordPage';
 import ResetPasswordPage  from '../pages/auth/ResetPasswordPage';
+import OAuthCallbackPage  from '../pages/auth/OAuthCallbackPage';
 
 import ProfileSetupPage   from '../pages/profile/ProfileSetupPage';
 import ProfileEditPage    from '../pages/profile/ProfileEditPage';
@@ -18,9 +19,11 @@ import BlockedUsersPage   from '../pages/profile/BlockedUsersPage';
 
 import BrowsePage         from '../pages/browse/BrowsePage';
 import SearchPage         from '../pages/search/SearchPage';
+import MapPage           from '../pages/map/MapPage';
 import ChatPage           from '../pages/chat/ChatPage';
 import MatchesPage        from '../pages/matches/MatchesPage';
 import NotificationsPage  from '../pages/notifications/NotificationsPage';
+import NotFoundPage       from '../pages/NotFoundPage';
 
 function AppRoutes() {
   return (
@@ -32,6 +35,7 @@ function AppRoutes() {
       <Route path="/verify-email"    element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password"  element={<ResetPasswordPage />} />
+      <Route path="/oauth/callback"  element={<OAuthCallbackPage />} />
 
       {/* Protected */}
       <Route path="/profile/setup"    element={<ProtectedRoute><ProfileSetupPage /></ProtectedRoute>} />
@@ -43,10 +47,15 @@ function AppRoutes() {
 
       <Route path="/browse"         element={<ProtectedRoute><BrowsePage /></ProtectedRoute>} />
       <Route path="/search"         element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
+      <Route path="/map"            element={<ProtectedRoute><MapPage /></ProtectedRoute>} />
       <Route path="/chat"           element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
       <Route path="/chat/:userId"   element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
       <Route path="/matches"        element={<ProtectedRoute><MatchesPage /></ProtectedRoute>} />
+      <Route path="/dates"          element={<ProtectedRoute><MatchesPage /></ProtectedRoute>} />
       <Route path="/notifications"  element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+
+      {/* Anything else */}
+      <Route path="*"               element={<NotFoundPage />} />
     </Routes>
   );
 }

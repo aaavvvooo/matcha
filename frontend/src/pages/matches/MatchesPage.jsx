@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Bell, Sparkle, Eye, PartyPopper, HeartCrack } from 'lucide-react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import {
+  MessageCircle, Bell, Sparkle, Eye, PartyPopper, HeartCrack,
+  CalendarHeart, CalendarCheck, CalendarX, CalendarClock,
+} from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext';
 import { useChat } from '../../context/ChatContext';
 import Avatar from '../../components/ui/Avatar';
 import { displayName } from '../../utils/displayName';
+import { notificationText, notificationLink } from '../../utils/notificationInfo';
+import DatesPanel from '../dates/DatesPanel';
 
 const NOTIF_ICONS = {
   like:    <Sparkle size={16} fill="currentColor"/>,
@@ -12,6 +17,11 @@ const NOTIF_ICONS = {
   match:   <PartyPopper size={16}/>,
   message: <MessageCircle size={16}/>,
   unlike:  <HeartCrack size={16}/>,
+  date_proposed:  <CalendarHeart size={16}/>,
+  date_accepted:  <CalendarCheck size={16}/>,
+  date_declined:  <CalendarX size={16}/>,
+  date_cancelled: <CalendarX size={16}/>,
+  date_reminder:  <CalendarClock size={16}/>,
 };
 
 function timeAgo(dateStr) {
@@ -26,17 +36,25 @@ function timeAgo(dateStr) {
 }
 
 export default function MatchesPage() {
-  const [tab, setTab] = useState('chats');
-  const { notifications, clearUnread } = useNotifications();
+  // '/dates' shows the Dates tab; on '/matches' the tab is local state.
+  const [localTab, setLocalTab] = useState('chats');
+  const location = useLocation();
+  const tab = location.pathname === '/dates' ? 'dates' : localTab;
+  const { notifications, unreadCount, clearUnread } = useNotifications();
   const { conversations, loadConversations } = useChat();
   const navigate = useNavigate();
 
   useEffect(() => { loadConversations().catch(() => {}); }, [loadConversations]);
 
-  const unread = notifications.filter(n => !n.is_read).length;
+  const unread = unreadCount;
+
+  function selectLocalTab(next) {
+    setLocalTab(next);
+    if (location.pathname !== '/matches') navigate('/matches');
+  }
 
   function handleNotifTab() {
-    setTab('notifs');
+    selectLocalTab('notifs');
     clearUnread();
   }
 
@@ -45,9 +63,10 @@ export default function MatchesPage() {
       {/* Header */}
       <div style={{ padding: '16px 20px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', flexShrink: 0 }}>
         <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>Matches</div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {[
-            ['chats', 'Chats', () => setTab('chats')],
+            ['chats', 'Chats', () => selectLocalTab('chats')],
+            ['dates', 'Dates', () => navigate('/dates')],
             ['notifs', `Notifications${unread ? ` (${unread})` : ''}`, handleNotifTab],
           ].map(([id, label, handler]) => (
             <button key={id} onClick={handler} style={{
@@ -89,7 +108,7 @@ export default function MatchesPage() {
                     boxShadow: hasUnread ? 'var(--shadow-sm)' : 'none',
                     transition: 'transform .15s',
                   }}>
-                    <Avatar name={name} size={52} online={c.is_online}/>
+                    <Avatar name={name} src={c.photo_url} size={52} online={c.is_online}/>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
                         <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 16, fontWeight: 600, color: 'var(--ink)' }}>{name}</div>
@@ -107,6 +126,9 @@ export default function MatchesPage() {
           </div>
         )}
 
+        {/* Dates tab */}
+        {tab === 'dates' && <DatesPanel />}
+
         {/* Notifications tab */}
         {tab === 'notifs' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -119,14 +141,13 @@ export default function MatchesPage() {
               notifications.map(n => {
                 const icon = NOTIF_ICONS[n.type] || <Sparkle size={16}/>;
                 const name = n.from_username || 'Someone';
-                const text = n.type === 'like' ? 'liked your profile'
-                  : n.type === 'view' ? 'viewed your profile'
-                  : n.type === 'match' ? 'matched with you!'
-                  : n.type === 'message' ? 'sent you a message'
-                  : n.type === 'unlike' ? 'disconnected from you'
-                  : '';
+                const text = notificationText(n.type);
+                const link = notificationLink(n.type);
+                // A real link (keyboard focusable, middle-click) when the notification leads somewhere.
+                const Row = link ? Link : 'div';
                 return (
-                  <div key={n.id} style={{
+                  <Row key={n.id} {...(link ? { to: link } : {})} style={{
+                    textDecoration: 'none', color: 'inherit',
                     padding: '13px 16px',
                     background: n.is_read ? 'var(--white)' : 'var(--cream2)',
                     borderRadius: 'var(--r-md)',
@@ -147,7 +168,7 @@ export default function MatchesPage() {
                       <div style={{ fontSize: 12, color: 'var(--ink4)', marginTop: 2 }}>{timeAgo(n.created_at)}</div>
                     </div>
                     {!n.is_read && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--spice)', flexShrink: 0 }}/>}
-                  </div>
+                  </Row>
                 );
               })
             )}

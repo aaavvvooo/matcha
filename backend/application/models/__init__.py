@@ -11,8 +11,10 @@ from .profile_views import ProfileView
 from .connections import Connection
 from .messages import Message
 from .notifications import Notification
+from .dates import Date
 from .blocks import Block
 from .reports import Report
+from .oauth_accounts import OAuthAccount
 
 __all__ = [
     "User",
@@ -28,6 +30,8 @@ __all__ = [
     "Connection",
     "Message",
     "Notification",
+    "Date",
     "Block",
     "Report",
+    "OAuthAccount",
 ]

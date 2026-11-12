@@ -1,5 +1,8 @@
 from pydantic import BaseModel, field_serializer, Field
 from datetime import datetime
+from typing import Optional
+
+from application.schema.fields import LoginIdentifier
 
 
 class TokenInfo(BaseModel):
@@ -10,6 +13,7 @@ class TokenInfo(BaseModel):
     created_at: datetime
     expires_at: datetime
     used: bool
+    new_email: Optional[str] = None
 
     @field_serializer("created_at")
     def created_at_formatter(cls, v):
@@ -25,7 +29,7 @@ class VerificationToken(BaseModel):
 
 
 class ForgetPasswordRequest(BaseModel):
-    username_or_email: str = Field(...)
+    username_or_email: LoginIdentifier
 
     model_config = {"from_attributes": True}
 
@@ -33,4 +37,3 @@ class ForgetPasswordRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    refresh_token: str

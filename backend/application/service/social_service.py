@@ -1,10 +1,16 @@
 from datetime import date, timezone
+from typing import cast
+
+from asyncpg.connection import Connection
 from fastapi import HTTPException, status
 
 from application.database import Database
 from application.repository.social_repo import SocialRepository
 from application.repository.profile_repo import ProfileRepository
 from application.repository.user_repo import UserRepository
+from application.service.date_service import DateService
+from application.service.db_errors import map_integrity_errors
+from application.service.notification_service import NotificationService
 from application.schema.users_schemas import (
     UserProfileResponse,
     LikeResponse,
@@ -13,6 +19,7 @@ from application.schema.users_schemas import (
 )
 from application.schema.profile_schemas import PhotoResponse
 from application.utils.photo_url import to_photo_url
+from application.websocket.call_manager import call_manager
 
 
 def _with_photo_url(row, field: str, model):
@@ -32,12 +39,22 @@ def _calculate_age(birth_date) -> int | None:
     return years
 
 
+def _user_fk_as_404():
+    return map_integrity_errors(fk_detail="User not found", fk_status=status.HTTP_404_NOT_FOUND)
+
+
 class SocialService:
     def __init__(self, db: Database):
         self.db = db
         self.social_repo = SocialRepository(db)
         self.profile_repo = ProfileRepository(db)
         self.user_repo = UserRepository(db)
+        self.notifications = NotificationService(db)
+        self.dates = DateService(db)
+
+    async def _require_user(self, user_id: int) -> None:
+        if not await self.user_repo.user_exists(user_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     async def get_user_profile(self, viewer_id: int, user_id: int) -> UserProfileResponse:
         profile = await self.profile_repo.get_profile(user_id)
@@ -59,6 +76,7 @@ class SocialService:
             if not is_blocked_by_viewer:
                 await self.social_repo.record_view(viewer_id, user_id)
                 await self.social_repo.recalculate_fame(user_id)
+                await self.notifications.notify_safe(user_id, "view", viewer_id)
 
         photos_rows = await self.profile_repo.get_user_photos(user_id)
         photos = [_with_photo_url(row, "url", PhotoResponse) for row in photos_rows]
@@ -105,7 +123,8 @@ class SocialService:
         if not target or target["gender"] is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         if await self.social_repo.is_blocked_either_way(liker_id, liked_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not found")
+            # Same 404 as a missing user: a block must not be detectable.
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         photo_count = await self.profile_repo.count_photos(liker_id)
         if photo_count == 0:
             raise HTTPException(
@@ -113,28 +132,63 @@ class SocialService:
                 detail="Add a profile picture before liking other users",
             )
 
-        await self.social_repo.like_user(liker_id, liked_id)
+        is_new_like = await self.social_repo.like_user(liker_id, liked_id)
         await self.social_repo.recalculate_fame(liked_id)
 
         is_match = await self.social_repo.has_liked(liked_id, liker_id)
+        connection_created = False
         if is_match:
-            await self.social_repo.create_connection(liker_id, liked_id)
+            connection_created = await self.social_repo.create_connection(liker_id, liked_id)
+
+        # Repeated likes are no-ops and notify nobody. A like-back is a "match" for both
+        # sides instead of a plain "like". Only the request that actually created the
+        # connection announces the match, so simultaneous mutual likes notify once.
+        if is_match:
+            if connection_created:
+                await self.notifications.notify_safe(liked_id, "match", liker_id)
+                await self.notifications.notify_safe(liker_id, "match", liked_id)
+        elif is_new_like:
+            await self.notifications.notify_safe(liked_id, "like", liker_id)
 
         return LikeResponse(liked=True, is_match=is_match)
 
     async def unlike(self, liker_id: int, liked_id: int) -> LikeResponse:
-        await self.social_repo.unlike_user(liker_id, liked_id)
-        await self.social_repo.remove_connection(liker_id, liked_id)
+        # Like, connection and dates go in ONE transaction: a failure leaves everything as it was
+        # (no live date without a connection) and a retry still sees was_connected and notifies.
+        pool = self.db.require_pool()
+        async with pool.acquire() as connection:
+            async with connection.transaction():
+                conn = cast(Connection, connection)
+                was_connected = await self.social_repo.are_connected(liker_id, liked_id, conn)
+                removed = await self.social_repo.unlike_user(liker_id, liked_id, conn)
+                await self.social_repo.remove_connection(liker_id, liked_id, conn)
+                # After the connection delete, so a racing proposal (which holds the connection
+                # row FOR SHARE) is committed and visible to this cancel.
+                await self.dates.cancel_between(liker_id, liked_id, conn)
+        # The connection is gone: a ringing or running call between the two ends (B4.4).
+        await call_manager.end_between(liker_id, liked_id)
         await self.social_repo.recalculate_fame(liked_id)
+        # Subject IV.7: notify when a connected user unlikes you.
+        if removed and was_connected:
+            await self.notifications.notify_safe(liked_id, "unlike", liker_id)
         return LikeResponse(liked=False, is_match=False)
 
     async def block(self, blocker_id: int, blocked_id: int):
         if blocker_id == blocked_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot block yourself")
-        await self.social_repo.block_user(blocker_id, blocked_id)
-        await self.social_repo.unlike_user(blocker_id, blocked_id)
-        await self.social_repo.unlike_user(blocked_id, blocker_id)
-        await self.social_repo.remove_connection(blocker_id, blocked_id)
+        await self._require_user(blocked_id)
+        pool = self.db.require_pool()
+        # A user deleted between the check and the insert: the FK violation is the same 404.
+        with _user_fk_as_404():
+            async with pool.acquire() as connection:
+                async with connection.transaction():
+                    conn = cast(Connection, connection)
+                    await self.social_repo.block_user(blocker_id, blocked_id, conn)
+                    await self.social_repo.unlike_user(blocker_id, blocked_id, conn)
+                    await self.social_repo.unlike_user(blocked_id, blocker_id, conn)
+                    await self.social_repo.remove_connection(blocker_id, blocked_id, conn)
+                    await self.dates.cancel_between(blocker_id, blocked_id, conn)
+        await call_manager.end_between(blocker_id, blocked_id)
         await self.social_repo.recalculate_fame(blocker_id)
         await self.social_repo.recalculate_fame(blocked_id)
         return {"blocked": True}
@@ -150,7 +204,9 @@ class SocialService:
     async def report(self, reporter_id: int, reported_id: int):
         if reporter_id == reported_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot report yourself")
-        await self.social_repo.report_user(reporter_id, reported_id)
+        await self._require_user(reported_id)
+        with _user_fk_as_404():
+            await self.social_repo.report_user(reporter_id, reported_id)
         return {"reported": True}
 
     async def get_viewers(self, requester_id: int, user_id: int):

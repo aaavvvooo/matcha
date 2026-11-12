@@ -4,6 +4,8 @@ import { register } from '../../api/authApi';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
 import FormInput from '../../components/ui/FormInput';
+import OAuthButtons from '../../components/auth/OAuthButtons';
+import { USERNAME_HINT, USERNAME_RE } from '../../utils/username';
 
 const STEPS = [
   { title: 'Your name',      fields: ['firstName', 'lastName'],     placeholders: ['First name', 'Last name'],     types: ['text', 'text'] },
@@ -29,6 +31,7 @@ function RegisterPage() {
     }
     if (step === 1) {
       if (!form.username.trim()) e.username = 'Required';
+      else if (!USERNAME_RE.test(form.username)) e.username = USERNAME_HINT;
       if (!form.email.includes('@')) e.email = 'Enter a valid email';
     }
     if (step === 2) {
@@ -117,7 +120,7 @@ function RegisterPage() {
             value={form[f]}
             onChange={e => setField(f, e.target.value)}
             placeholder={rs.placeholders[i]}
-            hint={errors[f]}
+            hint={errors[f] || (f === 'username' ? USERNAME_HINT : undefined)}
           />
         ))}
 
@@ -130,6 +133,7 @@ function RegisterPage() {
         <Btn onClick={handleNext} disabled={loading} style={{ marginTop: 'auto' }}>
           {loading ? 'Creating…' : step < STEPS.length - 1 ? 'Continue →' : 'Create account'}
         </Btn>
+        {step === 0 && <OAuthButtons />}
       </div>
 
       <div style={{ padding: '12px 24px 32px', textAlign: 'center', fontSize: 13, color: 'var(--ink3)' }}>

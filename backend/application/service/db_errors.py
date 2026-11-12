@@ -15,6 +15,8 @@ from fastapi import HTTPException, status
 UNIQUE_MESSAGES: Mapping[str, str] = {
     "ix_users_email": "Email already registered",
     "ix_users_username": "Username already taken",
+    "uq_users_email_lower": "Email already registered",
+    "uq_users_username_lower": "Username already taken",
     "ix_user_profiles_user_id": "Profile already exists",
 }
 
@@ -23,6 +25,7 @@ UNIQUE_MESSAGES: Mapping[str, str] = {
 def map_integrity_errors(
     conflict_detail: str = "Already exists",
     fk_detail: str = "Referenced item does not exist",
+    fk_status: int = status.HTTP_400_BAD_REQUEST,
 ) -> Iterator[None]:
     try:
         yield
@@ -30,4 +33,4 @@ def map_integrity_errors(
         detail = UNIQUE_MESSAGES.get(e.constraint_name or "", conflict_detail)
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from None
     except asyncpg.ForeignKeyViolationError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=fk_detail) from None
+        raise HTTPException(status_code=fk_status, detail=fk_detail) from None

@@ -1,10 +1,15 @@
+import { useId } from 'react';
+
 function FormInput({ label, type = 'text', value, onChange, placeholder, hint, style = {} }) {
+  // Ties the visible <label> to its <input> (click-to-focus, screen readers).
+  const id = useId();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, ...style }}>
       {label && (
-        <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)' }}>{label}</label>
+        <label htmlFor={id} style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)' }}>{label}</label>
       )}
       <input
+        id={id}
         type={type}
         value={value}
         onChange={onChange}
