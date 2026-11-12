@@ -11,7 +11,7 @@ class OAuthRepository:
 
     async def get_linked_user(self, provider: str, provider_user_id: str):
         query = """
-            SELECT u.id, u.username, u.email, u.is_validated
+            SELECT u.id, u.username, u.email, u.is_validated, u.token_version
             FROM oauth_accounts o
             JOIN users u ON u.id = o.user_id
             WHERE o.provider = $1 AND o.provider_user_id = $2
@@ -19,10 +19,10 @@ class OAuthRepository:
         return await self.db.fetch_one(query, provider, provider_user_id)
 
     async def find_users_by_email(self, email: str):
-        """Case-insensitive match. users.email is unique only case-sensitively, so
-        more than one row can come back; callers must treat that as ambiguous."""
+        """Case-insensitive match. users.email is unique ignoring case (uq_users_email_lower),
+        so at most one row comes back; callers still treat two as ambiguous."""
         query = """
-            SELECT id, username, email, is_validated
+            SELECT id, username, email, is_validated, token_version
             FROM users
             WHERE lower(email) = lower($1)
             ORDER BY id

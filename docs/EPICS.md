@@ -85,6 +85,7 @@ Legend: ✅ done · ⚠️ partial / broken · ❌ missing
 | Upload validation by content (magic bytes), not declared type | ✅ | `utils/image.py` (F2); request-size guard in `main.py` (R2) |
 | Logout always ends the session | ✅ | Idempotent `/auth/logout` clears cookies + revokes refresh token even with an expired access token |
 | Rate limiting, CORS whitelist, secrets in `.env` (gitignored) | ✅ | |
+| Full-app security scan fixes (2026-11-12) | ✅ | Branch `fix/security-scan`, migration `3c8e2b7f9a41`. H1 email change pending until the new address confirms + typed tokens + case-insensitive email/username + validated-only sessions · H2 Jinja autoescape + username rule · H3 JWT `sub` = user id, `refresh_tokens.user_id` · H4 photos served by sniffed type with sandbox CSP, no MinIO default creds, MinIO/Postgres on 127.0.0.1 · M1 reset ends all sessions (`token_version`) · M2 Pillow re-encode (no EXIF/GPS, bomb cap) · M3 per-account mail cooldowns · M4 axios / react-router bumps · L1 L2 L4 L5 L8 L9 L12. Known gaps kept in DESIGN §10: refresh reuse family revocation, login CSRF, public `/docs`, shared seed password, geocoder queue starvation, register 409 enumeration |
 
 ### E8 — Layout & Platform Compliance (General Instructions) — ⚠️
 

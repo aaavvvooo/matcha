@@ -20,7 +20,7 @@ from application.api.endpoints.auth import (
     set_session_cookies,
 )
 from application.clients import oauth_client
-from application.config import BREVO_API_KEY, FRONTEND_URL, OAUTH_REDIRECT_BASE_URL
+from application.config import BREVO_API_KEY, FRONTEND_URL, SECURE_COOKIES
 from application.database import Database, get_db
 from application.limiter import limiter
 from application.service import oauth_service
@@ -33,7 +33,7 @@ router = APIRouter()
 _FLOW_COOKIE = "oauth_flow"
 _FLOW_COOKIE_PATH = "/auth/oauth"
 _MAX_CODE_LEN = 512
-_SECURE_COOKIE = (OAUTH_REDIRECT_BASE_URL or "").lower().startswith("https://")
+_SECURE_COOKIE = SECURE_COOKIES
 
 
 def _frontend_redirect(**params: str) -> RedirectResponse:

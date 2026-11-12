@@ -52,3 +52,15 @@ def validate_password(password: str):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password must contain at least one number",
         )
+
+
+_dummy_hash: str | None = None
+
+
+def burn_password_check(plain_password: str) -> None:
+    """Spend the same Argon2 work as a real check when the account doesn't exist, so login
+    timing doesn't tell whether a username/email is registered."""
+    global _dummy_hash
+    if _dummy_hash is None:
+        _dummy_hash = pwd_context.hash("dummy-password-for-timing-equalisation")
+    pwd_context.verify(plain_password, _dummy_hash)

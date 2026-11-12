@@ -1,6 +1,5 @@
 """Chat: send over WebSocket, conversations and history over REST (DESIGN.md §7, EPICS E5)."""
 
-import unicodedata
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -8,6 +7,7 @@ from fastapi import HTTPException, status
 from application.database import Database
 from application.repository.chat_repo import ChatRepository
 from application.schema.chat_schemas import ConversationResponse, MessageResponse
+from application.schema.fields import has_unsafe_chars
 from application.service.notification_service import NotificationService
 from application.utils.photo_url import to_photo_url
 from application.websocket.manager import presence_manager
@@ -19,19 +19,6 @@ MAX_USER_ID = 2_147_483_647
 MAX_BODY_LENGTH = 2000
 
 NOT_CONNECTED_DETAIL = "You are not connected with this user"
-
-
-def _has_unsafe_chars(text: str) -> bool:
-    """True for text Postgres/asyncpg can't store or that has no place in a chat line:
-    NUL and other control characters (except newline and tab), and lone surrogates."""
-    try:
-        text.encode("utf-8")
-    except UnicodeEncodeError:
-        return True
-    return any(
-        unicodedata.category(ch) == "Cc" and ch not in "\n\t"
-        for ch in text
-    )
 
 
 class ChatError(Exception):
@@ -70,7 +57,7 @@ class ChatService:
         body = body.strip()
         if not body:
             raise ChatError("empty_body", "Message cannot be empty")
-        if _has_unsafe_chars(body):
+        if has_unsafe_chars(body, allow="\n\t"):
             raise ChatError("invalid_body", "Message contains characters that are not allowed")
         if len(body) > MAX_BODY_LENGTH:
             raise ChatError("body_too_long", f"Message is too long (max {MAX_BODY_LENGTH} characters)")

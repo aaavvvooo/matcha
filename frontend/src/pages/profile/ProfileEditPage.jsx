@@ -13,6 +13,7 @@ import Chip from '../../components/ui/Chip';
 import FormInput from '../../components/ui/FormInput';
 import LocationPicker from '../../components/ui/LocationPicker';
 import { displayName } from '../../utils/displayName';
+import { USERNAME_HINT, USERNAME_RE } from '../../utils/username';
 import { useLogout } from '../../hooks/useLogout';
 import PhotoGallery from './PhotoGallery';
 
@@ -37,7 +38,7 @@ function Section({ children, style, onClick }) {
 }
 
 export default function ProfileEditPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const handleLogout = useLogout();
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
@@ -47,7 +48,8 @@ export default function ProfileEditPage() {
     gender: '', sexual_orientation: '', bio: '', tags: [],
   });
   const [saved, setSaved] = useState(false);
-  const [emailChangeNotice, setEmailChangeNotice] = useState(false);
+  // The address a pending email change will switch to (null when none is pending).
+  const [pendingEmail, setPendingEmail] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [previewPhoto, setPreviewPhoto] = useState(null);
@@ -90,6 +92,11 @@ export default function ProfileEditPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A change requested earlier (e.g. before a reload) is still pending: keep saying so.
+  useEffect(() => {
+    if (user?.pending_email) setPendingEmail(p => p ?? user.pending_email);
+  }, [user]);
+
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   async function handlePhotoDelete(photoId) {
@@ -119,6 +126,11 @@ export default function ProfileEditPage() {
 
   async function handleSave() {
     setSaveError(null);
+    const usernameChanged = form.username !== (profile?.username || '');
+    if (usernameChanged && !USERNAME_RE.test(form.username)) {
+      setSaveError(`Username: ${USERNAME_HINT}`);
+      return;
+    }
     try {
       await updateProfile({
         bio: form.bio,
@@ -130,14 +142,19 @@ export default function ProfileEditPage() {
       const accountUpdates = {};
       if (form.first_name !== (profile?.first_name || '')) accountUpdates.first_name = form.first_name;
       if (form.last_name !== (profile?.last_name || '')) accountUpdates.last_name = form.last_name;
-      if (form.email !== (profile?.email || '')) accountUpdates.email = form.email;
+      if (usernameChanged) accountUpdates.username = form.username;
+      const newEmail = form.email.trim().toLowerCase();
+      if (newEmail !== (profile?.email || '').toLowerCase()) accountUpdates.email = newEmail;
       let emailVerificationSent = false;
       if (Object.keys(accountUpdates).length > 0) {
         const updated = await updateMe(accountUpdates);
-        if (updated.email_verification_sent) {
-          emailVerificationSent = true;
-          setEmailChangeNotice(true);
-        }
+        // The email changes only once the link sent to the new address is clicked: keep
+        // showing the current one, and say where the link went.
+        setProfile(p => ({ ...p, first_name: updated.first_name, last_name: updated.last_name, username: updated.username, email: updated.email }));
+        setForm(f => ({ ...f, username: updated.username, email: updated.email }));
+        setPendingEmail(updated.pending_email || null);
+        emailVerificationSent = Boolean(updated.email_verification_sent);
+        if (accountUpdates.username) refreshUser().catch(() => {});
       }
 
       setSaved(true);
@@ -204,8 +221,14 @@ export default function ProfileEditPage() {
           <Section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <FormInput label="First name" value={form.first_name} onChange={e => setField('first_name', e.target.value)}/>
             <FormInput label="Last name" value={form.last_name} onChange={e => setField('last_name', e.target.value)}/>
-            <FormInput label="Username" value={form.username} onChange={e => setField('username', e.target.value)}/>
-            <FormInput label="Email" type="email" value={form.email} onChange={e => setField('email', e.target.value)}/>
+            <FormInput label="Username" value={form.username} onChange={e => setField('username', e.target.value)} hint={USERNAME_HINT}/>
+            <FormInput
+              label="Email"
+              type="email"
+              value={form.email}
+              onChange={e => setField('email', e.target.value)}
+              hint="Changing it sends a confirmation link to the new address; your current address stays in use until you click it."
+            />
           </Section>
 
           <Section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -262,12 +285,12 @@ export default function ProfileEditPage() {
             <div style={{ fontSize: 13, color: 'var(--ink4)' }}>Manage →</div>
           </Section>
 
-          {emailChangeNotice && (
-            <div style={{
+          {pendingEmail && (
+            <div role="status" style={{
               fontSize: 12, color: 'var(--ink3)', fontStyle: 'italic',
               textAlign: 'center', marginBottom: 10,
             }}>
-              A verification link was sent to your new email. Please confirm it to keep using your account.
+              Check your new inbox: we sent a confirmation link to {pendingEmail}. Your email stays {profile?.email} until you click it.
             </div>
           )}
 

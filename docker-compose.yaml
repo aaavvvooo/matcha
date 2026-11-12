@@ -9,7 +9,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "${POSTGRES_PORT_OUTER}:5432"
+      # Host-only: the database is reachable from this machine, not the network.
+      - "127.0.0.1:${POSTGRES_PORT_OUTER}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -73,15 +74,15 @@ services:
     # pgsty/minio is a maintained community fork with pinnable release tags.
     image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     container_name: minio
-    env_file:
-      - .env
+    # Only the two variables below are passed (not the whole .env).
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      # Host-only: the API reaches MinIO over app-network; nothing else should.
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio_data:/data
     networks:
@@ -93,10 +94,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     container_name: react_frontend
-    env_file:
-      - .env
+    # Only what the dev server and the bundle read: the dev server has no use for the .env secrets.
     environment:
       REACT_APP_API_URL: ${REACT_APP_API_URL}
+      REACT_APP_WS_URL: ${REACT_APP_WS_URL:-}
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
       FAST_REFRESH: "true"

@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import json
 import logging
 import time
@@ -10,8 +9,6 @@ from fastapi import APIRouter, Depends, Path, Query, Request, WebSocket, WebSock
 
 from application.database import Database, database, get_db
 from application.limiter import limiter
-from application.repository.token_repo import TokenRepository
-from application.repository.user_repo import UserRepository
 from application.schema.chat_schemas import (
     ConversationResponse,
     IceServersResponse,
@@ -20,7 +17,8 @@ from application.schema.chat_schemas import (
 )
 from application.service.call_service import CallError, CallService, build_ice_servers, is_signal_frame
 from application.service.chat_service import MAX_USER_ID, ChatError, ChatService
-from application.utils import decode_token, get_current_user
+from application.utils import get_current_user
+from application.utils.deps import resolve_access_token
 from application.websocket.manager import presence_manager
 from application.websocket.rate_limit import SlidingWindowLimiter
 
@@ -64,27 +62,19 @@ class _Session:
 
 
 async def _authenticate(token: str) -> tuple[int, float, str] | None:
-    """Returns (user_id, token expiry as epoch seconds, username) for a live access token, else None."""
-    payload = decode_token(token)
-    # Only access tokens authenticate; a refresh JWT must not.
-    if not payload or payload.get("type") != "access":
+    """Returns (user_id, token expiry as epoch seconds, username) for a live access token, else None.
+
+    Same rules as REST (utils/deps.resolve_access_token): access type, not blacklisted, id-based
+    subject with the user's current token version, validated account.
+    """
+    resolved = await resolve_access_token(token, database)
+    if resolved is None:
         return None
+    user, payload = resolved
     exp = payload.get("exp")
     if not isinstance(exp, (int, float)):
         return None
-
-    token_repo = TokenRepository(database)
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
-    if await token_repo.is_token_blacklisted(token_hash):
-        return None
-
-    username = payload.get("sub")
-    if not username:
-        return None
-
-    user_repo = UserRepository(database)
-    user = await user_repo.get_user_by_username(username)
-    return (user["id"], float(exp), str(username)) if user else None
+    return user["id"], float(exp), str(user["username"])
 
 
 async def _await_token(websocket: WebSocket) -> str | None:
@@ -315,11 +305,12 @@ async def _reauthenticate(websocket: WebSocket, session: _Session, data: Mapping
     if auth is None:
         await _send_error(websocket, "auth_failed", "Could not renew the session")
         return
-    new_id, new_exp, _username = auth
+    new_id, new_exp, username = auth
     if new_id != session.user_id:
         session.close_reason = _REASON_AUTH_FAILED
         return
     session.expires_at = max(session.expires_at, new_exp)
+    session.username = username  # display name for call frames; may have changed
     await websocket.send_json({"type": "auth_ok"})
 
 

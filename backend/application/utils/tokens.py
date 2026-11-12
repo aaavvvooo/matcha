@@ -1,3 +1,4 @@
+import re
 import secrets
 import hashlib
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,31 @@ def _get_jwt_settings() -> tuple[str, str]:
     if JWT_SECRET_KEY is None or JWT_ALGORITHM is None:
         raise RuntimeError("JWT_SECRET_KEY and JWT_ALGORITHM must be set")
     return JWT_SECRET_KEY, JWT_ALGORITHM
+
+
+_USER_ID_RE = re.compile(r"[1-9][0-9]{0,9}")
+_INT4_MAX = 2_147_483_647
+
+
+def session_claims(user_id: int, token_version: int) -> dict:
+    """JWT identity: the immutable user id (never the username) plus the user's token version,
+    which a password reset bumps to end every outstanding session."""
+    return {"sub": str(user_id), "ver": token_version}
+
+
+def parse_session_claims(payload: dict) -> tuple[int, int] | None:
+    """(user_id, token_version) from a decoded JWT, or None for anything else, including
+    tokens minted before ids were used (sub=<username>, no "ver"): those must never resolve."""
+    sub = payload.get("sub")
+    ver = payload.get("ver")
+    if not isinstance(sub, str) or not _USER_ID_RE.fullmatch(sub):
+        return None
+    if not isinstance(ver, int) or isinstance(ver, bool) or ver < 0:
+        return None
+    user_id = int(sub)
+    if user_id > _INT4_MAX:
+        return None
+    return user_id, ver
 
 
 def create_access_token(data: dict):

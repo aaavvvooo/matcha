@@ -29,6 +29,10 @@ OAUTH_42_CLIENT_SECRET = os.getenv("OAUTH_42_CLIENT_SECRET")
 OAUTH_GITHUB_CLIENT_ID = os.getenv("OAUTH_GITHUB_CLIENT_ID")
 OAUTH_GITHUB_CLIENT_SECRET = os.getenv("OAUTH_GITHUB_CLIENT_SECRET")
 
+# Cookies (session + OAuth flow) get the Secure flag when the API's public base URL is https.
+# OAUTH_REDIRECT_BASE_URL is that URL when OAuth is configured; REACT_APP_API_URL otherwise.
+SECURE_COOKIES = (OAUTH_REDIRECT_BASE_URL or REACT_APP_API_URL or "").strip().lower().startswith("https://")
+
 # Voice / video calls (bonus B4). Served to signed-in users by GET /chat/ice-servers.
 # STUN_URL defaults to a public STUN server; the TURN trio is optional and, when all three are
 # set, adds a relay for peers that cannot connect directly. Values live in .env only.

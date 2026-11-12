@@ -32,20 +32,20 @@ async def update_me(
     from application.api.endpoints.auth import _get_email_client, _send_with_retry
 
     user_id = current_user["user"]["id"]
-    # An email change un-verifies the account, so fail before writing if the
-    # verification email can't be sent.
+    # An email change needs the confirmation mail: fail before writing if it can't be sent.
     email_client = _get_email_client() if body.email is not None else None
     service = AuthService(db)
-    response, verification_token = await service.update_me(user_id, body)
-    if verification_token and email_client is not None:
+    result = await service.update_me(user_id, body)
+    if result.verification_token and result.email_to and email_client is not None:
+        # To the NEW address: the change applies only once that mailbox confirms it.
         background_tasks.add_task(
             _send_with_retry,
-            email_client.send_verification_email,
-            response.email,
-            response.username,
-            verification_token,
+            email_client.send_email_change_email,
+            result.email_to,
+            result.response.username,
+            result.verification_token,
         )
-    return response
+    return result.response
 
 
 @router.get("/me/blocks", response_model=list[SimpleUserResponse])

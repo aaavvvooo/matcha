@@ -61,7 +61,7 @@ Rules: endpoint → service → repository, with SQL in `repository/`. New domai
 repo/service/endpoint file rather than growing an unrelated one. Existing exceptions (move them when touched):
 - SQL outside `repository/`: `main.py` (`/health` ping), `SocialService.get_user_profile` (`fame_rating` read).
   (The presence updates of `websocket/manager.py` and the startup reset moved to `UserRepository`.)
-- Endpoints calling repositories directly: `auth.py` `/auth/me`, `photos.py` `/profile/photo/{key}`,
+- Endpoints calling repositories directly: `auth.py` `/auth/me` (profile + pending email), `photos.py` `/profile/photo/{key}`,
   `profile.py` upload photo-count check.
 - Dynamic `SET` clauses (`user_repo`, `profile_repo`) build column names with f-strings from code-defined keys;
   values are always `$n` parameters. Never let request field names reach those keys unfiltered.
@@ -70,7 +70,9 @@ repo/service/endpoint file rather than growing an unrelated one. Existing except
 
 ```
 users            id PK, email UQ, username UQ, hashed_password, first_name, last_name, is_validated, is_superuser,
-                 is_online, last_seen, created_at, updated_at
+                 is_online, last_seen, created_at, updated_at, token_version INT DEFAULT 0
+                 unique indexes uq_users_email_lower (lower(email)), uq_users_username_lower (lower(username)):
+                 both are unique ignoring case; emails are stored lower-case and every lookup compares lower()
 user_profiles    id PK, user_id FK UQ, bio, birth_date, gender, sexual_orientation,
                  profile_picture_id FK→photos, fame_rating FLOAT, latitude, longitude, location_label,
                  created_at, updated_at
@@ -91,8 +93,9 @@ dates            id PK, proposer_id FK→users CASCADE, invitee_id FK→users CA
                  ix_dates_reminder (scheduled_at) WHERE status = 'accepted' AND reminder_sent_at IS NULL
 blocks           (blocker_id, blocked_id) PK
 reports          (reporter_id, reported_id) PK, created_at
-verification_tokens  id PK, user_id FK, token UQ, token_type, expires_at, used, created_at
-refresh_tokens   id PK, username UQ, token_hash, expires_at, created_at
+verification_tokens  id PK, user_id FK, token UQ (SHA-256 of the mailed secret), token_type, expires_at, used, created_at,
+                 new_email NULL (pending email change), index ix_verification_tokens_user_type (user_id, token_type, created_at)
+refresh_tokens   id PK, user_id FK→users ON DELETE CASCADE UQ, token_hash, expires_at, created_at  -- one row per user
 token_blacklist  id PK, token_hash UQ, expires_at, created_at
 oauth_accounts   id PK, user_id FK→users ON DELETE CASCADE, provider VARCHAR(20), provider_user_id VARCHAR(64),
                  created_at, UQ(provider, provider_user_id), UQ(user_id, provider)   -- B1
@@ -107,6 +110,10 @@ Value sets (shared by frontend, seed scripts, and matching; `Literal` types in
   `date_declined` · `date_cancelled` · `date_reminder`
 - `dates.status` (`ck_dates_status`): `pending` · `accepted` · `declined` · `cancelled`
 - `oauth_accounts.provider`: `42` · `github` (`ck_oauth_accounts_provider`; allowlist in `clients/oauth_client.py`)
+- `verification_tokens.token_type`: `email` (sign-up verification; with `new_email` set, a pending email change) ·
+  `password_reset` (`TOKEN_EMAIL` / `TOKEN_PASSWORD_RESET` in `service/auth_service.py`). Each consumer accepts only its own type.
+- Username rule (`schema/fields.Username`, register / `PATCH /users/me` / OAuth generator): `^[A-Za-z0-9_.-]{3,30}$`,
+  so a username can never contain `@` or look like an email. Checked on write only: older usernames still sign in.
 
 All timestamps in the schema are `timestamptz`; the API accepts and returns ISO 8601 UTC instants and the frontend
 renders them in the viewer's local timezone. `dates.scheduled_at` must be sent with an offset (a naive value is a 422).
@@ -115,7 +122,8 @@ A profile counts as **complete** when `user_profiles.gender IS NOT NULL`; incomp
 
 ## 5. HTTP API
 
-No `/api` prefix. Public routes: `/auth/register`, `/verify-email`, `/login`, `/forget-password`, `/refresh`,
+No `/api` prefix. Request bodies: at most 64 KB except `/profile/upload-photo` (413 above; 411 for a chunked body).
+Public routes: `/auth/register`, `/verify-email`, `/login`, `/forget-password`, `/refresh`,
 `/reset-password`, `/oauth/*`. `/auth/logout` takes an optional Bearer token plus the refresh cookie and works even with an
 expired token. `/profile/photo/*` is authenticated by the `access_token` cookie (so `<img src>` works). Everything
 else, including `/auth/me`, requires `Authorization: Bearer <access>`.
@@ -123,14 +131,14 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 ### Auth — `/auth`
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/register` | Sends verification email · 10/hour · 409 if username/email is taken |
-| POST | `/verify-email` | Token in body |
+| POST | `/register` | Sends verification email · 10/hour · 409 if username/email is taken (case-insensitive) · 422 if the username breaks the rule (§4) |
+| POST | `/verify-email` | Token in body; only `email` tokens (a password-reset token is "Invalid token"). Confirms a sign-up, or applies a pending email change: the new address is re-checked and written in one locked transaction (409 "Email already registered" if it was taken meanwhile; nothing changes); a token is spent atomically (single use) |
 | POST | `/login` | Form body (username or email + password) · body `{access_token, token_type}` only (the refresh token is never in a response body), sets the refresh and `access_token` cookies · 5/min |
-| GET | `/me` | Current user |
-| POST | `/forget-password` | Always same message (no user enumeration) · 3/min |
-| POST | `/logout` | Idempotent: blacklists a live access token, revokes the refresh token (username from access or refresh token), closes all of that user's WebSockets (1008 `logged_out`), always clears both cookies |
+| GET | `/me` | Current user: `id`, `first_name`, `last_name`, `username`, `email`, `is_validated`, `has_profile`, `pending_email` (address of an unconfirmed email change, or null) |
+| POST | `/forget-password` | Always same message (no user enumeration) · 3/min per IP, and per account at most one reset mail per 2 minutes (a request inside the cooldown gets the same answer and sends nothing); a new reset link invalidates the previous ones |
+| POST | `/logout` | Idempotent: blacklists a live access token, revokes the refresh token (user id from the access or refresh token, if it still matches the account's `token_version`), closes all of that user's WebSockets (1008 `logged_out`), always clears both cookies |
 | POST | `/refresh` | Rotates the refresh token (httpOnly, SameSite=Strict cookie); body `{access_token, token_type}`. **204 No Content** (empty body) when the request carries no `refresh_token` cookie (nothing to restore: a signed-out page load must not log a console error); 401 when a cookie is present but invalid, expired or revoked. 10/min |
-| POST | `/reset-password` | Token + new password in body · 5/min |
+| POST | `/reset-password` | Token + new password in body · 5/min · only `password_reset` tokens. Ends every session of the account: all its outstanding tokens are spent, `token_version` is bumped (every access/refresh JWT dies at once), the refresh row is deleted, its sockets are closed (1008 `logged_out`). The link went to the account's address, so a reset also marks an unverified account verified |
 | GET | `/oauth/providers` | `{"providers": [...]}` — only providers with credentials configured (B1) |
 | GET | `/oauth/{provider}/start` | `provider` ∈ `42`·`github` and configured, else 404 · 302 to the provider with `state` (+ PKCE S256 for GitHub) · sets the `oauth_flow` cookie · 20/min |
 | GET | `/oauth/{provider}/callback` | `code`, `state` (or provider `error`) · always 302 to `{FRONTEND_URL}/oauth/callback?status=ok\|verify_email` or `?error=<code>`; on success sets the same cookies as `/login` · 20/min |
@@ -142,22 +150,22 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 | GET | `/get` | Own full profile |
 | PATCH | `/update` | Gender, orientation, bio, birth date, tags |
 | PATCH | `/location` | `{latitude, longitude}` (GPS) or `{city}` (geocoded) |
-| POST | `/upload-photo` | multipart `files[]`; JPEG/PNG/WebP, ≤5 MB each, ≤5 total. Refused before parsing: 411 (no `Content-Length` / chunked), 401 (no credentials), 413 (body > 5×5 MB + 64 KB). Optional form field `replaces` (photo id, B2.3): atomic replace, valid with exactly one file (else 400). In one locked transaction the new image is stored, inserted at the old `"order"` with the old `is_main`, `profile_picture_id` is repointed and the old row deleted; the old storage object is removed only after commit, the new one if the transaction fails, so the original disappears only if the replacement commits. Net photo count is unchanged (works at 5/5). 400 if the id isn't the caller's; 409 "This image is already in your gallery" if the bytes match any existing photo of the caller (including the one being replaced), nothing changed. Returns a one-element list |
+| POST | `/upload-photo` | multipart `files[]`; JPEG/PNG/WebP, ≤5 MB each, ≤5 total. Every file is decoded and re-encoded server-side (§10, `utils/image.py`); only the re-encoded bytes are stored and hashed into the key, so duplicate detection compares re-encoded images. 400 "Photo N: …" for an unreadable, oversized (> 16 MP) or non-image file. Refused before parsing: 411 (no `Content-Length` / chunked), 401 (no valid, unexpired access token — signature/type/expiry checked without the DB), 413 (body > 5×5 MB + 64 KB). Optional form field `replaces` (photo id, B2.3): atomic replace, valid with exactly one file (else 400). In one locked transaction the new image is stored, inserted at the old `"order"` with the old `is_main`, `profile_picture_id` is repointed and the old row deleted; the old storage object is removed only after commit, the new one if the transaction fails, so the original disappears only if the replacement commits. Net photo count is unchanged (works at 5/5). 400 if the id isn't the caller's; 409 "This image is already in your gallery" if the bytes match any existing photo of the caller (including the one being replaced), nothing changed. Returns a one-element list |
 | DELETE | `/delete-photos` | `{photo_ids: []}` |
 | POST | `/set-profpic` | `{photo_id}` |
 | PATCH | `/photo-order` | `{photo_ids: []}` (B2.2) · 30/min. Must be exactly the caller's photo ids, each once, in the new order, else 400 (foreign, duplicate, missing, unknown or empty list). Renumbers `"order"` 1..n in one statement under the per-user photo lock. Returns the photos in the new order. `is_main` / `profile_picture_id` are untouched: the profile picture is the explicit `is_main` flag (browse/search sort "main first, then `"order"`"), so reordering never changes it |
 | GET | `/get-all-tags` | Tag autocomplete |
-| GET | `/photo/{key}` | Serves a stored photo (cookie auth) |
+| GET | `/photo/{key}` | Serves a stored photo (cookie auth). The type is sniffed from the first bytes (JPEG/PNG/WebP only, else 404), never taken from object metadata; headers `Content-Security-Policy: default-src 'none'; sandbox`, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline` |
 
 ### Other users — `/users`
 | Method | Path | Notes |
 |---|---|---|
-| PATCH | `/me` | Name / email (email change ⇒ re-verify) · 409 if username/email is taken |
+| PATCH | `/me` | Name / username / email · 409 if username/email is taken (case-insensitive). **Email change is pending:** `users.email` is not touched; the new address is stored with an `email` token (`new_email`) and the link goes to the **new** address; the account stays validated on its current address until that link is clicked (`/auth/verify-email`). Response `MeResponse` adds `pending_email`, `email_verification_sent`. One pending change at a time (a new one invalidates the previous link); 429 if one was requested < 2 min ago or 5 in the last hour |
 | GET | `/me/blocks` | My blocked list |
-| GET | `/{id}` | Public profile (no email); records a view; 403 if they blocked me |
-| POST / DELETE | `/{id}/like` | Like requires own photo; mutual ⇒ connection. Unlike removes connection |
-| POST / DELETE | `/{id}/block` | Block also removes likes + connection both ways |
-| POST | `/{id}/report` | Fake-account report |
+| GET | `/{id}` | Public profile (no email); records a view; 404 if they blocked me (same as a missing user) |
+| POST / DELETE | `/{id}/like` | Like requires own photo; mutual ⇒ connection. Unlike removes connection. 404 "User not found" for a missing/hidden user **and** for one who blocked you (a block is not detectable) |
+| POST / DELETE | `/{id}/block` | Block also removes likes + connection both ways · 404 for an unknown user |
+| POST | `/{id}/report` | Fake-account report · 404 for an unknown user |
 | GET | `/{id}/views` | Own only (403 otherwise) |
 | GET | `/{id}/likes` | Own only |
 
@@ -215,7 +223,14 @@ participant (§7); every transition returns the updated date.
 ```
 register → email link → POST /auth/verify-email → is_validated = true
 login    → access token (body) + refresh token (httpOnly cookie only, hash stored in refresh_tokens)
-request  → Bearer access token; blacklist checked in get_current_user
+request  → Bearer access token; utils/deps.resolve_access_token (shared by REST, the photo cookie and the WebSocket):
+           type=access, not blacklisted, sub = user id + ver = users.token_version, account is_validated
+identity → JWT `sub` is the immutable user id (string) plus `ver`; never the username. Tokens minted before this
+           (sub=<username>, no ver) never resolve: everyone signed in before the upgrade signs in again
+email    → change: PATCH /users/me stores new_email with an `email` token, mails the NEW address; users.email changes
+           only when that link is confirmed (uniqueness re-checked). Reset tokens never verify an email and vice versa
+reset    → POST /auth/reset-password: spends all of the user's tokens, bumps token_version, deletes the refresh row,
+           closes the user's sockets; outstanding access tokens are rejected immediately (no 15-minute residual)
 boot     → AuthContext calls refreshAccessToken() (api/client.js) once: 200 restores the session, 204 (no cookie)
            leaves the user signed out without any failed request, 401 (stale cookie) also signed out
 expiring → the axios request interceptor refreshes a token that expires within 30 s before sending (at most once a
@@ -309,13 +324,15 @@ in `PROVIDERS` if 42 confirms support.
 
 One socket per browser tab at `/chat/ws`. The client sends `{"type":"auth","token":"<access>"}` as its first
 frame (token is never in the URL); the server closes with 1008 if it is missing, invalid, or blacklisted, or after
-10 s. Only an **access** JWT is accepted (a refresh JWT is refused), and it must not be blacklisted. On success the
+10 s. Only an **access** JWT is accepted (a refresh JWT is refused); it must not be blacklisted, must carry the user id
+and the account's current `token_version`, and the account must be validated (`resolve_access_token`, same as REST). On success the
 server sends `{"type":"auth_ok"}`; clients treat the socket as connected only then. Server pings every 25 s
 (`{"type":"ping"}`); the client may answer `{"type":"pong"}` (ignored).
 
 The token's `exp` is kept: when it passes (checked on every inbound frame and on the ping tick) the server closes the
 socket with 1008. **In-band re-auth:** an open socket accepts `{"type":"auth","token":"<fresh access token>"}` at any
-time. The token is validated exactly like the first frame (signature, `type == access`, not blacklisted) and must belong
+time. The token is validated exactly like the first frame (signature, `type == access`, not blacklisted, token version,
+validated account) and must belong
 to the **same user** (another user's token closes the socket with 1008 `auth_failed`; an invalid or refresh token gets an
 `auth_failed` error frame and the socket stays); on success the socket's expiry becomes the new token's (never earlier
 than before) and `auth_ok` answers. It counts against the per-connection frame limit. The client does this on every
@@ -537,12 +554,21 @@ Stored in `user_profiles.fame_rating`. `profile_viewers` counts distinct viewers
 | Threat | Mitigation | Status |
 |---|---|---|
 | SQL injection | All values are asyncpg `$n` parameters; f-strings only for code-defined column names (§3) | ✅ |
-| XSS | React escapes output; no `dangerouslySetInnerHTML` | ✅ |
+| XSS | React escapes output; no `dangerouslySetInnerHTML`; email templates rendered by Jinja2 with `autoescape` (html/xml) and links built with `urlencode` | ✅ |
+| Security headers | API (`main.py` middleware, every response incl. errors): `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cross-Origin-Resource-Policy: same-site` (the SPA on `localhost:3000` is the same site as the API, so `<img>` photos still load). SPA production image (`frontend/nginx.conf`): CSP `default-src 'self'; script-src 'self'` (the build sets `INLINE_RUNTIME_CHUNK=false`, so no inline script), `style-src 'self' 'unsafe-inline' fonts.googleapis.com` (react-hot-toast injects a `<style>`), `img-src` self/data/blob/API/OSM tiles, `connect-src` self + API http(s)/ws(s) origins (substituted at image build from `REACT_APP_API_URL`/`REACT_APP_WS_URL`), `media-src blob: mediastream:`, `frame-ancestors 'none'`, plus `X-Frame-Options`, `nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` (OSM tiles need a Referer). Dev server (`npm start`): `src/setupProxy.js` adds `X-Frame-Options`, `frame-ancestors 'none'`, `nosniff` only. Vercel (`vercel.json`) sets no headers | ✅ / ⚠️ Vercel |
 | Weak passwords | Argon2; zxcvbn score ≥ 2 + length/charset rules | ✅ |
 | CSRF | Refresh cookie httpOnly + SameSite=Strict; CORS whitelist | ✅ |
 | Brute force | SlowAPI limits on auth routes | ✅ |
-| Token replay | Access blacklist on logout; refresh rotation | ✅ |
-| Malicious upload | Type detected from magic bytes (`utils/image.py`), never client `content_type`; ≤5 MB read cap; all files validated before any is stored; served with `nosniff`; `upload_size_guard` (`main.py`) refuses oversized, chunked or anonymous upload bodies from the headers before Starlette parses them | ✅ |
+| Token replay | Access blacklist on logout; refresh rotation; password reset bumps `users.token_version`, which every JWT carries (`ver`), so all outstanding access/refresh tokens die at once | ✅ |
+| Session identity | JWT `sub` = immutable user id (+ `ver`), `refresh_tokens` keyed by `user_id` (FK, cascade): renaming, or taking someone's old username, can never move a session to another account. Old username-based tokens are rejected | ✅ |
+| Email verification / account takeover | Tokens are looked up with their type (reset ≠ verify); an email change is pending (`verification_tokens.new_email`) and applied only via the link sent to the new address, with uniqueness re-checked; confirming it spends every other outstanding token (reset links mailed to the old address die); email and username unique ignoring case; every credential check (Bearer, photo cookie, refresh, WS) requires a validated account | ✅ |
+| Mail abuse | Per IP (SlowAPI) **and** per account: one reset mail / 2 min (silent, same response), one email-change mail / 2 min and 5 / hour (429); counted from `verification_tokens.created_at` under a row lock on the user | ✅ |
+| User text | One validator (`schema/fields.has_unsafe_chars`) for every request text field, chat and dates: no NUL / control characters / lone surrogates (would be a 500 in Postgres), no bidi controls or U+2028/2029; names also no zero-width / format characters; length caps everywhere (login identifier ≤ 254); `birth_date` must give an age of 18–120 | ✅ |
+| Request size | `body_size_guard` (`main.py`): non-upload bodies ≤ 64 KB by `Content-Length` (413), chunked bodies refused (411) | ✅ |
+| Malicious upload | Type detected from magic bytes (`utils/image.py`), never client `content_type`; ≤5 MB read cap; then decoded and **re-encoded with Pillow** (same format family): header-declared size > 16 MP or any decode error / truncation → 400 (decompression bombs never decoded), EXIF orientation applied then **all metadata dropped** (EXIF incl. GPS, XMP, ICC, text chunks), longest side ≤ 4096, animated images keep their first frame only; only the re-encoded bytes are stored; CPU work in `asyncio.to_thread`, at most 2 decodes at a time per process; all files validated before any is stored; `body_size_guard` (`main.py`) refuses oversized, chunked, anonymous or forged-token upload bodies from the headers before Starlette parses them | ✅ |
+| Photo serving | `GET /profile/photo/{key}` sniffs JPEG/PNG/WebP from the stored bytes (anything else 404), ignores object metadata, sends `CSP: default-src 'none'; sandbox`, `nosniff`, `Content-Disposition: inline`. MinIO has no credential defaults in code (startup fails with a clear error if `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` are unset) and Compose publishes MinIO and Postgres on `127.0.0.1` only | ✅ |
+| Cookies | Session and OAuth-flow cookies get `Secure` when the API's public URL (`OAUTH_REDIRECT_BASE_URL`, else `REACT_APP_API_URL`) is https, on set and on delete (`config.SECURE_COOKIES`) | ✅ |
+| User enumeration | Login answers "Invalid credentials" for both unknown users and wrong passwords and spends the same Argon2 work for an unknown user (dummy hash); forgot-password always answers the same; profile/like/block/report use one 404. **Accepted trade-off:** `/auth/register` (and `PATCH /users/me`) say 409 "Email already registered" / "Username already taken" — needed for a usable sign-up form, rate limited 10/hour per IP | ⚠️ documented |
 | Info leakage | `main.py` middleware logs unhandled errors and returns `{"detail":"Internal server error"}`; `/health` returns only `status` (`healthy`/`degraded`/`unhealthy`), database connectivity and `storage.ready` — no versions, hosts or errors | ✅ |
 | Secrets | `.env` gitignored | ✅ |
 | OAuth login CSRF / session fixation | 256-bit `state` in a stateless HMAC-SHA256-sealed (derived key) httpOnly SameSite=Lax cookie, strict parsing, constant-time compare, 10 min TTL, cleared on every callback; single use = cookie clearing + providers' single-use codes (§6). No server state, so `/start` can't exhaust memory | ✅ |
@@ -554,6 +580,13 @@ Stored in `user_profiles.fame_rating`. `profile_viewers` counts distinct viewers
 | IP exposure through WebRTC | ICE candidates carry each peer's IP addresses (inherent to peer-to-peer media). They are produced and relayed only after the callee **accepts** (the caller creates its offer, and starts gathering, only on `accept`; the callee gathers only when answering), and only between connected, unblocked users. A TURN relay (`TURN_URL`) hides addresses from the peer at the cost of relaying the media through it. The public STUN server sees the user's address too | ⚠️ inherent, documented |
 | Per-IP rate limits behind a proxy | uvicorn runs without `--proxy-headers`/`--forwarded-allow-ips`, so behind Cloud Run's front end every client may share one key and per-IP limits collapse into a global one | ⚠️ known gap |
 | Same-site assumption | The Strict refresh cookie (session restore, OAuth hand-off) needs SPA and API on one site: true in Compose, false for the vercel.app / run.app production split (§6) | ⚠️ known gap |
+| Email change without password | `PATCH /users/me` needs a valid session but not the current password: someone holding a live session could move the account to their mailbox (then reset the password). Mitigated by short access tokens, validated-only sessions and the confirm-by-new-mailbox step | ⚠️ known gap |
+| Reset-link churn | Anyone can request a reset for a username every 2 minutes; each new link invalidates the previous one, so a slow user may click a dead link (the newest mail always works) | ⚠️ accepted |
+| Refresh-token reuse | Rotation keeps one refresh row per user; replaying an already-rotated refresh token is refused, but it does not revoke the session family (no reuse detection) | ⚠️ known gap |
+| Login CSRF | `/auth/login` has no Origin check; a cross-site form can sign a browser into an attacker's account (SameSite=Strict cookies limit what follows) | ⚠️ known gap |
+| Public API docs | `/docs` and `/openapi.json` are public (handy for the evaluation; disable in a real deployment) | ⚠️ known gap |
+| Seed accounts | Seeded profiles share one password (`scripts/seed_common.py`); never run the seed scripts against a public deployment | ⚠️ known gap |
+| Geocoder queue | Nominatim lookups are serialised per process (1 request/s, at most 10 waiting, then 503 "busy"); one client sending uncached cities can keep the queue full and starve everyone's location search for a while (rate limited per IP only) | ⚠️ known gap |
 | OAuth open redirect / token leakage | Callback redirects only to the fixed `{FRONTEND_URL}/oauth/callback` with `status`/`error` from a fixed set; tokens only in httpOnly cookies; provider token discarded; provider bodies/codes never logged; `provider` path param checked against a fixed allowlist (404) | ✅ |
 
 **Micro-framework rule (subject §III).** Decision 2026-11-07: keep FastAPI + Pydantic. Defense position: FastAPI is
@@ -593,6 +626,10 @@ library (auth, tokens, verification, reset and OAuth sign-in are hand-written).
   partners in the loaded conversations list. The `datetime-local` value is read in local time and sent as
   `toISOString()` (UTC). Titles/places/notes render as text only. `utils/notificationInfo.js` maps every notification
   type to text and link (unknown types get a generic line); `date_*` notifications link to `/dates`.
+- **Account settings:** `pages/profile/ProfileEditPage.jsx` sends only changed name / username / email fields to
+  `PATCH /users/me`. The username field shows the server rule (`utils/username.js`, also used by the register form).
+  An email change keeps showing the current address and says "Check your new inbox …" with the pending address (also
+  after a reload, from `/auth/me`'s `pending_email`).
 - **Routing:** `ProtectedRoute` redirects to `/login`; `/profile/setup` for incomplete profiles.
   `/oauth/callback` (public) finishes OAuth sign-in from AuthProvider's page-load refresh; provider buttons
   (`components/auth/OAuthButtons.jsx`) appear on Login/Register only for providers the API reports.
@@ -618,9 +655,9 @@ library (auth, tokens, verification, reset and OAuth sign-in are hand-written).
   with the previous request aborted; the view is locked to the world (±180°, ±85°, no wrapping). Markers are
   `L.divIcon`s built from DOM nodes (`textContent`, no HTML from user data); the mini profile card is React, rendered
   outside Leaflet, with a button to `/profile/:id`. GPS goes through the shared `LocationPicker` →
-  `PATCH /profile/location` (explicit button = consent; denied / unavailable / timeout shown inline). No CSP or
-  security-header middleware exists in the backend, nginx config or `index.html`, so tile images are not blocked; if
-  a CSP is added, `img-src` must allow `https://tile.openstreetmap.org`.
+  `PATCH /profile/location` (explicit button = consent; denied / unavailable / timeout shown inline). The production
+  CSP (`frontend/nginx.conf`, §10) allows `https://tile.openstreetmap.org` and `https://*.tile.openstreetmap.org` in
+  `img-src`, and the SPA's `Referrer-Policy` keeps a Referer for the tile servers.
 - **Errors:** `components/ErrorBoundary.jsx` wraps the whole app (render errors only — async errors must be
   handled where they occur).
 - **Design system:** tokens in `src/index.css` (cream / matcha palette, Playfair Display + DM Sans);

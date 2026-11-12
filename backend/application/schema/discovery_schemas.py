@@ -5,6 +5,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from application.schema.fields import has_unsafe_chars
 from application.schema.profile_schemas import PhotoResponse
 from application.schema.value_sets import Gender, Orientation
 
@@ -31,7 +32,7 @@ class DiscoveryQuery(BaseModel):
     @field_validator("tags")
     @classmethod
     def _no_nul(cls, v):
-        if v is not None and "\x00" in v:
+        if v is not None and has_unsafe_chars(v):
             raise ValueError("Invalid character")
         return v
 
@@ -62,7 +63,7 @@ class SearchQuery(DiscoveryQuery):
     def _location_no_nul(cls, v):
         if v is None:
             return v
-        if "\x00" in v:
+        if has_unsafe_chars(v):
             raise ValueError("Invalid character")
         v = v.strip()
         if not v:

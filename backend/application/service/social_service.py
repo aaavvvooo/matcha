@@ -9,6 +9,7 @@ from application.repository.social_repo import SocialRepository
 from application.repository.profile_repo import ProfileRepository
 from application.repository.user_repo import UserRepository
 from application.service.date_service import DateService
+from application.service.db_errors import map_integrity_errors
 from application.service.notification_service import NotificationService
 from application.schema.users_schemas import (
     UserProfileResponse,
@@ -38,6 +39,10 @@ def _calculate_age(birth_date) -> int | None:
     return years
 
 
+def _user_fk_as_404():
+    return map_integrity_errors(fk_detail="User not found", fk_status=status.HTTP_404_NOT_FOUND)
+
+
 class SocialService:
     def __init__(self, db: Database):
         self.db = db
@@ -46,6 +51,10 @@ class SocialService:
         self.user_repo = UserRepository(db)
         self.notifications = NotificationService(db)
         self.dates = DateService(db)
+
+    async def _require_user(self, user_id: int) -> None:
+        if not await self.user_repo.user_exists(user_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     async def get_user_profile(self, viewer_id: int, user_id: int) -> UserProfileResponse:
         profile = await self.profile_repo.get_profile(user_id)
@@ -114,7 +123,8 @@ class SocialService:
         if not target or target["gender"] is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         if await self.social_repo.is_blocked_either_way(liker_id, liked_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not found")
+            # Same 404 as a missing user: a block must not be detectable.
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         photo_count = await self.profile_repo.count_photos(liker_id)
         if photo_count == 0:
             raise HTTPException(
@@ -166,15 +176,18 @@ class SocialService:
     async def block(self, blocker_id: int, blocked_id: int):
         if blocker_id == blocked_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot block yourself")
+        await self._require_user(blocked_id)
         pool = self.db.require_pool()
-        async with pool.acquire() as connection:
-            async with connection.transaction():
-                conn = cast(Connection, connection)
-                await self.social_repo.block_user(blocker_id, blocked_id, conn)
-                await self.social_repo.unlike_user(blocker_id, blocked_id, conn)
-                await self.social_repo.unlike_user(blocked_id, blocker_id, conn)
-                await self.social_repo.remove_connection(blocker_id, blocked_id, conn)
-                await self.dates.cancel_between(blocker_id, blocked_id, conn)
+        # A user deleted between the check and the insert: the FK violation is the same 404.
+        with _user_fk_as_404():
+            async with pool.acquire() as connection:
+                async with connection.transaction():
+                    conn = cast(Connection, connection)
+                    await self.social_repo.block_user(blocker_id, blocked_id, conn)
+                    await self.social_repo.unlike_user(blocker_id, blocked_id, conn)
+                    await self.social_repo.unlike_user(blocked_id, blocker_id, conn)
+                    await self.social_repo.remove_connection(blocker_id, blocked_id, conn)
+                    await self.dates.cancel_between(blocker_id, blocked_id, conn)
         await call_manager.end_between(blocker_id, blocked_id)
         await self.social_repo.recalculate_fame(blocker_id)
         await self.social_repo.recalculate_fame(blocked_id)
@@ -191,7 +204,9 @@ class SocialService:
     async def report(self, reporter_id: int, reported_id: int):
         if reporter_id == reported_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot report yourself")
-        await self.social_repo.report_user(reporter_id, reported_id)
+        await self._require_user(reported_id)
+        with _user_fk_as_404():
+            await self.social_repo.report_user(reporter_id, reported_id)
         return {"reported": True}
 
     async def get_viewers(self, requester_id: int, user_id: int):
