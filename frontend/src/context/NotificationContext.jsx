@@ -5,7 +5,10 @@ import { getClientToken, onTokenChange, refreshAccessToken, tokenExpiresSoon, to
 
 const NotificationContext = createContext(null)
 
-const WS_BASE = process.env.REACT_APP_WS_URL || 'ws://localhost:8000'
+// The socket lives on the API host: derive it from REACT_APP_API_URL (http -> ws, https -> wss)
+// unless REACT_APP_WS_URL overrides it, so one variable points the whole app at its backend.
+const WS_BASE = process.env.REACT_APP_WS_URL ||
+  (process.env.REACT_APP_API_URL || 'http://localhost:8000').replace(/\/+$/, '').replace(/^http/, 'ws')
 
 const RECONNECT_MIN_MS = 1000
 const RECONNECT_MAX_MS = 30000

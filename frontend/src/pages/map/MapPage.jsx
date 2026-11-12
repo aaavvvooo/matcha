@@ -8,6 +8,7 @@ import Btn from '../../components/ui/Btn';
 import LocationPicker from '../../components/ui/LocationPicker';
 import { getMapUsers, getMyProfile } from '../../api/profilesApi';
 import { apiError } from '../../api/errors';
+import { hideDeprecatedMouseEventProps } from '../../utils/leafletFirefoxFix';
 import './MapPage.css';
 
 const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -126,6 +127,7 @@ export default function MapPage() {
   useEffect(() => {
     if (!ready || !containerRef.current) return undefined;
     const start = homeRef.current;
+    hideDeprecatedMouseEventProps();
     const map = L.map(containerRef.current, {
       center: start ? [start.lat, start.lng] : [25, 10],
       zoom: start ? 11 : 2,
@@ -134,7 +136,9 @@ export default function MapPage() {
       maxBoundsViscosity: 1.0,
       worldCopyJump: false,
     });
-    L.tileLayer(TILE_URL, { attribution: ATTRIBUTION, maxZoom: 19, noWrap: true }).addTo(map);
+    // `bounds` is what makes noWrap effective: without it Leaflet still requests tiles left and right
+    // of the world (x = -1, 4 at zoom 2), which tile.openstreetmap.org answers with HTTP 400.
+    L.tileLayer(TILE_URL, { attribution: ATTRIBUTION, maxZoom: 19, noWrap: true, bounds: WORLD_BOUNDS }).addTo(map);
     markersRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
 

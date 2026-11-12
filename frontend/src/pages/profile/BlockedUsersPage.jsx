@@ -58,7 +58,8 @@ export default function BlockedUsersPage() {
                 borderRadius: 'var(--r-md)', padding: '10px 14px',
               }}
             >
-              <Avatar name={displayName(u, null)} src={u.profile_photo_url} size={44} />
+              {/* No photo: the photo route answers 404 for blocked pairs, which would log a console error and draw an empty circle */}
+              <Avatar name={displayName(u, null)} size={44} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{displayName(u, null)}</div>
                 <div style={{ fontSize: 12, color: 'var(--ink4)' }}>@{u.username}</div>

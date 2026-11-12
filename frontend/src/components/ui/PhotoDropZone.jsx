@@ -29,8 +29,10 @@ export default function PhotoDropZone({
     const files = Array.from(fileList || []);
     if (!files.length) return;
     const { accepted, errors } = checkPhotoFiles(files, multiple ? slots : Math.min(slots, 1));
-    onErrors?.(errors);
+    // Accepted files first: onFiles handlers reset the message area, which would wipe the
+    // rejections of a mixed drop (some files fine, some not) if they were reported before.
     if (accepted.length) onFiles(accepted);
+    onErrors?.(errors);
   }
 
   function open() {

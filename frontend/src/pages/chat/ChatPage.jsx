@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Sparkle, CalendarPlus, Phone, Video } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
@@ -99,7 +99,15 @@ function ChatThreadView({
   partner, messages, myId, state, hasMore, error, notConnected,
   onSend, onBack, onLoadOlder, onRetry, onDismissError,
 }) {
-  const [input, setInput] = useState('');
+  const [input, setInputState] = useState('');
+  // Mirrors `input` synchronously: a fast double click or double Enter fires a second send before
+  // React has re-rendered the cleared field, which would send the same text twice (seen in Firefox).
+  const draftRef = useRef('');
+  const setInput = useCallback(update => {
+    const next = typeof update === 'function' ? update(draftRef.current) : update;
+    draftRef.current = next;
+    setInputState(next);
+  }, []);
   const [proposing, setProposing] = useState(false);
   const [dateSent, setDateSent] = useState(false);
   const { startCall, busy: inCall } = useCall();
@@ -121,7 +129,7 @@ function ChatThreadView({
   }, [error]);
 
   function handleSend() {
-    const text = input.trim();
+    const text = draftRef.current.trim();
     if (!text || notConnected) return;
     stickToEndRef.current = true;
     if (onSend(partner.user_id, text)) setInput('');

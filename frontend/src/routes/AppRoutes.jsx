@@ -23,6 +23,7 @@ import MapPage           from '../pages/map/MapPage';
 import ChatPage           from '../pages/chat/ChatPage';
 import MatchesPage        from '../pages/matches/MatchesPage';
 import NotificationsPage  from '../pages/notifications/NotificationsPage';
+import NotFoundPage       from '../pages/NotFoundPage';
 
 function AppRoutes() {
   return (
@@ -52,6 +53,9 @@ function AppRoutes() {
       <Route path="/matches"        element={<ProtectedRoute><MatchesPage /></ProtectedRoute>} />
       <Route path="/dates"          element={<ProtectedRoute><MatchesPage /></ProtectedRoute>} />
       <Route path="/notifications"  element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+
+      {/* Anything else */}
+      <Route path="*"               element={<NotFoundPage />} />
     </Routes>
   );
 }
