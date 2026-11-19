@@ -67,6 +67,43 @@ export function tagsError(tags) {
   return missing > 0 ? `Pick ${missing} more interest${missing === 1 ? '' : 's'}` : null;
 }
 
+// Discover / search filter bounds (backend/application/schema/discovery_schemas.py DiscoveryQuery).
+export const MAX_DISTANCE_KM = 20000;
+export const MAX_FAME = 100;
+
+function boundError(raw, { min, max, integer = false, exclusiveMin = false }) {
+  if (raw === '' || raw == null) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 'Enter a number';
+  if (integer && !Number.isInteger(n)) return 'Whole numbers only';
+  if (exclusiveMin ? n <= min : n < min) return exclusiveMin ? `More than ${min}` : `At least ${min}`;
+  if (n > max) return `At most ${max}`;
+  return null;
+}
+
+/**
+ * Per-field errors for discover/search filters; keys with no problem are left out.
+ * @param {{minAge?, maxAge?, maxDistance?, minFame?, maxFame?}} f raw input strings ('' = no bound)
+ * @returns {Record<string, string>}
+ */
+export function filterErrors(f) {
+  const errors = {
+    minAge: boundError(f.minAge, { min: MIN_AGE, max: MAX_AGE, integer: true }),
+    maxAge: boundError(f.maxAge, { min: MIN_AGE, max: MAX_AGE, integer: true }),
+    maxDistance: boundError(f.maxDistance, { min: 0, max: MAX_DISTANCE_KM, exclusiveMin: true }),
+    minFame: boundError(f.minFame, { min: 0, max: MAX_FAME }),
+    maxFame: boundError(f.maxFame, { min: 0, max: MAX_FAME }),
+  };
+  const both = (a, b) => a !== '' && a != null && b !== '' && b != null;
+  if (!errors.minAge && !errors.maxAge && both(f.minAge, f.maxAge) && Number(f.minAge) > Number(f.maxAge)) {
+    errors.maxAge = 'Must be at least the min age';
+  }
+  if (!errors.minFame && !errors.maxFame && both(f.minFame, f.maxFame) && Number(f.minFame) > Number(f.maxFame)) {
+    errors.maxFame = 'Must be at least the min fame';
+  }
+  return Object.fromEntries(Object.entries(errors).filter(([, v]) => v));
+}
+
 /** `YYYY-MM-DD` for the date `years` ago, for date input min/max. */
 export function isoYearsAgo(years, today = new Date()) {
   const d = new Date(today.getFullYear() - years, today.getMonth(), today.getDate());

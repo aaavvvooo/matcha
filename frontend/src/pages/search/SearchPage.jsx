@@ -7,6 +7,7 @@ import FameMeter from '../../components/ui/FameMeter';
 import Chip from '../../components/ui/Chip';
 import Btn from '../../components/ui/Btn';
 import FormInput from '../../components/ui/FormInput';
+import { filterErrors } from '../../utils/formValidation';
 import { displayName } from '../../utils/displayName';
 import { apiError } from '../../api/errors';
 
@@ -29,6 +30,10 @@ export default function SearchPage() {
   // Only the latest request may update the results (sort can change mid-flight).
   const requestRef = useRef(0);
   const navigate = useNavigate();
+
+  // Same bounds as the server (fame comes from sliders, always in range).
+  const searchErrors = filterErrors({ minAge: filters.ageMin, maxAge: filters.ageMax, maxDistance: filters.maxDistance });
+  const searchValid = Object.keys(searchErrors).length === 0;
 
   const toggleTag = t => setFilters(f => ({
     ...f,
@@ -98,6 +103,7 @@ export default function SearchPage() {
                   type="number"
                   value={filters.ageMin}
                   onChange={e => setFilters(f => ({ ...f, ageMin: e.target.value }))}
+                  error={searchErrors.minAge}
                   placeholder="18"
                   style={{ flex: 1 }}
                 />
@@ -106,6 +112,7 @@ export default function SearchPage() {
                   type="number"
                   value={filters.ageMax}
                   onChange={e => setFilters(f => ({ ...f, ageMax: e.target.value }))}
+                  error={searchErrors.maxAge}
                   placeholder="50"
                   style={{ flex: 1 }}
                 />
@@ -147,6 +154,7 @@ export default function SearchPage() {
                 type="number"
                 value={filters.maxDistance}
                 onChange={e => setFilters(f => ({ ...f, maxDistance: e.target.value }))}
+                error={searchErrors.maxDistance}
                 placeholder="Any distance"
                 style={{ marginTop: 12 }}
               />
@@ -164,7 +172,7 @@ export default function SearchPage() {
             </div>
 
             {error && <div role="alert" style={{ fontSize: 13, color: 'var(--rose)' }}>{error}</div>}
-            <Btn onClick={() => runSearch()} disabled={loading} style={{ width: '100%' }}>
+            <Btn onClick={() => runSearch()} disabled={loading || !searchValid} style={{ width: '100%' }}>
               {loading ? 'Searching…' : 'Search →'}
             </Btn>
           </div>
