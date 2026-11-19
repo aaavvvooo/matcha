@@ -10,6 +10,12 @@ import {
   confirmError, emailError, nameError, passwordError, required, usernameError,
 } from '../../utils/formValidation';
 
+// Lets password managers and the browser fill each field correctly.
+const AUTOCOMPLETE = {
+  firstName: 'given-name', lastName: 'family-name', username: 'username', email: 'email',
+  password: 'new-password', confirmPassword: 'new-password',
+};
+
 const STEPS = [
   { title: 'Your name',      fields: ['firstName', 'lastName'],     placeholders: ['First name', 'Last name'],     types: ['text', 'text'] },
   { title: 'Account details', fields: ['username', 'email'],         placeholders: ['Username', 'Email address'],   types: ['text', 'email'] },
@@ -132,6 +138,8 @@ function RegisterPage() {
               });
             }}
             placeholder={rs.placeholders[i]}
+            aria-label={rs.placeholders[i]}
+            autoComplete={AUTOCOMPLETE[f]}
             error={liveErrors[f] || errors[f]}
             hint={f === 'username' ? USERNAME_HINT : undefined}
           />
