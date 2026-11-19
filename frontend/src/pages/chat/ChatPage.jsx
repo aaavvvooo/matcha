@@ -111,6 +111,8 @@ function ChatThreadView({
   }, []);
   const [proposing, setProposing] = useState(false);
   const [dateSent, setDateSent] = useState(false);
+  // Bumped only when a proposal succeeds, so the dates strip refetches once (not on dismiss).
+  const [datesVersion, setDatesVersion] = useState(0);
   const { startCall, busy: inCall } = useCall();
   const endRef = useRef(null);
   const stickToEndRef = useRef(true);
@@ -205,7 +207,8 @@ function ChatThreadView({
       </div>
 
       {/* Dates with this person and their status (missed, confirmed, …); refetched after proposing. */}
-      <ChatDates partnerId={partner.user_id} myId={myId} reloadKey={dateSent}/>
+      {/* Hidden once not connected (unlike/block): no stale dates with someone you can't reach. */}
+      {!notConnected && <ChatDates partnerId={partner.user_id} myId={myId} reloadKey={datesVersion}/>}
 
       {/* Propose a date (only while connected: the partner comes from the loaded conversations) */}
       {proposing && !notConnected && (
@@ -214,7 +217,7 @@ function ChatThreadView({
             inviteeId={partner.user_id}
             inviteeName={name}
             onCancel={() => setProposing(false)}
-            onDone={() => { setProposing(false); setDateSent(true); }}
+            onDone={() => { setProposing(false); setDateSent(true); setDatesVersion(v => v + 1); }}
           />
         </div>
       )}

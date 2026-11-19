@@ -13,7 +13,7 @@ const RELOAD_DEBOUNCE_MS = 300;
 /**
  * Dates with one chat partner and where each stands (confirmed, waiting, missed…), shown in the
  * thread so a missed or declined date is visible where the two people talk.
- * @param {{ partnerId: number, myId: number, reloadKey?: unknown }} props reloadKey: change it to refetch (e.g. after proposing)
+ * @param {{ partnerId: number, myId: number, reloadKey?: number }} props reloadKey: bump it to refetch (e.g. after proposing)
  */
 export default function ChatDates({ partnerId, myId, reloadKey }) {
   const [dates, setDates] = useState([]);
@@ -32,8 +32,9 @@ export default function ChatDates({ partnerId, myId, reloadKey }) {
     }
   }, [partnerId]);
 
+  // The thread remounts per partner (ChatThreadView key), so no reset is needed between partners;
+  // a refetch keeps the current rows on screen until the new ones arrive (no flicker).
   useEffect(() => {
-    setDates([]);
     load();
   }, [load, reloadKey]);
 
@@ -72,8 +73,10 @@ export default function ChatDates({ partnerId, myId, reloadKey }) {
               </span>
               <span style={{
                 flexShrink: 0, padding: '2px 8px', borderRadius: 'var(--r-full)', fontWeight: 600, fontSize: 11,
+                // Pairs chosen for WCAG AA at 11px: --danger-fg on --white ~4.8:1,
+                // --white on --matcha2 ~5.7:1 (--danger-bg / --matcha backgrounds fall short).
                 border: `1px solid ${missed ? 'var(--danger-border)' : 'var(--sand)'}`,
-                background: missed ? 'var(--danger-bg)' : confirmed ? 'var(--matcha)' : 'var(--white)',
+                background: confirmed ? 'var(--matcha2)' : 'var(--white)',
                 color: missed ? 'var(--danger-fg)' : confirmed ? 'var(--white)' : 'var(--ink2)',
               }}>{label}</span>
             </li>
