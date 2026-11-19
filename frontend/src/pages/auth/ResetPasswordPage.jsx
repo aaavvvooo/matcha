@@ -55,29 +55,37 @@ function ResetPasswordPage() {
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>New Password</label>
+            <label htmlFor="reset-password">New Password</label>
             <input
+              id="reset-password"
               type="password"
+              autoComplete="new-password"
               placeholder="••••••••"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
               autoFocus
               aria-invalid={passwordMsg ? true : undefined}
+              aria-describedby={passwordMsg ? 'reset-password-error' : undefined}
             />
-            {passwordMsg && <p className="error-msg" aria-live="polite">{passwordMsg}</p>}
+            {passwordMsg && <p id="reset-password-error" className="error-msg">{passwordMsg}</p>}
+            <span className="sr-only" aria-live="polite">{passwordMsg || ''}</span>
           </div>
           <div className="form-group">
-            <label>Confirm Password</label>
+            <label htmlFor="reset-confirm">Confirm Password</label>
             <input
+              id="reset-confirm"
               type="password"
+              autoComplete="new-password"
               placeholder="••••••••"
               value={confirm}
               onChange={e => setConfirm(e.target.value)}
               required
               aria-invalid={confirmMsg ? true : undefined}
+              aria-describedby={confirmMsg ? 'reset-confirm-error' : undefined}
             />
-            {confirmMsg && <p className="error-msg" aria-live="polite">{confirmMsg}</p>}
+            {confirmMsg && <p id="reset-confirm-error" className="error-msg">{confirmMsg}</p>}
+            <span className="sr-only" aria-live="polite">{confirmMsg || ''}</span>
           </div>
           {error && <p className="error-msg">{error}</p>}
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>

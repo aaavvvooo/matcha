@@ -20,6 +20,33 @@ const STEPS = [
   { title: 'Add a photo.', subtitle: "You won't be able to like anyone without one — but you can skip this for now." },
 ];
 
+// Module scope: defined inside the page it would be a new component type on every render,
+// remounting the buttons and dropping keyboard focus after each pick.
+function OptionBtn({ selected, onClick, children }) {
+  return (
+    <button type="button" aria-pressed={selected} onClick={onClick} style={{
+      padding: '15px 20px',
+      textAlign: 'left',
+      background: selected ? 'var(--spice)' : 'var(--white)',
+      border: `1.5px solid ${selected ? 'var(--spice)' : 'var(--sand)'}`,
+      borderRadius: 'var(--r-md)',
+      color: selected ? 'var(--white)' : 'var(--ink2)',
+      fontSize: 15,
+      fontWeight: selected ? 500 : 400,
+      cursor: 'pointer',
+      transition: 'all .18s',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      width: '100%',
+      fontFamily: 'DM Sans, sans-serif',
+    }}>
+      {children}
+      {selected && <Check size={16} aria-hidden="true"/>}
+    </button>
+  );
+}
+
 function ProfileSetupPage() {
   const [step, setStep] = useState(0);
   const [data, setData] = useState({ birth_date: '', gender: '', sexual_orientation: '', bio: '', tags: [] });
@@ -31,6 +58,8 @@ function ProfileSetupPage() {
   const [photos, setPhotos] = useState([]);
   const [photoError, setPhotoError] = useState(null);
   const deletingRef = useRef(false);
+  // Set once the user changes the gallery, so a late initial load can't overwrite it.
+  const photosTouchedRef = useRef(false);
   const navigate = useNavigate();
 
   const locationStep = STEPS.length - 2;
@@ -44,9 +73,18 @@ function ProfileSetupPage() {
   // Photos may already exist (reload, or coming back to setup): start from the real gallery,
   // or the 5-photo count and the "first photo becomes the profile picture" rule go wrong.
   useEffect(() => {
-    if (step !== photoStep) return;
-    getMyProfile().then(p => setPhotos(p.photos || [])).catch(() => {});
+    if (step !== photoStep) return undefined;
+    let cancelled = false;
+    getMyProfile()
+      .then(p => { if (!cancelled && !photosTouchedRef.current) setPhotos(p.photos || []); })
+      .catch(() => { if (!cancelled) setPhotoError("Couldn't load your photos — reload the page to try again"); });
+    return () => { cancelled = true; };
   }, [step, photoStep]);
+
+  function handlePhotosChange(list) {
+    photosTouchedRef.current = true;
+    setPhotos(list);
+  }
 
   const birthError = birthDateError(data.birth_date);
   const tagsMsg = tagsError(data.tags);
@@ -65,14 +103,18 @@ function ProfileSetupPage() {
 
   async function handlePhotoDelete(photoId) {
     // A double-click would send a second delete for a photo that is already gone (404).
-    if (deletingRef.current || !photos.some(p => p.id === photoId)) return;
+    if (deletingRef.current) return;
     deletingRef.current = true;
+    photosTouchedRef.current = true;
     setPhotoError(null);
     try {
       await deletePhotos([photoId]);
-      const rest = photos.filter(p => p.id !== photoId);
-      setPhotos(rest);
-      if (rest.length > 0 && !rest.some(p => p.is_main)) await handleMakeMain(rest[0]);
+      setPhotos(list => list.filter(p => p.id !== photoId));
+      // Decide the new profile picture from the server, not from the list as it was at click
+      // time: an upload or another pick may have landed while the delete was in flight.
+      const fresh = (await getMyProfile()).photos || [];
+      setPhotos(fresh);
+      if (fresh.length > 0 && !fresh.some(p => p.is_main)) await handleMakeMain(fresh[0]);
     } catch (err) {
       setPhotoError(apiError(err, 'Could not delete the photo — try again'));
     } finally {
@@ -105,7 +147,8 @@ function ProfileSetupPage() {
         setProfileCreated(true);
         setStep(s => s + 1);
       } catch (e) {
-        setError(e?.response?.data?.detail || 'Something went wrong. Please try again.');
+        // apiError flattens a 422's list of objects; rendering it raw would crash the page.
+        setError(apiError(e, 'Something went wrong. Please try again.'));
       } finally {
         setLoading(false);
       }
@@ -114,29 +157,6 @@ function ProfileSetupPage() {
 
     setStep(s => s + 1);
   }
-
-  const OptionBtn = ({ selected, onClick, children }) => (
-    <button onClick={onClick} style={{
-      padding: '15px 20px',
-      textAlign: 'left',
-      background: selected ? 'var(--spice)' : 'var(--white)',
-      border: `1.5px solid ${selected ? 'var(--spice)' : 'var(--sand)'}`,
-      borderRadius: 'var(--r-md)',
-      color: selected ? '#fff' : 'var(--ink2)',
-      fontSize: 15,
-      fontWeight: selected ? 500 : 400,
-      cursor: 'pointer',
-      transition: 'all .18s',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      width: '100%',
-      fontFamily: 'DM Sans, sans-serif',
-    }}>
-      {children}
-      {selected && <Check size={16}/>}
-    </button>
-  );
 
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
@@ -225,6 +245,7 @@ function ProfileSetupPage() {
         {step === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <textarea
+              aria-label="Bio"
               value={data.bio}
               onChange={e => setData(d => ({ ...d, bio: e.target.value.slice(0, 300) }))}
               placeholder="What makes you, you?"
@@ -264,6 +285,8 @@ function ProfileSetupPage() {
               {availableTags.map(tag => (
                 <button
                   key={tag.id}
+                  type="button"
+                  aria-pressed={data.tags.includes(tag.id)}
                   onClick={() => setData(d => ({
                     ...d,
                     tags: d.tags.includes(tag.id) ? d.tags.filter(t => t !== tag.id) : [...d.tags, tag.id],
@@ -298,13 +321,13 @@ function ProfileSetupPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <PhotoGallery
               photos={photos}
-              onPhotosChange={setPhotos}
+              onPhotosChange={handlePhotosChange}
               onOpen={handleMakeMain}
               onDelete={handlePhotoDelete}
               openLabel="Make profile picture: photo"
             />
             <div style={{ fontSize: 12, color: 'var(--ink4)' }}>
-              {photos.length > 0 && <><Check size={12}/> {photos.length} of {MAX_PHOTOS} added · </>}
+              {photos.length > 0 && <><Check size={12} aria-hidden="true"/> {photos.length} of {MAX_PHOTOS} added · </>}
               Add up to {MAX_PHOTOS} photos. Tap one to make it your profile picture.
             </div>
             {photoError && (
@@ -314,7 +337,7 @@ function ProfileSetupPage() {
         )}
 
         {error && (
-          <div style={{ marginTop: 12, padding: '10px 14px', background: '#fff0f0', border: '1px solid var(--rose)', borderRadius: 'var(--r-sm)', fontSize: 13, color: 'var(--rose)' }}>
+          <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--danger-bg)', border: '1px solid var(--danger-fg)', borderRadius: 'var(--r-sm)', fontSize: 13, color: 'var(--danger-fg)' }} role="alert">
             {error}
           </div>
         )}

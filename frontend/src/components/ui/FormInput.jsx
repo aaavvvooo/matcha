@@ -1,7 +1,8 @@
 import { useId } from 'react';
 
-/** Labelled input. `error` (string) marks it invalid and replaces the hint with the message. */
-function FormInput({ label, type = 'text', value, onChange, onBlur, placeholder, hint, error, style = {} }) {
+/** Labelled input. `error` (string) marks it invalid and replaces the hint with the message.
+ * Other props (autoComplete, min, max, step, inputMode, aria-label, name…) go to the <input>. */
+function FormInput({ label, type = 'text', value, onChange, onBlur, placeholder, hint, error, style = {}, ...inputProps }) {
   // Ties the visible <label> to its <input> (click-to-focus, screen readers).
   const id = useId();
   const noteId = `${id}-note`;
@@ -12,6 +13,7 @@ function FormInput({ label, type = 'text', value, onChange, onBlur, placeholder,
         <label htmlFor={id} style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)' }}>{label}</label>
       )}
       <input
+        {...inputProps}
         id={id}
         type={type}
         value={value}
@@ -32,14 +34,13 @@ function FormInput({ label, type = 'text', value, onChange, onBlur, placeholder,
         }}
       />
       {note && (
-        <span
-          id={noteId}
-          aria-live="polite"
-          style={{ fontSize: 12, color: error ? 'var(--danger-fg)' : 'var(--ink4)' }}
-        >
+        <span id={noteId} style={{ fontSize: 12, color: error ? 'var(--danger-fg)' : 'var(--ink4)' }}>
           {note}
         </span>
       )}
+      {/* Always mounted and never hidden: a live region that appears together with its text
+          is often not announced. Only errors are announced; the hint is read via describedby. */}
+      <span className="sr-only" aria-live="polite">{error || ''}</span>
     </div>
   );
 }
