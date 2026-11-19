@@ -13,7 +13,8 @@ import Chip from '../../components/ui/Chip';
 import FormInput from '../../components/ui/FormInput';
 import LocationPicker from '../../components/ui/LocationPicker';
 import { displayName } from '../../utils/displayName';
-import { USERNAME_HINT, USERNAME_RE } from '../../utils/username';
+import { USERNAME_HINT } from '../../utils/username';
+import { emailError, nameError, required, usernameError } from '../../utils/formValidation';
 import { useLogout } from '../../hooks/useLogout';
 import PhotoGallery from './PhotoGallery';
 
@@ -124,11 +125,25 @@ export default function ProfileEditPage() {
     }
   }
 
+  // Shown while typing (the server re-validates on save); nothing until the profile has loaded.
+  // Only edited values are checked: an account may come from OAuth without, e.g., a last name.
+  const check = (key, rule) => {
+    const value = form[key];
+    if (!profile || value === (profile[key] || '')) return null;
+    return rule(value) || required(value);
+  };
+  const fieldErrors = {
+    first_name: check('first_name', nameError),
+    last_name: check('last_name', nameError),
+    username: check('username', usernameError),
+    email: check('email', emailError),
+  };
+
   async function handleSave() {
     setSaveError(null);
     const usernameChanged = form.username !== (profile?.username || '');
-    if (usernameChanged && !USERNAME_RE.test(form.username)) {
-      setSaveError(`Username: ${USERNAME_HINT}`);
+    if (Object.values(fieldErrors).some(Boolean)) {
+      setSaveError('Fix the highlighted fields first');
       return;
     }
     try {
@@ -219,14 +234,15 @@ export default function ProfileEditPage() {
           </Section>
 
           <Section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <FormInput label="First name" value={form.first_name} onChange={e => setField('first_name', e.target.value)}/>
-            <FormInput label="Last name" value={form.last_name} onChange={e => setField('last_name', e.target.value)}/>
-            <FormInput label="Username" value={form.username} onChange={e => setField('username', e.target.value)} hint={USERNAME_HINT}/>
+            <FormInput label="First name" value={form.first_name} onChange={e => setField('first_name', e.target.value)} error={fieldErrors.first_name}/>
+            <FormInput label="Last name" value={form.last_name} onChange={e => setField('last_name', e.target.value)} error={fieldErrors.last_name}/>
+            <FormInput label="Username" value={form.username} onChange={e => setField('username', e.target.value)} hint={USERNAME_HINT} error={fieldErrors.username}/>
             <FormInput
               label="Email"
               type="email"
               value={form.email}
               onChange={e => setField('email', e.target.value)}
+              error={fieldErrors.email}
               hint="Changing it sends a confirmation link to the new address; your current address stays in use until you click it."
             />
           </Section>

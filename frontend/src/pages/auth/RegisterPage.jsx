@@ -5,7 +5,16 @@ import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
 import FormInput from '../../components/ui/FormInput';
 import OAuthButtons from '../../components/auth/OAuthButtons';
-import { USERNAME_HINT, USERNAME_RE } from '../../utils/username';
+import { USERNAME_HINT } from '../../utils/username';
+import {
+  confirmError, emailError, nameError, passwordError, required, usernameError,
+} from '../../utils/formValidation';
+
+// Lets password managers and the browser fill each field correctly.
+const AUTOCOMPLETE = {
+  firstName: 'given-name', lastName: 'family-name', username: 'username', email: 'email',
+  password: 'new-password', confirmPassword: 'new-password',
+};
 
 const STEPS = [
   { title: 'Your name',      fields: ['firstName', 'lastName'],     placeholders: ['First name', 'Last name'],     types: ['text', 'text'] },
@@ -23,20 +32,21 @@ function RegisterPage() {
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  // Shown while typing; "Required" for empty fields is added when the user tries to continue.
+  const liveErrors = {
+    firstName: nameError(form.firstName),
+    lastName: nameError(form.lastName),
+    username: usernameError(form.username),
+    email: emailError(form.email),
+    password: passwordError(form.password),
+    confirmPassword: confirmError(form.password, form.confirmPassword),
+  };
+
   function validate() {
     const e = {};
-    if (step === 0) {
-      if (!form.firstName.trim()) e.firstName = 'Required';
-      if (!form.lastName.trim()) e.lastName = 'Required';
-    }
-    if (step === 1) {
-      if (!form.username.trim()) e.username = 'Required';
-      else if (!USERNAME_RE.test(form.username)) e.username = USERNAME_HINT;
-      if (!form.email.includes('@')) e.email = 'Enter a valid email';
-    }
-    if (step === 2) {
-      if (form.password.length < 8) e.password = 'Min 8 characters';
-      if (form.password !== form.confirmPassword) e.confirmPassword = 'Passwords do not match';
+    for (const f of STEPS[step].fields) {
+      const msg = liveErrors[f] || required(form[f]);
+      if (msg) e[f] = msg;
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -118,9 +128,20 @@ function RegisterPage() {
             key={f}
             type={rs.types[i]}
             value={form[f]}
-            onChange={e => setField(f, e.target.value)}
+            onChange={e => {
+              setField(f, e.target.value);
+              // Editing a field clears its "Required"; live checks take over from here.
+              setErrors(prev => {
+                const next = { ...prev };
+                delete next[f];
+                return next;
+              });
+            }}
             placeholder={rs.placeholders[i]}
-            hint={errors[f] || (f === 'username' ? USERNAME_HINT : undefined)}
+            aria-label={rs.placeholders[i]}
+            autoComplete={AUTOCOMPLETE[f]}
+            error={liveErrors[f] || errors[f]}
+            hint={f === 'username' ? USERNAME_HINT : undefined}
           />
         ))}
 
