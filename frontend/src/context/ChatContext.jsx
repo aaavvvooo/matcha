@@ -53,31 +53,40 @@ export function ChatProvider({ children }) {
     [conversations]
   )
 
+  // A fresh list is the source of truth for who we can talk to. A "not connected" error for
+  // someone who is in it again (re-match after an unlike, or a send that raced the match) is
+  // stale: ChatPage reads it as "not connected" and would keep chat, dates and calls disabled
+  // with no way to clear it, since sending (which resets the error) is the disabled action.
+  const applyConversations = useCallback((data) => {
+    setConversations(data)
+    setConversationsState('ready')
+    setChatError(err => (
+      err?.code === 'not_connected' && data.some(c => c.user_id === err.to) ? null : err
+    ))
+  }, [])
+
   const loadConversations = useCallback(async () => {
     setConversationsState(s => (s === 'ready' ? s : 'loading'))
     try {
       const data = await getConversations()
-      setConversations(data)
-      setConversationsState('ready')
+      applyConversations(data)
       return data
     } catch {
       setConversationsState('error')
       return []
     }
-  }, [])
+  }, [applyConversations])
 
   // Background refresh (online status, new rows): never flips a loaded list into the error state.
   // Resolves to whether it worked, so the caller can back off.
   const refreshConversations = useCallback(async () => {
     try {
-      const data = await getConversations()
-      setConversations(data)
-      setConversationsState('ready')
+      applyConversations(await getConversations())
       return true
     } catch {
       return false
     }
-  }, [])
+  }, [applyConversations])
 
   const clearUnread = useCallback((userId) => {
     setConversations(prev => prev.map(c => (c.user_id === userId && c.unread_count ? { ...c, unread_count: 0 } : c)))

@@ -212,3 +212,13 @@
   .chat-main { display: none; }
   .chat-layout { flex-direction: column; }
 }
+
+/* Header avatar + name: a link to the partner's profile. */
+.chat-partner-link {
+  border-radius: var(--r-sm);
+}
+
+.chat-partner-link:focus-visible {
+  outline: 2px solid var(--spice);
+  outline-offset: 2px;
+}
