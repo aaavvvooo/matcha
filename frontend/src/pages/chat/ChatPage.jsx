@@ -7,6 +7,7 @@ import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
 import Btn from '../../components/ui/Btn';
 import ProposeDateForm from '../../components/dates/ProposeDateForm';
+import ChatDates from '../../components/dates/ChatDates';
 import { displayName } from '../../utils/displayName';
 
 const CONVERSATION_POLL_MS = 30000;
@@ -152,15 +153,23 @@ function ChatThreadView({
         boxShadow: 'var(--shadow-sm)', flexShrink: 0,
       }}>
         <button onClick={onBack} aria-label="Back to conversations" style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink3)', lineHeight: 1, flexShrink: 0, padding: 0 }}>←</button>
-        <Avatar name={name} src={partner.photo_url} size={42} online={notConnected ? undefined : partner.is_online}/>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 17, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
-          {!notConnected && (
-            <div style={{ fontSize: 11, color: partner.is_online ? 'var(--matcha2)' : 'var(--ink4)' }}>
-              {partner.is_online ? '● online' : 'offline'}
-            </div>
-          )}
-        </div>
+        {/* Avatar + name open the partner's profile (the server still applies blocks there). */}
+        <Link
+          to={`/profile/${partner.user_id}`}
+          aria-label={`View ${name}'s profile`}
+          className="chat-partner-link"
+          style={{ flex: 1, minWidth: 0, display: 'flex', gap: 8, alignItems: 'center', color: 'inherit', textDecoration: 'none' }}
+        >
+          <Avatar name={name} src={partner.photo_url} size={42} online={notConnected ? undefined : partner.is_online}/>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 17, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+            {!notConnected && (
+              <div style={{ fontSize: 11, color: partner.is_online ? 'var(--matcha2)' : 'var(--ink4)' }}>
+                {partner.is_online ? '● online' : 'offline'}
+              </div>
+            )}
+          </div>
+        </Link>
         {!notConnected && partner.is_online && ['audio', 'video'].map(media => (
           <button
             key={media}
@@ -194,6 +203,9 @@ function ChatThreadView({
           </button>
         )}
       </div>
+
+      {/* Dates with this person and their status (missed, confirmed, …); refetched after proposing. */}
+      <ChatDates partnerId={partner.user_id} myId={myId} reloadKey={dateSent}/>
 
       {/* Propose a date (only while connected: the partner comes from the loaded conversations) */}
       {proposing && !notConnected && (
