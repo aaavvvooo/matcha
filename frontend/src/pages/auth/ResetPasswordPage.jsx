@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { resetPassword } from '../../api/authApi';
+import { confirmError, passwordError } from '../../utils/formValidation';
 
 function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -25,13 +26,13 @@ function ResetPasswordPage() {
     );
   }
 
+  const passwordMsg = passwordError(password);
+  const confirmMsg = confirmError(password, confirm);
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    if (password !== confirm) {
-      setError("Passwords don't match");
-      return;
-    }
+    if (passwordMsg || confirmMsg) return;
     setLoading(true);
     try {
       await resetPassword(token, password);
@@ -62,7 +63,9 @@ function ResetPasswordPage() {
               onChange={e => setPassword(e.target.value)}
               required
               autoFocus
+              aria-invalid={passwordMsg ? true : undefined}
             />
+            {passwordMsg && <p className="error-msg" aria-live="polite">{passwordMsg}</p>}
           </div>
           <div className="form-group">
             <label>Confirm Password</label>
@@ -72,7 +75,9 @@ function ResetPasswordPage() {
               value={confirm}
               onChange={e => setConfirm(e.target.value)}
               required
+              aria-invalid={confirmMsg ? true : undefined}
             />
+            {confirmMsg && <p className="error-msg" aria-live="polite">{confirmMsg}</p>}
           </div>
           {error && <p className="error-msg">{error}</p>}
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
