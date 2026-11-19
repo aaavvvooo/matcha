@@ -266,3 +266,25 @@
 .map-canvas .leaflet-control-attribution {
   font-size: 10px;
 }
+
+/* Cluster bubble (leaflet.markercluster): several nearby grid cells at this zoom. */
+.map-cluster {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--spice);
+  color: var(--white);
+  font-weight: 700;
+  font-size: 14px;
+  border: 3px solid var(--white);
+  box-shadow: 0 0 0 6px rgba(194, 120, 74, 0.25), var(--shadow-md);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.map-cluster:hover {
+  transform: scale(1.06);
+}
