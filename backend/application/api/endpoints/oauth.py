@@ -37,8 +37,8 @@ _SECURE_COOKIE = SECURE_COOKIES
 
 
 def _frontend_redirect(**params: str) -> RedirectResponse:
-    base = (FRONTEND_URL or "").rstrip("/")
-    response = RedirectResponse(f"{base}/oauth/callback?{urlencode(params)}", status_code=302)
+    # OAuth routes only exist when FRONTEND_URL is set (oauth_client.is_enabled), already normalised.
+    response = RedirectResponse(f"{FRONTEND_URL}/oauth/callback?{urlencode(params)}", status_code=302)
     response.headers["Cache-Control"] = "no-store"
     response.headers["Referrer-Policy"] = "no-referrer"
     # Single use: the flow cookie is cleared on every callback outcome.

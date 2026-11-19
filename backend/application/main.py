@@ -112,11 +112,21 @@ async def _date_reminder_loop() -> None:
         await asyncio.sleep(_REMINDER_INTERVAL_SECONDS)
 
 
+def _check_frontend_url() -> None:
+    """FRONTEND_URL is the base of every emailed link (verify, reset) and an allowed CORS origin.
+    config.py already rejects a malformed value; say which one is in effect, or that it is unset."""
+    if not FRONTEND_URL:
+        logger.warning("FRONTEND_URL is unset: email links and OAuth sign-in will not work")
+    else:
+        logger.info("Email links and CORS use FRONTEND_URL=%s", FRONTEND_URL)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _install_access_log_redaction()
     from application.clients.storage import check_config, ensure_bucket
     check_config()  # misconfiguration (e.g. MinIO credentials unset) stops startup with a clear error
+    _check_frontend_url()
     await database.connect()
     try:
         await asyncio.to_thread(ensure_bucket)
@@ -244,7 +254,8 @@ async def security_headers_middleware(request: Request, call_next):
 
 app.add_middleware(
     cast(Any, CORSMiddleware),
-    allow_origins=["http://localhost:3000", FRONTEND_URL],
+    # The CRA dev server is trusted only when no real frontend origin is configured.
+    allow_origins=[FRONTEND_URL] if FRONTEND_URL else ["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

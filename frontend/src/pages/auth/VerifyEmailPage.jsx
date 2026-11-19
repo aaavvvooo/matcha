@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { verifyEmail } from '../../api/authApi';
+import { useUrlToken } from '../../hooks/useUrlToken';
 
 function VerifyEmailPage() {
-  const [searchParams] = useSearchParams();
+  const token = useUrlToken();
   const [status, setStatus] = useState('verifying');
 
   useEffect(() => {
-    const token = searchParams.get('token');
     if (!token) { setStatus('error'); return; }
     verifyEmail(token)
       .then(() => setStatus('success'))

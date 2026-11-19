@@ -1,5 +1,6 @@
 import dotenv
 import os
+from urllib.parse import urlsplit
 
 dotenv.load_dotenv("../.env")
 
@@ -17,7 +18,29 @@ FROM_EMAIL = os.getenv("FROM_EMAIL")
 BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 
 
-FRONTEND_URL = os.getenv("FRONTEND_URL")
+def _frontend_origin(raw: str | None) -> str | None:
+    """FRONTEND_URL as a bare origin (scheme://host[:port], no trailing slash), or None when unset.
+
+    It is the base of every emailed link (verify, reset), the OAuth return target and an allowed
+    CORS origin, so a malformed value stops startup instead of mailing tokens to a broken URL."""
+    if not raw or not raw.strip():
+        return None
+    u = urlsplit(raw.strip())
+    if (
+        u.scheme not in ("http", "https")
+        or not u.hostname
+        or u.username
+        or u.password
+        or u.path not in ("", "/")
+        or u.query
+        or u.fragment
+    ):
+        raise RuntimeError("FRONTEND_URL must be a bare origin like https://host[:port]")
+    # Browsers send the Origin host lowercased; userinfo is rejected above, so lowering is safe.
+    return f"{u.scheme}://{u.netloc.lower()}"
+
+
+FRONTEND_URL = _frontend_origin(os.getenv("FRONTEND_URL"))
 
 # OAuth sign-in (bonus B1). A provider is enabled only when its client id and
 # secret are set, together with OAUTH_REDIRECT_BASE_URL (the backend's public
