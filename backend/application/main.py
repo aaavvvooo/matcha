@@ -1,5 +1,5 @@
 from .database import database
-from .config import FRONTEND_URL
+from .config import FRONTEND_URL, FRONTEND_URL_PROBLEM
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -114,7 +114,9 @@ async def _date_reminder_loop() -> None:
 
 def _check_frontend_url() -> None:
     """FRONTEND_URL is the base of every emailed link (verify, reset) and an allowed CORS origin.
-    config.py already rejects a malformed value; say which one is in effect, or that it is unset."""
+    A malformed value stops startup with the reason; otherwise say which one is in effect."""
+    if FRONTEND_URL_PROBLEM:
+        raise RuntimeError(FRONTEND_URL_PROBLEM)
     if not FRONTEND_URL:
         logger.warning("FRONTEND_URL is unset: email links and OAuth sign-in will not work")
     else:
@@ -254,7 +256,8 @@ async def security_headers_middleware(request: Request, call_next):
 
 app.add_middleware(
     cast(Any, CORSMiddleware),
-    # The CRA dev server is trusted only when no real frontend origin is configured.
+    # FRONTEND_URL is the only browser origin allowed (open the app at exactly that URL); the CRA
+    # dev server is trusted only when no frontend origin is configured.
     allow_origins=[FRONTEND_URL] if FRONTEND_URL else ["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],

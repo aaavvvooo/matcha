@@ -16,7 +16,7 @@ from application.schema import (
 from application.database import get_db, Database
 from application.service import AuthService
 from application.clients.email_client import EmailClient
-from application.config import BREVO_API_KEY, FRONTEND_URL, SECURE_COOKIES
+from application.config import BREVO_API_KEY, EMAIL_CONFIGURED, SECURE_COOKIES
 from application.utils import get_current_user
 from application.utils.tokens import ACCESS_TOKEN_EXPIRE_MINUTES
 from application.limiter import limiter
@@ -32,7 +32,7 @@ def _get_email_client() -> EmailClient:
     global _email_client
     if _email_client is None:
         # No FRONTEND_URL means emailed links would be relative and unusable.
-        if not BREVO_API_KEY or not FRONTEND_URL:
+        if not EMAIL_CONFIGURED or not BREVO_API_KEY:
             raise HTTPException(
                 status_code=503,
                 detail="Email service is not configured",

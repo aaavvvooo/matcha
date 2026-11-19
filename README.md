@@ -45,7 +45,7 @@ message listing their ids and changes nothing; rename one of them and restart.
 | `POSTGRES_PORT_OUTER` | DB port published on the host |
 | `JWT_SECRET_KEY`, `JWT_ALGORITHM` | Token signing |
 | `BACKEND_HOST`, `BACKEND_PORT` | Uvicorn bind host, published API port |
-| `FRONTEND_URL` | Public URL of the frontend users actually open (e.g. `http://localhost:3000`). Base of every emailed link (verification, password reset), OAuth return target and allowed CORS origin; a stale value (e.g. an old preview deployment) sends users to the wrong site. Must be a bare origin (`scheme://host[:port]`, no path); a malformed value stops startup, the value in use is logged |
+| `FRONTEND_URL` | Public URL of the frontend users actually open (e.g. `http://localhost:3000`). Base of every emailed link (verification, password reset), OAuth return target and the **only** allowed CORS origin, so open the app at exactly this URL (a LAN IP or `127.0.0.1` needs its own value); `http://localhost:3000` is allowed only while it is unset. A stale value (e.g. an old preview deployment) sends users to the wrong site. Must be a bare origin (`scheme://host[:port]`, no path); a malformed value stops the API at startup with the reason (seed scripts still run), the value in use is logged |
 | `REACT_APP_API_URL` | API base URL used by the frontend |
 | `BREVO_API_KEY`, `FROM_EMAIL` | Transactional email (verification, password reset) |
 | `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_BUCKET` | Local photo storage. Required (the backend refuses to start without them); do **not** use MinIO's well-known defaults (`minioadmin` / `minioadmin123`): pick your own user and a long random password |

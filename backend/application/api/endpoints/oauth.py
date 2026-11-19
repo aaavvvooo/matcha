@@ -20,7 +20,7 @@ from application.api.endpoints.auth import (
     set_session_cookies,
 )
 from application.clients import oauth_client
-from application.config import BREVO_API_KEY, FRONTEND_URL, SECURE_COOKIES
+from application.config import EMAIL_CONFIGURED, FRONTEND_URL, SECURE_COOKIES
 from application.database import Database, get_db
 from application.limiter import limiter
 from application.service import oauth_service
@@ -102,7 +102,8 @@ async def callback(
         except oauth_client.ProviderError:
             raise OAuthFlowError("provider_error") from None
 
-        email_available = bool(BREVO_API_KEY)
+        # Same condition as _get_email_client, so the send after sign-up cannot 503.
+        email_available = EMAIL_CONFIGURED
         result = await OAuthService(db).sign_in(config, identity, email_available)
     except OAuthFlowError as e:
         return _frontend_redirect(error=e.code)
