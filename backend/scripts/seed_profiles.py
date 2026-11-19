@@ -79,7 +79,11 @@ CITY_JITTER_DEG = 0.03
 
 def random_city_location(nat: str | None) -> tuple[float, float, str]:
     """A point in a real city of the person's nationality (any listed city if unknown)."""
-    cities = CITIES_BY_NAT.get((nat or "").lower()) or [c for cs in CITIES_BY_NAT.values() for c in cs]
+    cities = CITIES_BY_NAT.get((nat or "").lower())
+    if not cities:
+        # Only expected if randomuser stops returning `nat` (requested via &inc=...,nat).
+        print(f"Unknown nationality {nat!r}: placing the profile in a random listed city")
+        cities = [c for cs in CITIES_BY_NAT.values() for c in cs]
     city, country, lat, lon = random.choice(cities)
     return (
         lat + random.uniform(-CITY_JITTER_DEG, CITY_JITTER_DEG),

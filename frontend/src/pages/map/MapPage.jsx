@@ -82,7 +82,14 @@ function buildClusterIcon(cluster) {
   const people = cluster.getAllChildMarkers().reduce((n, m) => n + (m.options.people || 1), 0);
   const root = document.createElement('div');
   root.className = 'map-cluster';
-  root.textContent = String(people);
+  // Leaflet makes the icon a focusable button named by its text: say what the number means.
+  const count = document.createElement('span');
+  count.setAttribute('aria-hidden', 'true');
+  count.textContent = String(people);
+  const label = document.createElement('span');
+  label.className = 'map-sr-only';
+  label.textContent = `${people} ${people === 1 ? 'person' : 'people'} nearby, activate to zoom in`;
+  root.append(count, label);
   const size = people < 10 ? 40 : people < 100 ? 48 : 56;
   return L.divIcon({ html: root, className: 'map-pin-wrap', iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
 }
@@ -163,7 +170,10 @@ export default function MapPage() {
       // Clicking a bubble zooms to it; cells left at max zoom keep the per-cell list on click.
       spiderfyOnMaxZoom: false,
       disableClusteringAtZoom: MAX_CLUSTER_ZOOM,
-    }).addTo(map);
+    })
+      // Zooming into a bubble re-groups cells: an open cell card would describe a stale pin.
+      .on('clusterclick', () => setSelected(null))
+      .addTo(map);
     mapRef.current = map;
 
     let timer = null;
