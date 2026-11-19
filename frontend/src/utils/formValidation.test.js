@@ -1,5 +1,5 @@
 import {
-  birthDateError, confirmError, emailError, isoYearsAgo, nameError, passwordError, tagsError, usernameError,
+  birthDateError, confirmError, emailError, filterErrors, isoYearsAgo, nameError, passwordError, tagsError, usernameError,
 } from './formValidation';
 
 const today = new Date(2026, 10, 19); // 19 Nov 2026
@@ -39,6 +39,24 @@ test('account fields mirror the server rules', () => {
   expect(passwordError('Matcha!Tea42')).toBeNull();
   expect(confirmError('abcdefgh', 'abcdefgx')).toMatch(/match/);
   expect(confirmError('abcdefgh', 'abcdefgh')).toBeNull();
+});
+
+test('filters: empty means no bound, out-of-range and inverted ranges are flagged', () => {
+  expect(filterErrors({ minAge: '', maxAge: '', maxDistance: '', minFame: '', maxFame: '' })).toEqual({});
+  expect(filterErrors({ minAge: '16' }).minAge).toMatch(/18/);
+  expect(filterErrors({ minAge: '25.5' }).minAge).toMatch(/Whole/);
+  expect(filterErrors({ minAge: '30', maxAge: '25' }).maxAge).toMatch(/min age/);
+  expect(filterErrors({ maxDistance: '0' }).maxDistance).toMatch(/More than 0/);
+  expect(filterErrors({ maxFame: '500' }).maxFame).toMatch(/100/);
+  expect(filterErrors({ minFame: '60', maxFame: '40' }).maxFame).toMatch(/min fame/);
+  expect(filterErrors({ minAge: '20', maxAge: '30', maxDistance: '15', minFame: '0', maxFame: '100' })).toEqual({});
+});
+
+test('filters: tag count and total length follow the server limits', () => {
+  const names = n => Array.from({ length: n }, (_, i) => `tag${i}`);
+  expect(filterErrors({ tags: names(20) }).tags).toBeUndefined();
+  expect(filterErrors({ tags: names(21) }).tags).toMatch(/at most 20/);
+  expect(filterErrors({ tags: ['x'.repeat(600), 'y'.repeat(600)] }).tags).toMatch(/Too many/);
 });
 
 test('isoYearsAgo gives a date input value', () => {
