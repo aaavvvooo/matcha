@@ -70,6 +70,8 @@ export function tagsError(tags) {
 // Discover / search filter bounds (backend/application/schema/discovery_schemas.py DiscoveryQuery).
 export const MAX_DISTANCE_KM = 20000;
 export const MAX_FAME = 100;
+export const MAX_TAG_FILTERS = 20; // server: at most 20 names
+export const MAX_TAGS_PARAM = 1000; // server: max_length of the comma-joined `tags` param
 
 function boundError(raw, { min, max, integer = false, exclusiveMin = false }) {
   if (raw === '' || raw == null) return null;
@@ -83,7 +85,7 @@ function boundError(raw, { min, max, integer = false, exclusiveMin = false }) {
 
 /**
  * Per-field errors for discover/search filters; keys with no problem are left out.
- * @param {{minAge?, maxAge?, maxDistance?, minFame?, maxFame?}} f raw input strings ('' = no bound)
+ * @param {{minAge?, maxAge?, maxDistance?, minFame?, maxFame?, tags?: string[]}} f raw input strings ('' = no bound) and tag names
  * @returns {Record<string, string>}
  */
 export function filterErrors(f) {
@@ -94,6 +96,8 @@ export function filterErrors(f) {
     minFame: boundError(f.minFame, { min: 0, max: MAX_FAME }),
     maxFame: boundError(f.maxFame, { min: 0, max: MAX_FAME }),
   };
+  if (f.tags?.length > MAX_TAG_FILTERS) errors.tags = `Pick at most ${MAX_TAG_FILTERS} interests`;
+  else if (f.tags?.join(',').length > MAX_TAGS_PARAM) errors.tags = 'Too many interests selected';
   const both = (a, b) => a !== '' && a != null && b !== '' && b != null;
   if (!errors.minAge && !errors.maxAge && both(f.minAge, f.maxAge) && Number(f.minAge) > Number(f.maxAge)) {
     errors.maxAge = 'Must be at least the min age';

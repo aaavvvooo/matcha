@@ -12,20 +12,26 @@ import Btn from '../../components/ui/Btn';
 import Chip from '../../components/ui/Chip';
 import { displayName } from '../../utils/displayName';
 import FormInput from '../../components/ui/FormInput';
-import { filterErrors } from '../../utils/formValidation';
+import { filterErrors, MAX_AGE, MAX_DISTANCE_KM, MAX_FAME, MAX_TAG_FILTERS, MIN_AGE } from '../../utils/formValidation';
 
 const PAGE_SIZE = 20;
 const SORTS = [['score', 'best match'], ['distance', 'distance'], ['age', 'age'], ['fame', 'fame'], ['tags', 'common tags']];
 const NO_FILTERS = { minAge: '', maxAge: '', maxDistance: '', minFame: '', maxFame: '', tags: [] };
+// [key, label, width, input bounds]
 const FILTER_FIELDS = [
-  ['minAge', 'Min age', 90], ['maxAge', 'Max age', 90], ['maxDistance', 'Within km', 100],
-  ['minFame', 'Min fame', 90], ['maxFame', 'Max fame', 90],
+  ['minAge', 'Min age', 90, { min: MIN_AGE, max: MAX_AGE, step: 1 }],
+  ['maxAge', 'Max age', 90, { min: MIN_AGE, max: MAX_AGE, step: 1 }],
+  ['maxDistance', 'Within km', 100, { min: 1, max: MAX_DISTANCE_KM, step: 'any' }],
+  ['minFame', 'Min fame', 90, { min: 0, max: MAX_FAME, step: 'any' }],
+  ['maxFame', 'Max fame', 90, { min: 0, max: MAX_FAME, step: 'any' }],
 ];
+// Values that filter nothing on the server: not counted as active filters.
+const NO_OP_VALUES = { minAge: MIN_AGE, minFame: 0, maxFame: MAX_FAME };
 const sameFilters = (a, b) =>
   FILTER_FIELDS.every(([k]) => String(a[k]).trim() === String(b[k]).trim()) &&
   a.tags.length === b.tags.length && a.tags.every(t => b.tags.includes(t));
-const countActive = f =>
-  FILTER_FIELDS.filter(([k]) => String(f[k]).trim() !== '').length + (f.tags.length ? 1 : 0);
+const isActive = (k, v) => String(v).trim() !== '' && Number(v) !== NO_OP_VALUES[k];
+const countActive = f => FILTER_FIELDS.filter(([k]) => isActive(k, f[k])).length + (f.tags.length ? 1 : 0);
 
 // Empty inputs are left out so the server applies no bound.
 function toParams(sortBy, f, offset) {
@@ -292,18 +298,6 @@ export default function BrowsePage() {
   const [filters, setFilters] = useState(NO_FILTERS);
   const [draft, setDraft] = useState(NO_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
-  // Out-of-range values would be a 422 that replaces the stack with an error: flag them while
-  // typing and keep Apply disabled instead. "Applied" makes an unchanged draft visibly a no-op.
-  const draftErrors = filterErrors(draft);
-  const draftValid = Object.keys(draftErrors).length === 0;
-  const draftChanged = !sameFilters(draft, filters);
-  const activeFilters = countActive(filters);
-
-  function applyFilters() {
-    if (!draftValid || !draftChanged) return;
-    setFilters(draft);
-    setShowFilters(false); // the open panel pushed the card stack out of view
-  }
   const [allTags, setAllTags] = useState([]);
   const [tagsError, setTagsError] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -322,6 +316,33 @@ export default function BrowsePage() {
   const dragRef = useRef(null);
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
+
+  // Out-of-range values would be a 422 that replaces the stack with an error: flag them while
+  // typing and keep Apply disabled instead. "Applied" makes an unchanged draft visibly a no-op.
+  const draftErrors = filterErrors(draft);
+  const draftValid = Object.keys(draftErrors).length === 0;
+  const draftChanged = !sameFilters(draft, filters);
+  const activeFilters = countActive(filters);
+
+  function applyFilters() {
+    if (!draftValid || !draftChanged) return;
+    setFilters(draft);
+    setShowFilters(false); // the open panel pushed the card stack out of view
+  }
+
+  function toggleFilters() {
+    // Closing without Apply drops the unapplied edits, so reopening shows what is in effect.
+    if (showFilters) setDraft(filters);
+    setShowFilters(v => !v);
+  }
+
+  function toggleDraftTag(name) {
+    setDraft(d => {
+      if (d.tags.includes(name)) return { ...d, tags: d.tags.filter(x => x !== name) };
+      if (d.tags.length >= MAX_TAG_FILTERS) return d; // server limit; the panel says so
+      return { ...d, tags: [...d.tags, name] };
+    });
+  }
 
   const loadPage = useCallback(async (offset, replace) => {
     const request = ++requestRef.current;
@@ -418,12 +439,14 @@ export default function BrowsePage() {
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8, alignItems: 'center', minWidth: 0 }}>
           <div style={{ fontSize: 12, color: 'var(--ink4)' }}>Sort:</div>
           {SORTS.map(([key, label]) => (
-            <Chip key={key} label={label} active={sortBy === key} onClick={() => setSortBy(key)}/>
+            <Chip key={key} label={label} active={sortBy === key} aria-pressed={sortBy === key} onClick={() => setSortBy(key)}/>
           ))}
           <Chip
             label={showFilters ? 'hide filters' : activeFilters ? `filters · ${activeFilters}` : 'filters'}
             active={showFilters || activeFilters > 0}
-            onClick={() => setShowFilters(v => !v)}
+            onClick={toggleFilters}
+            aria-expanded={showFilters}
+            aria-controls="browse-filters"
           />
         </div>
         <button onClick={() => navigate('/matches')} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
@@ -442,8 +465,8 @@ export default function BrowsePage() {
       </div>
 
       {showFilters && (
-        <div style={{ padding: '12px 24px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', flexShrink: 0 }}>
-          {FILTER_FIELDS.map(([key, label, width]) => (
+        <div id="browse-filters" style={{ padding: '12px 24px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', flexShrink: 0 }}>
+          {FILTER_FIELDS.map(([key, label, width, bounds]) => (
             <FormInput
               key={key}
               label={label}
@@ -451,6 +474,8 @@ export default function BrowsePage() {
               value={draft[key]}
               onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))}
               error={draftErrors[key]}
+              inputMode="decimal"
+              {...bounds}
               style={{ width }}
             />
           ))}
@@ -463,9 +488,13 @@ export default function BrowsePage() {
                 key={t.id}
                 label={`#${t.name}`}
                 active={draft.tags.includes(t.name)}
-                onClick={() => setDraft(d => ({ ...d, tags: d.tags.includes(t.name) ? d.tags.filter(x => x !== t.name) : [...d.tags, t.name] }))}
+                aria-pressed={draft.tags.includes(t.name)}
+                onClick={() => toggleDraftTag(t.name)}
               />
             ))}
+            <div aria-live="polite" style={{ flexBasis: '100%', fontSize: 12, color: 'var(--danger-fg)' }}>
+              {draftErrors.tags || (draft.tags.length >= MAX_TAG_FILTERS ? `Up to ${MAX_TAG_FILTERS} interests` : '')}
+            </div>
           </div>
           <Btn onClick={applyFilters} disabled={!draftValid || !draftChanged}>
             {draftChanged || !draftValid ? 'Apply' : 'Applied'}
@@ -534,8 +563,8 @@ export default function BrowsePage() {
               />
 
               <div style={{ fontSize: 11, color: 'var(--ink4)', marginTop: 10, fontStyle: 'italic', textAlign: 'center' }}>
-                {sorted.length}{hasMore ? '+' : ''} {sorted.length === 1 ? 'person' : 'people'}
-                {activeFilters ? ' match your filters' : ' nearby'} · drag the card or use the buttons
+                {sorted.length}{hasMore ? '+' : ''}
+                {' in your stack'}{activeFilters ? ' · filtered' : ''} · drag the card or use the buttons
               </div>
 
               {/* Coming up strip */}

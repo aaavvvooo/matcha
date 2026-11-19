@@ -52,6 +52,13 @@ test('filters: empty means no bound, out-of-range and inverted ranges are flagge
   expect(filterErrors({ minAge: '20', maxAge: '30', maxDistance: '15', minFame: '0', maxFame: '100' })).toEqual({});
 });
 
+test('filters: tag count and total length follow the server limits', () => {
+  const names = n => Array.from({ length: n }, (_, i) => `tag${i}`);
+  expect(filterErrors({ tags: names(20) }).tags).toBeUndefined();
+  expect(filterErrors({ tags: names(21) }).tags).toMatch(/at most 20/);
+  expect(filterErrors({ tags: ['x'.repeat(600), 'y'.repeat(600)] }).tags).toMatch(/Too many/);
+});
+
 test('isoYearsAgo gives a date input value', () => {
   expect(isoYearsAgo(18, today)).toBe('2008-11-19');
 });

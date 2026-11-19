@@ -32,7 +32,9 @@ export default function SearchPage() {
   const navigate = useNavigate();
 
   // Same bounds as the server (fame comes from sliders, always in range).
-  const searchErrors = filterErrors({ minAge: filters.ageMin, maxAge: filters.ageMax, maxDistance: filters.maxDistance });
+  const searchErrors = filterErrors({
+    minAge: filters.ageMin, maxAge: filters.ageMax, maxDistance: filters.maxDistance, tags: filters.tags,
+  });
   const searchValid = Object.keys(searchErrors).length === 0;
 
   const toggleTag = t => setFilters(f => ({
@@ -167,8 +169,17 @@ export default function SearchPage() {
                 {tagsError && (
                   <div style={{ fontSize: 12, color: 'var(--ink3)' }}>Interest tags couldn't be loaded — reload the page to filter by tags.</div>
                 )}
-                {allTags.map(t => <Chip key={t.id} label={`#${t.name}`} active={filters.tags.includes(t.name)} onClick={() => toggleTag(t.name)}/>)}
+                {allTags.map(t => (
+                  <Chip
+                    key={t.id}
+                    label={`#${t.name}`}
+                    active={filters.tags.includes(t.name)}
+                    aria-pressed={filters.tags.includes(t.name)}
+                    onClick={() => toggleTag(t.name)}
+                  />
+                ))}
               </div>
+              <div aria-live="polite" style={{ fontSize: 12, color: 'var(--danger-fg)', marginTop: 8 }}>{searchErrors.tags || ''}</div>
             </div>
 
             {error && <div role="alert" style={{ fontSize: 13, color: 'var(--rose)' }}>{error}</div>}
