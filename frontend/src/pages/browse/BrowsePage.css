@@ -1,164 +1,202 @@
-.browse-page {
-  padding: 32px 0 64px;
-}
-
-.browse-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 28px;
-}
-
-.browse-header h1 {
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.profiles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 20px;
-}
-
-/* ── Card ──────────────────────────────────── */
-
-.profile-card {
-  background: var(--white);
-  border: 1px solid var(--cream3);
-  border-radius: var(--r-md);
-  overflow: hidden;
-  transition: var(--transition-base);
-}
-
-.profile-card:hover {
-  border-color: var(--spice);
-  transform: translateY(-2px);
-}
-
-.card-photo-wrap {
-  display: block;
-  aspect-ratio: 3/4;
-  overflow: hidden;
-}
-
-.card-photo {
-  width: 100%;
+/* Discover layout. Below 860px (the app's desktop breakpoint) the page is one scrolling
+   column: a slim bar, then the whole card with Pass/Like pinned to the bottom of the screen. */
+.browse {
   height: 100%;
-  object-fit: cover;
-}
-
-.card-photo-placeholder {
-  width: 100%;
-  height: 100%;
-  background: var(--cream2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink3);
-  font-size: 13px;
-}
-
-.card-body {
-  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  background: var(--cream);
 }
 
-.card-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  font-size: 15px;
-}
-
-.card-name a {
-  color: var(--ink);
-  text-decoration: none;
-}
-
-.card-name a:hover {
-  color: var(--spice);
-  opacity: 1;
-}
-
-.online-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--matcha);
+.browse-bar {
   flex-shrink: 0;
-}
-
-.card-location {
-  font-size: 12px;
-  color: var(--ink3);
-}
-
-.card-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.tag {
-  font-size: 11px;
-  padding: 2px 8px;
-  background: var(--cream2);
-  border-radius: 99px;
-  color: var(--ink3);
-}
-
-.card-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 4px;
+  padding: 14px 24px;
+  background: var(--white);
+  border-bottom: 1.5px solid var(--cream3);
 }
 
-.fame-badge {
-  font-size: 11px;
-  color: var(--ink3);
-}
-
-.btn-like {
-  background: none;
-  border: none;
+.browse-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-style: italic;
   font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.browse-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Desktop: the chips wrap together with the filter chip, as one row. */
+.browse-sort {
+  display: contents;
+}
+
+.browse-bell {
+  position: relative;
+  display: flex;
+  padding: 4px;
+  border: none;
+  background: none;
   cursor: pointer;
-  color: var(--ink3);
-  transition: var(--transition-base);
-  padding: 0;
-  line-height: 1;
 }
 
-.btn-like:hover,
-.btn-like.liked {
-  color: var(--spice);
-}
-
-.btn-like:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* ── States ────────────────────────────────── */
-
-.browse-spinner {
+.browse-filters {
+  flex-shrink: 0;
   display: flex;
-  justify-content: center;
-  padding: 40px 0;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 12px 24px;
+  background: var(--white);
+  border-bottom: 1.5px solid var(--cream3);
 }
 
-.browse-more {
+.browse-filter-actions {
   display: flex;
-  justify-content: center;
-  margin-top: 32px;
+  gap: 12px;
 }
 
-.browse-empty {
-  text-align: center;
-  color: var(--ink3);
-  margin-top: 60px;
+.browse-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.browse-stack {
+  position: relative;
+  flex: 0 0 auto;
+  width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 20px 12px;
+  border-right: 1.5px solid var(--cream3);
+  background: var(--cream);
+}
+
+.browse-detail {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--cream2);
+}
+
+/* Horizontal drags are ours (like / pass); vertical ones belong to the browser (scrolling). */
+.browse-card {
+  touch-action: pan-y;
+}
+
+.browse-card-photo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+}
+
+.browse-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.browse-card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 6px 14px 14px;
+}
+
+@media (min-width: 860px) {
+  /* The detail panel next to the card lists every tag. */
+  .browse-card-tags span:nth-child(n + 5) {
+    display: none;
+  }
+}
+
+@media (max-width: 859px) {
+  .browse-sort {
+    display: flex;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .browse-bar {
+    justify-content: flex-end;
+    padding: 8px 16px;
+  }
+
+  /* Open, the panel takes the place of the card and scrolls on its own. */
+  .browse-filters {
+    flex: 1;
+    min-height: 0;
+    align-content: flex-start;
+    padding: 12px 16px 0;
+    overflow-y: auto;
+    border-bottom: none;
+  }
+
+  .browse-filters ~ .browse-body {
+    display: none;
+  }
+
+  .browse-filter-actions {
+    position: sticky;
+    bottom: 0;
+    flex-basis: 100%;
+    margin-top: auto;
+    padding: 10px 0;
+    background: var(--white);
+  }
+
+  .browse-body {
+    overflow-y: auto;
+  }
+
+  .browse-stack {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    height: max-content;
+    min-height: 100%;
+    justify-content: flex-start;
+    padding: 12px 14px;
+    border-right: none;
+  }
+
+  .browse-detail {
+    display: none;
+  }
+
+  .browse-card {
+    max-width: 420px !important;
+    overflow: clip !important; /* `hidden` would stop the actions from sticking to the screen */
+  }
+
+  .browse-card-photo {
+    height: clamp(180px, 38vh, 360px);
+  }
+
+  .browse-card-actions {
+    position: sticky;
+    bottom: 0;
+    padding: 10px 14px 14px;
+    background: var(--white);
+  }
 }

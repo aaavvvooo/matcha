@@ -143,6 +143,9 @@ input:focus, textarea:focus {
 @media (min-width: 860px) {
   .mobile-only { display: none !important; }
 }
+@media (max-width: 859px) {
+  .desktop-only { display: none !important; }
+}
 
 /* ── Photo gallery (B2) ──────────────────────────────────────── */
 .photo-dropzone:focus-visible,

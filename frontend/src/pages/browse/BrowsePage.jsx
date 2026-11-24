@@ -13,6 +13,7 @@ import Chip from '../../components/ui/Chip';
 import { displayName } from '../../utils/displayName';
 import FormInput from '../../components/ui/FormInput';
 import { filterErrors, MAX_AGE, MAX_DISTANCE_KM, MAX_FAME, MAX_TAG_FILTERS, MIN_AGE } from '../../utils/formValidation';
+import './BrowsePage.css';
 
 const PAGE_SIZE = 20;
 const SORTS = [['score', 'best match'], ['distance', 'distance'], ['age', 'age'], ['fame', 'fame'], ['tags', 'common tags']];
@@ -49,7 +50,18 @@ function toParams(sortBy, f, offset) {
   };
 }
 
-function ProfileCard({ profile, onLike, onOpenProfile, isPreview, drag, isDragging, onPointerDown, onPointerMove, onPointerUp }) {
+function SortChips({ sortBy, onSort, className }) {
+  return (
+    <div className={`browse-sort ${className}`} role="group" aria-label="Sort by">
+      <div style={{ fontSize: 12, color: 'var(--ink4)' }}>Sort:</div>
+      {SORTS.map(([key, label]) => (
+        <Chip key={key} label={label} active={sortBy === key} aria-pressed={sortBy === key} onClick={() => onSort(key)}/>
+      ))}
+    </div>
+  );
+}
+
+function ProfileCard({ profile, onLike, onOpenProfile, isPreview, drag, isDragging, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }) {
   const rotation = drag.x * 0.035;
   const opacity = Math.max(0.4, 1 - Math.abs(drag.x) / 260);
   const name = displayName(profile, 'Unknown');
@@ -59,10 +71,13 @@ function ProfileCard({ profile, onLike, onOpenProfile, isPreview, drag, isDraggi
 
   return (
     <div
+      className="browse-card"
+      data-testid="browse-card"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
+      onPointerCancel={onPointerCancel}
       style={{
         position: 'relative',
         zIndex: 1,
@@ -81,15 +96,10 @@ function ProfileCard({ profile, onLike, onOpenProfile, isPreview, drag, isDraggi
       }}
     >
       {/* Photo area */}
-      <div style={{
-        height: 200,
+      <div className="browse-card-photo" style={{
         background: firstPhoto
           ? `url(${firstPhoto}) center/cover`
           : 'linear-gradient(160deg, var(--cream2) 0%, var(--cream3) 100%)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
       }}>
         {!firstPhoto && (
           <div style={{ textAlign: 'center' }}>
@@ -145,8 +155,8 @@ function ProfileCard({ profile, onLike, onOpenProfile, isPreview, drag, isDraggi
         {profile.bio && (
           <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.5, marginBottom: 8 }}>{profile.bio}</div>
         )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-          {tags.slice(0, 4).map(t => (
+        <div className="browse-card-tags">
+          {tags.map(t => (
             <span key={t} style={{
               padding: '3px 9px', borderRadius: 'var(--r-full)',
               background: 'var(--cream2)', border: '1px solid var(--sand)',
@@ -157,7 +167,7 @@ function ProfileCard({ profile, onLike, onOpenProfile, isPreview, drag, isDraggi
       </div>
 
       {/* Actions */}
-      <div style={{ padding: '6px 14px 14px', display: 'flex', gap: 8 }}>
+      <div className="browse-card-actions">
         <Btn variant="secondary" onClick={e => { e.stopPropagation(); onLike(false); }} style={{ flex: 1, padding: '10px', fontSize: 13 }}>Pass</Btn>
         <button
           type="button"
@@ -314,6 +324,8 @@ export default function BrowsePage() {
   const [loading, setLoading] = useState(true);
   const [likeError, setLikeError] = useState(null);
   const dragRef = useRef(null);
+  // One like at a time: the card stays until the server answers, so it can be tapped again.
+  const likingRef = useRef(false);
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
 
@@ -334,6 +346,12 @@ export default function BrowsePage() {
     // Closing without Apply drops the unapplied edits, so reopening shows what is in effect.
     if (showFilters) setDraft(filters);
     setShowFilters(v => !v);
+  }
+
+  // Phones only: the panel covers the card, so show the re-sorted stack unless edits are pending.
+  function sortFromPanel(key) {
+    setSortBy(key);
+    if (!draftChanged) setShowFilters(false);
   }
 
   function toggleDraftTag(name) {
@@ -381,8 +399,9 @@ export default function BrowsePage() {
   const currentProfile = sorted[0];
 
   const handleAction = useCallback(async (yes) => {
-    if (!currentProfile) return;
+    if (!currentProfile || likingRef.current) return;
     if (yes) {
+      likingRef.current = true;
       try {
         const result = await likeUser(currentProfile.user_id);
         if (result?.is_match) {
@@ -390,12 +409,15 @@ export default function BrowsePage() {
           setTimeout(() => setMatchProfile(null), 3000);
         }
       } catch (err) {
+        setDrag({ x: 0, y: 0 });
         const msg = err?.response?.data?.detail;
         if (msg) {
           setLikeError(msg);
           setTimeout(() => setLikeError(null), 4000);
         }
         return;
+      } finally {
+        likingRef.current = false;
       }
     }
     if (!yes) passedRef.current += 1;
@@ -415,6 +437,8 @@ export default function BrowsePage() {
   }, [isDragging]);
 
   const onPointerUp = useCallback(() => {
+    // Touch fires leave after up/cancel: only the event that ends a live drag may act.
+    if (!dragRef.current) return;
     if (Math.abs(drag.x) > 70) {
       handleAction(drag.x > 0);
     } else {
@@ -424,23 +448,23 @@ export default function BrowsePage() {
     dragRef.current = null;
   }, [drag.x, handleAction]);
 
+  // The browser took the touch over (scrolling): not a swipe, put the card back.
+  const onPointerCancel = useCallback(() => {
+    dragRef.current = null;
+    setIsDragging(false);
+    setDrag({ x: 0, y: 0 });
+  }, []);
+
   return (
-    <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
-      {/* Top bar */}
-      <div style={{
-        padding: '14px 24px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)',
-        flexShrink: 0,
-      }}>
-        <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, fontWeight: 700, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div className="screen browse">
+      {/* Top bar. On phones the site header already shows the brand and the bell, and
+          sorting lives in the filter panel. */}
+      <div className="browse-bar">
+        <div className="browse-brand desktop-only">
           <MatchaCup size={30} mood="happy" animate={false}/>Matcha
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8, alignItems: 'center', minWidth: 0 }}>
-          <div style={{ fontSize: 12, color: 'var(--ink4)' }}>Sort:</div>
-          {SORTS.map(([key, label]) => (
-            <Chip key={key} label={label} active={sortBy === key} aria-pressed={sortBy === key} onClick={() => setSortBy(key)}/>
-          ))}
+        <div className="browse-controls">
+          <SortChips className="desktop-only" sortBy={sortBy} onSort={setSortBy}/>
           <Chip
             label={showFilters ? 'hide filters' : activeFilters ? `filters · ${activeFilters}` : 'filters'}
             active={showFilters || activeFilters > 0}
@@ -449,7 +473,7 @@ export default function BrowsePage() {
             aria-controls="browse-filters"
           />
         </div>
-        <button onClick={() => navigate('/matches')} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
+        <button className="browse-bell desktop-only" onClick={() => navigate('/matches')}>
           <Bell size={22} strokeWidth={1.75} color="var(--ink3)"/>
           {unreadCount > 0 && (
             <div style={{
@@ -465,7 +489,8 @@ export default function BrowsePage() {
       </div>
 
       {showFilters && (
-        <div id="browse-filters" style={{ padding: '12px 24px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', flexShrink: 0 }}>
+        <div id="browse-filters" className="browse-filters">
+          <SortChips className="mobile-only" sortBy={sortBy} onSort={sortFromPanel}/>
           {FILTER_FIELDS.map(([key, label, width, bounds]) => (
             <FormInput
               key={key}
@@ -496,10 +521,12 @@ export default function BrowsePage() {
               {draftErrors.tags || (draft.tags.length >= MAX_TAG_FILTERS ? `Up to ${MAX_TAG_FILTERS} interests` : '')}
             </div>
           </div>
-          <Btn onClick={applyFilters} disabled={!draftValid || !draftChanged}>
-            {draftChanged || !draftValid ? 'Apply' : 'Applied'}
-          </Btn>
-          <Btn variant="ghost" onClick={() => { setDraft(NO_FILTERS); setFilters(NO_FILTERS); }}>Reset</Btn>
+          <div className="browse-filter-actions">
+            <Btn onClick={applyFilters} disabled={!draftValid || !draftChanged}>
+              {draftChanged || !draftValid ? 'Apply' : 'Applied'}
+            </Btn>
+            <Btn variant="ghost" onClick={() => { setDraft(NO_FILTERS); setFilters(NO_FILTERS); }}>Reset</Btn>
+          </div>
         </div>
       )}
 
@@ -513,20 +540,9 @@ export default function BrowsePage() {
       )}
 
       {/* Two-column body */}
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
+      <div className="browse-body">
         {/* Left: card stack */}
-        <div style={{
-          flex: '0 0 auto',
-          width: 'min(100%, 420px)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '20px 20px 12px',
-          borderRight: '1.5px solid var(--cream3)',
-          background: 'var(--cream)',
-          position: 'relative',
-        }}>
+        <div className="browse-stack">
           {loading ? (
             <div style={{ textAlign: 'center', padding: 40 }}>
               <MatchaCup size={60} mood="happy" animate={true} style={{ margin: '0 auto 12px', animation: 'float 3s ease-in-out infinite' }}/>
@@ -536,7 +552,7 @@ export default function BrowsePage() {
             <>
               {/* Ghost card behind */}
               {sorted[1] && (
-                <div style={{
+                <div className="desktop-only" style={{
                   position: 'absolute',
                   width: 340,
                   background: 'var(--white)',
@@ -558,6 +574,7 @@ export default function BrowsePage() {
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
+                onPointerCancel={onPointerCancel}
                 onLike={handleAction}
                 onOpenProfile={p => navigate(`/profile/${p.user_id}`)}
               />
@@ -569,7 +586,7 @@ export default function BrowsePage() {
 
               {/* Coming up strip */}
               {sorted.length > 1 && (
-                <div style={{ width: '100%', maxWidth: 360, marginTop: 14 }}>
+                <div className="desktop-only" style={{ width: '100%', maxWidth: 360, marginTop: 14 }}>
                   <div style={{ fontSize: 11, color: 'var(--ink4)', marginBottom: 8 }}>Coming up</div>
                   <div style={{ display: 'flex', gap: 8, overflow: 'hidden' }}>
                     {sorted.slice(1, 4).map(p => {
@@ -609,7 +626,7 @@ export default function BrowsePage() {
         </div>
 
         {/* Right: profile detail panel */}
-        <div style={{ flex: 1, overflow: 'auto', background: 'var(--cream2)', display: 'flex', flexDirection: 'column' }}>
+        <div className="browse-detail">
           <RightPanel
             profile={previewProfile || currentProfile}
             onProfile={p => navigate(`/profile/${p.user_id}`)}
