@@ -1,17 +1,16 @@
 import { useState } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { resetPassword } from '../../api/authApi';
 import { confirmError, passwordError } from '../../utils/formValidation';
+import { useUrlToken } from '../../hooks/useUrlToken';
 
 function ResetPasswordPage() {
-  const [searchParams] = useSearchParams();
+  const token = useUrlToken();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
   const navigate = useNavigate();
-
-  const token = searchParams.get('token');
 
   if (!token) {
     return (

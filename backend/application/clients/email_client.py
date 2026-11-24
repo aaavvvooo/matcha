@@ -41,7 +41,8 @@ class EmailClient:
         return render_template(self.jinja_env, template_name, **kwargs)
 
     def _link(self, path: str, token: str) -> str:
-        return f"{(self.frontend_url or '').rstrip('/')}{path}?{urlencode({'token': token})}"
+        # FRONTEND_URL is a normalised origin; _get_email_client refuses (503) while it is unset.
+        return f"{self.frontend_url}{path}?{urlencode({'token': token})}"
 
     def send_verification_email(self, to: str, username: str, token: str):
         html_content = self._render_template(
