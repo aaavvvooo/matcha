@@ -1,0 +1,14 @@
+# LAN demo override: serve the app on this machine's LAN address so a second device
+# (phone / laptop on the same Wi-Fi) can join, e.g. to demo calls between two real devices.
+# Use via scripts/lan-up.sh, or:
+#   LAN_IP=192.168.1.42 docker compose -f docker-compose.yaml -f docker-compose.lan.yaml up --build
+# `environment` wins over `env_file`, so .env stays untouched.
+services:
+  backend:
+    environment:
+      REACT_APP_API_URL: http://${LAN_IP:?set LAN_IP to this machine's LAN address}:${BACKEND_PORT:-8000}
+      FRONTEND_URL: http://${LAN_IP}:3000
+  frontend:
+    environment:
+      REACT_APP_API_URL: http://${LAN_IP:?set LAN_IP to this machine's LAN address}:${BACKEND_PORT:-8000}
+      REACT_APP_WS_URL: ws://${LAN_IP}:${BACKEND_PORT:-8000}

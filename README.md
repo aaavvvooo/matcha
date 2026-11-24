@@ -81,6 +81,12 @@ TURN server (`TURN_*` above, e.g. a coturn instance) two users behind strict NAT
 to connect; on one machine or LAN the public STUN server is enough. Exchanging connection candidates reveals each
 participant's IP address to the other, which only happens after the callee accepts.
 
+To demo a call between two devices on the same Wi-Fi, run `scripts/lan-up.sh` (optionally `scripts/lan-up.sh
+192.168.x.x`). It starts the stack with `docker-compose.lan.yaml`, which points the API, WebSocket and CORS origin at
+the LAN address without touching `.env`, and prints the `chrome://flags/#unsafely-treat-insecure-origin-as-secure`
+value to enter in Chrome on every device (Android or desktop; iOS has no such flag). Open the printed LAN URL on all
+devices, this one included, so the session cookie stays same-site.
+
 **Email delivery:** Brevo rejects API calls from IPs that aren't on the account's allowlist (`401 unrecognised IP
 address`). Before running on a new network (e.g. the defense machine), add its public IP to the authorised IPs in
 the Brevo account's security settings, or turn the restriction off. Server errors, `429` and network failures are
