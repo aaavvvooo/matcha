@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+// Plugin attaches L.markerClusterGroup to the global L that leaflet sets; import it after leaflet.
+import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
 import { LocateFixed, X } from 'lucide-react';
 import Avatar from '../../components/ui/Avatar';
 import Btn from '../../components/ui/Btn';
@@ -17,6 +20,9 @@ const ATTRIBUTION =
 const WORLD_BOUNDS = [[-85, -180], [85, 180]];
 const MAP_LIMIT = 200; // keep in sync with the backend cap
 const DEBOUNCE_MS = 450;
+// Cells closer than this on screen share a bubble; from MAX_CLUSTER_ZOOM on every cell shows.
+const CLUSTER_RADIUS_PX = 60;
+const MAX_CLUSTER_ZOOM = 14;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const round4 = (v) => Number(v.toFixed(4));
@@ -68,6 +74,24 @@ function buildPinIcon(group) {
     root.appendChild(badge);
   }
   return L.divIcon({ html: root, className: 'map-pin-wrap', iconSize: [44, 44], iconAnchor: [22, 22] });
+}
+
+// Cells that are close on screen merge into one bubble showing how many people they hold.
+// DOM nodes only (no HTML strings), like the pins.
+function buildClusterIcon(cluster) {
+  const people = cluster.getAllChildMarkers().reduce((n, m) => n + (m.options.people || 1), 0);
+  const root = document.createElement('div');
+  root.className = 'map-cluster';
+  // Leaflet makes the icon a focusable button named by its text: say what the number means.
+  const count = document.createElement('span');
+  count.setAttribute('aria-hidden', 'true');
+  count.textContent = String(people);
+  const label = document.createElement('span');
+  label.className = 'map-sr-only';
+  label.textContent = `${people} ${people === 1 ? 'person' : 'people'} nearby, activate to zoom in`;
+  root.append(count, label);
+  const size = people < 10 ? 40 : people < 100 ? 48 : 56;
+  return L.divIcon({ html: root, className: 'map-pin-wrap', iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
 }
 
 function buildSelfIcon() {
@@ -139,7 +163,17 @@ export default function MapPage() {
     // `bounds` is what makes noWrap effective: without it Leaflet still requests tiles left and right
     // of the world (x = -1, 4 at zoom 2), which tile.openstreetmap.org answers with HTTP 400.
     L.tileLayer(TILE_URL, { attribution: ATTRIBUTION, maxZoom: 19, noWrap: true, bounds: WORLD_BOUNDS }).addTo(map);
-    markersRef.current = L.layerGroup().addTo(map);
+    markersRef.current = L.markerClusterGroup({
+      iconCreateFunction: buildClusterIcon,
+      showCoverageOnHover: false,
+      maxClusterRadius: CLUSTER_RADIUS_PX,
+      // Clicking a bubble zooms to it; cells left at max zoom keep the per-cell list on click.
+      spiderfyOnMaxZoom: false,
+      disableClusteringAtZoom: MAX_CLUSTER_ZOOM,
+    })
+      // Zooming into a bubble re-groups cells: an open cell card would describe a stale pin.
+      .on('clusterclick', () => setSelected(null))
+      .addTo(map);
     mapRef.current = map;
 
     let timer = null;
@@ -205,18 +239,19 @@ export default function MapPage() {
     };
   }, [ready]);
 
-  // One marker per grid cell.
+  // One marker per grid cell; the cluster layer groups nearby cells by zoom level.
   useEffect(() => {
     const layer = markersRef.current;
     if (!layer) return;
     layer.clearLayers();
-    for (const group of groupByCell(users)) {
+    const markers = groupByCell(users).map(group => {
       const first = group[0];
       const title = group.length > 1 ? `${group.length} people here` : first.first_name;
-      L.marker([first.latitude, first.longitude], { icon: buildPinIcon(group), title, riseOnHover: true })
-        .on('click', () => setSelected(group))
-        .addTo(layer);
-    }
+      return L.marker([first.latitude, first.longitude], {
+        icon: buildPinIcon(group), title, riseOnHover: true, people: group.length,
+      }).on('click', () => setSelected(group));
+    });
+    layer.addLayers(markers); // one batch: a single re-cluster instead of one per marker
   }, [users, ready]);
 
   // The viewer's own (exact) position, drawn for themselves only.

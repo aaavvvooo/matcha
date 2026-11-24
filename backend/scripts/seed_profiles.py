@@ -42,6 +42,54 @@ from scripts.seed_common import (  # noqa: E402
 )
 
 NATIONALITIES = "au,br,ca,ch,de,dk,es,fi,fr,gb,ie,in,mx,nl,no,nz,rs,tr,ua,us"
+
+# randomuser.me's coordinates are random and unrelated to its city/country, which put seeded
+# profiles in the ocean or on the wrong continent. Each person is placed in a real city of their
+# nationality instead: (city, country, latitude, longitude).
+CITIES_BY_NAT: dict[str, list[tuple[str, str, float, float]]] = {
+    "au": [("Sydney", "Australia", -33.8688, 151.2093), ("Melbourne", "Australia", -37.8136, 144.9631)],
+    "br": [("São Paulo", "Brazil", -23.5505, -46.6333), ("Rio de Janeiro", "Brazil", -22.9068, -43.1729)],
+    "ca": [("Toronto", "Canada", 43.6532, -79.3832), ("Montreal", "Canada", 45.5019, -73.5674),
+           ("Vancouver", "Canada", 49.2827, -123.1207)],
+    "ch": [("Zurich", "Switzerland", 47.3769, 8.5417), ("Geneva", "Switzerland", 46.2044, 6.1432)],
+    "de": [("Berlin", "Germany", 52.5200, 13.4050), ("Munich", "Germany", 48.1351, 11.5820),
+           ("Hamburg", "Germany", 53.5511, 9.9937)],
+    "dk": [("Copenhagen", "Denmark", 55.6761, 12.5683), ("Aarhus", "Denmark", 56.1629, 10.2039)],
+    "es": [("Madrid", "Spain", 40.4168, -3.7038), ("Barcelona", "Spain", 41.3874, 2.1686)],
+    "fi": [("Helsinki", "Finland", 60.1699, 24.9384), ("Tampere", "Finland", 61.4978, 23.7610)],
+    "fr": [("Paris", "France", 48.8566, 2.3522), ("Lyon", "France", 45.7640, 4.8357),
+           ("Marseille", "France", 43.2965, 5.3698)],
+    "gb": [("London", "United Kingdom", 51.5072, -0.1276), ("Manchester", "United Kingdom", 53.4808, -2.2426)],
+    "ie": [("Dublin", "Ireland", 53.3498, -6.2603), ("Cork", "Ireland", 51.8985, -8.4756)],
+    "in": [("Mumbai", "India", 19.0760, 72.8777), ("Delhi", "India", 28.6139, 77.2090),
+           ("Bengaluru", "India", 12.9716, 77.5946)],
+    "mx": [("Mexico City", "Mexico", 19.4326, -99.1332), ("Guadalajara", "Mexico", 20.6597, -103.3496)],
+    "nl": [("Amsterdam", "Netherlands", 52.3676, 4.9041), ("Rotterdam", "Netherlands", 51.9244, 4.4777)],
+    "no": [("Oslo", "Norway", 59.9139, 10.7522), ("Bergen", "Norway", 60.3913, 5.3221)],
+    "nz": [("Auckland", "New Zealand", -36.8485, 174.7633), ("Wellington", "New Zealand", -41.2865, 174.7762)],
+    "rs": [("Belgrade", "Serbia", 44.7866, 20.4489), ("Novi Sad", "Serbia", 45.2671, 19.8335)],
+    "tr": [("Istanbul", "Turkey", 41.0082, 28.9784), ("Ankara", "Turkey", 39.9334, 32.8597)],
+    "ua": [("Kyiv", "Ukraine", 50.4501, 30.5234), ("Lviv", "Ukraine", 49.8397, 24.0297)],
+    "us": [("New York", "United States", 40.7128, -74.0060), ("Los Angeles", "United States", 34.0522, -118.2437),
+           ("Chicago", "United States", 41.8781, -87.6298)],
+}
+# Spread people across a city (~3 km) without pushing coastal ones far out to sea.
+CITY_JITTER_DEG = 0.03
+
+
+def random_city_location(nat: str | None) -> tuple[float, float, str]:
+    """A point in a real city of the person's nationality (any listed city if unknown)."""
+    cities = CITIES_BY_NAT.get((nat or "").lower())
+    if not cities:
+        # Only expected if randomuser stops returning `nat` (requested via &inc=...,nat).
+        print(f"Unknown nationality {nat!r}: placing the profile in a random listed city")
+        cities = [c for cs in CITIES_BY_NAT.values() for c in cs]
+    city, country, lat, lon = random.choice(cities)
+    return (
+        lat + random.uniform(-CITY_JITTER_DEG, CITY_JITTER_DEG),
+        lon + random.uniform(-CITY_JITTER_DEG, CITY_JITTER_DEG),
+        f"{city}, {country}",
+    )
 GENDER_LABELS = ["Man", "Woman", "Non-binary", "Other"]
 
 
@@ -49,7 +97,7 @@ def fetch_people(count: int, randomuser_gender: str | None = None) -> list[dict]
     gender_param = f"&gender={randomuser_gender}" if randomuser_gender else ""
     url = (
         f"https://randomuser.me/api/?results={count}"
-        f"&inc=gender,name,picture,dob,location,login&nat={NATIONALITIES}{gender_param}&noinfo"
+        f"&inc=gender,name,picture,dob,location,login,nat&nat={NATIONALITIES}{gender_param}&noinfo"
     )
     with urllib.request.urlopen(url, timeout=30) as resp:
         import json
@@ -114,10 +162,7 @@ async def seed_gender(
             chosen_tags = random.sample(tags, k=min(len(tags), random.randint(3, 6)))
             bio = random_bio(chosen_tags[0]["name"])
 
-            latitude = float(person["location"]["coordinates"]["latitude"])
-            longitude = float(person["location"]["coordinates"]["longitude"])
-            # randomuser.me returns city/state/country pre-transliterated to Latin script.
-            location_label = f"{person['location']['city']}, {person['location']['country']}"
+            latitude, longitude, location_label = random_city_location(person.get("nat"))
 
             await db.execute(
                 """

@@ -1,5 +1,6 @@
 """Shared helpers for scripts/seed_profiles.py and scripts/seed_armenia_profiles.py."""
 import random
+import urllib.parse
 import urllib.request
 
 from application.repository.user_repo import UserRepository
@@ -50,11 +51,27 @@ def random_bio(tag_name: str) -> str:
     return random.choice(BIO_TEMPLATES).format(tag=tag_name)
 
 
+# The picture URL comes from randomuser.me's response: only fetch from that host over https
+# (urlopen would also follow file:// or ftp://), cap the size and require JPEG bytes.
+_PHOTO_HOST = "randomuser.me"
+_PHOTO_MAX_BYTES = 5 * 1024 * 1024
+_JPEG_MAGIC = b"\xff\xd8\xff"
+
+
+def _checked_photo_url(url: str) -> str:
+    u = urllib.parse.urlsplit(url)
+    if u.scheme != "https" or u.hostname != _PHOTO_HOST:
+        raise ValueError(f"unexpected seed photo URL: {url!r}")
+    return url
+
+
 def fetch_and_upload_photo(user_id: int, picture_url: str) -> str:
     data = _photo_bytes_cache.get(picture_url)
     if data is None:
-        with urllib.request.urlopen(picture_url, timeout=15) as resp:
-            data = resp.read()
+        with urllib.request.urlopen(_checked_photo_url(picture_url), timeout=15) as resp:
+            data = resp.read(_PHOTO_MAX_BYTES + 1)
+        if len(data) > _PHOTO_MAX_BYTES or not data.startswith(_JPEG_MAGIC):
+            raise ValueError(f"seed photo is not a JPEG under 5 MB: {picture_url!r}")
         _photo_bytes_cache[picture_url] = data
     return upload_photo(user_id, data, "image/jpeg")
 
