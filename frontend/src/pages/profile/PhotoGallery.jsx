@@ -28,7 +28,7 @@ let nextStagedId = 1;
  * endpoint with `replaces`, which swaps it in atomically on the server (same
  * position and profile-picture status; the original goes only if the copy is saved).
  */
-export default function PhotoGallery({ photos, onPhotosChange, onOpen, onDelete }) {
+export default function PhotoGallery({ photos, onPhotosChange, onOpen, onDelete, openLabel = 'View photo' }) {
   const [staged, setStaged] = useState([]); // { id, file, url, replaces?, error? }
   const [editing, setEditing] = useState(null); // { staged: item } | { photo }
   const [messages, setMessages] = useState([]);
@@ -208,7 +208,7 @@ export default function PhotoGallery({ photos, onPhotosChange, onOpen, onDelete 
                   type="button"
                   className="photo-tile-btn photo-thumb"
                   onClick={() => onOpen(photo)}
-                  aria-label={`View photo ${i + 1}${photo.is_main ? ' (profile picture)' : ''}`}
+                  aria-label={`${openLabel} ${i + 1}${photo.is_main ? ' (profile picture)' : ''}`}
                   style={{
                     width: TILE, height: TILE, padding: 0, borderRadius: 'var(--r-sm)',
                     background: `url(${photo.url}) center/cover`,
