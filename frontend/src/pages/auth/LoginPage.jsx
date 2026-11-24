@@ -46,10 +46,12 @@ function LoginPage() {
           value={username}
           onChange={e => setUsername(e.target.value)}
           placeholder="you@example.com"
+          autoComplete="username"
         />
         <FormInput
           label="Password"
           type="password"
+          autoComplete="current-password"
           value={password}
           onChange={e => setPassword(e.target.value)}
           placeholder="••••••••"
