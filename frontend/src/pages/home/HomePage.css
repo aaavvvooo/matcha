@@ -1,132 +1,259 @@
-.hero {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 5rem 0;
-  text-align: center;
+/* Landing page layout. Same gutters as components/layout/Header.css, so the brand does not
+   jump sideways between the landing page and the rest of the site. */
+.landing {
+  --landing-gutter: 20px;
+  --landing-nav-font: 14px;
+  --landing-nav-link-pad: 10px 16px;
+  --landing-nav-cta-pad: 10px 24px;
 }
 
-.hero h1 {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-}
-
-.hero p {
-  font-size: 1.3rem;
-  margin-bottom: 2rem;
-  opacity: 0.9;
-}
-
-.hero-actions {
+/* ── Header ──────────────────────────────────────────────────── */
+.landing-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-shrink: 0;
   display: flex;
-  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px var(--landing-gutter);
+  background: var(--white);
+  border-bottom: 1.5px solid var(--cream3);
+}
+
+.landing-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.landing-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+/* ── Hero ────────────────────────────────────────────────────── */
+.landing-hero {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  padding: clamp(40px, 6vw, 96px) var(--landing-gutter);
+  background: var(--cream);
+}
+
+.landing-hero-blob {
+  position: absolute;
+  border-radius: 50%;
+  opacity: .06;
+  pointer-events: none;
+}
+
+.landing-hero-blob--spice {
+  top: -80px;
+  right: -80px;
+  width: min(360px, 60vw);
+  aspect-ratio: 1;
+  background: var(--spice);
+}
+
+.landing-hero-blob--matcha {
+  bottom: -60px;
+  left: -60px;
+  width: min(280px, 50vw);
+  aspect-ratio: 1;
+  background: var(--matcha);
+}
+
+/* Stacked and centred by default; two columns from 860px (the app's desktop breakpoint). */
+.landing-hero-inner {
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+}
+
+.landing-hero-text {
+  min-width: 0;
+  max-width: 560px;
+  text-align: center;
+}
+
+.landing-hero-tagline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  margin-bottom: 20px;
+  border: 1.5px solid var(--sand);
+  border-radius: var(--r-full);
+  background: var(--cream2);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--ink3);
+}
+
+.landing-hero-title {
+  margin-bottom: 20px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(40px, 5.2vw, 76px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.landing-hero-lead {
+  max-width: 480px;
+  margin: 0 auto 32px;
+  font-size: clamp(15px, 1.35vw, 19px);
+  line-height: 1.7;
+  color: var(--ink3);
+}
+
+.landing-hero-cta {
+  display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  gap: 14px;
 }
 
-.btn-primary {
-  background-color: #e91e63;
-  color: white;
-  border: none;
-  padding: 1rem 2rem;
-  font-size: 1.1rem;
-  border-radius: 25px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: transform 0.2s;
+.landing-hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: clamp(16px, 3vw, 40px);
+  margin-top: 36px;
 }
 
-.btn-primary:hover {
-  background-color: #c2185b;
-  transform: translateY(-2px);
+.landing-hero-stat-value {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(22px, 2.2vw, 30px);
+  font-weight: 700;
+  color: var(--ink);
 }
 
-.btn-secondary {
-  background-color: transparent;
-  color: white;
-  border: 2px solid white;
-  padding: 1rem 2rem;
-  font-size: 1.1rem;
-  border-radius: 25px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.2s;
+.landing-hero-stat-label {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink4);
 }
 
-.btn-secondary:hover {
-  background-color: white;
-  color: #667eea;
+/* The wrapper reserves the scaled size; `scale` alone would not affect layout. */
+.landing-cards {
+  --cards-scale: 1;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(276px * var(--cards-scale));
+  height: calc(240px * var(--cards-scale));
 }
 
-.features {
-  padding: 4rem 0;
+.landing-cards-stage {
+  position: relative;
+  flex-shrink: 0;
+  width: 276px;
+  height: 240px;
+  scale: var(--cards-scale);
 }
 
-.features h2 {
-  text-align: center;
-  font-size: 2.5rem;
-  margin-bottom: 3rem;
-  color: #2c3e50;
-}
-
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 2rem;
-}
-
-.feature-card {
-  text-align: center;
-  padding: 2rem;
-  border-radius: 10px;
-  background: #f8f9fa;
-  transition: transform 0.3s;
-}
-
-.feature-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-}
-
-.feature-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-}
-
-.feature-card h3 {
-  color: #e91e63;
-  margin-bottom: 1rem;
-}
-
-.cta {
-  background-color: #f8f9fa;
-  padding: 4rem 0;
-  text-align: center;
-}
-
-.cta h2 {
-  font-size: 2.5rem;
-  margin-bottom: 1rem;
-  color: #2c3e50;
-}
-
-.cta p {
-  font-size: 1.2rem;
-  margin-bottom: 2rem;
-  color: #7f8c8d;
-}
-
-/* Mobile responsive */
-@media (max-width: 768px) {
-  .hero h1 {
-    font-size: 2rem;
+@media (min-width: 860px) {
+  .landing-hero-inner {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 60px;
+    padding: 0 20px;
   }
-  
-  .hero-actions {
-    flex-direction: column;
-    align-items: center;
+
+  .landing-hero-text {
+    text-align: left;
   }
-  
-  .features h2,
-  .cta h2 {
-    font-size: 2rem;
+
+  .landing-hero-lead {
+    margin-left: 0;
+  }
+
+  .landing-hero-cta,
+  .landing-hero-stats {
+    justify-content: flex-start;
+  }
+
+  .landing-cards {
+    --cards-scale: 1.2;
+  }
+}
+
+@media (min-width: 1200px) {
+  .landing-cards {
+    --cards-scale: 1.6;
+  }
+}
+
+/* ── Footer ──────────────────────────────────────────────────── */
+.landing-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 24px var(--landing-gutter);
+  background: var(--white);
+  border-top: 1.5px solid var(--cream3);
+}
+
+.landing-footer .landing-brand {
+  font-size: 18px;
+}
+
+.landing-footer-note {
+  font-size: 12px;
+  color: var(--ink4);
+  text-align: right;
+}
+
+/* ── Phones ──────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .landing {
+    --landing-gutter: 14px;
+    --landing-nav-link-pad: 8px;
+    --landing-nav-cta-pad: 9px 16px;
+  }
+
+  .landing-header {
+    padding-block: 12px;
+  }
+
+  .landing-header .landing-brand {
+    font-size: 22px;
+  }
+
+  .landing-header-actions {
+    gap: 6px;
+  }
+}
+
+/* 320px phones: brand + "Sign in" + "Get started" must fit on one row. */
+@media (max-width: 360px) {
+  .landing {
+    --landing-gutter: 10px;
+    --landing-nav-font: 13px;
+    --landing-nav-cta-pad: 8px 12px;
+  }
+
+  .landing-header .landing-brand {
+    gap: 6px;
+    font-size: 19px;
   }
 }
