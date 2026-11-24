@@ -1,13 +1,16 @@
-function Chip({ label, active, onClick }) {
+/** Pill button. Extra props (aria-pressed, aria-expanded, aria-controls…) go to the <button>. */
+function Chip({ label, active, onClick, ...buttonProps }) {
   return (
     <button
+      type="button"
+      {...buttonProps}
       onClick={onClick}
       style={{
         padding: '5px 13px',
         borderRadius: 'var(--r-full)',
         background: active ? 'var(--spice)' : 'var(--cream2)',
         border: `1.5px solid ${active ? 'var(--spice)' : 'var(--sand)'}`,
-        color: active ? '#fff' : 'var(--ink2)',
+        color: active ? 'var(--white)' : 'var(--ink2)',
         fontSize: 12,
         fontWeight: 500,
         cursor: 'pointer',

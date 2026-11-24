@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkle, Bell } from 'lucide-react';
+import { Sparkle, Bell, User } from 'lucide-react';
 import { browse, getAllTags } from '../../api/profilesApi';
 import { likeUser } from '../../api/usersApi';
 import { apiError } from '../../api/errors';
@@ -12,10 +12,26 @@ import Btn from '../../components/ui/Btn';
 import Chip from '../../components/ui/Chip';
 import { displayName } from '../../utils/displayName';
 import FormInput from '../../components/ui/FormInput';
+import { filterErrors, MAX_AGE, MAX_DISTANCE_KM, MAX_FAME, MAX_TAG_FILTERS, MIN_AGE } from '../../utils/formValidation';
 
 const PAGE_SIZE = 20;
 const SORTS = [['score', 'best match'], ['distance', 'distance'], ['age', 'age'], ['fame', 'fame'], ['tags', 'common tags']];
 const NO_FILTERS = { minAge: '', maxAge: '', maxDistance: '', minFame: '', maxFame: '', tags: [] };
+// [key, label, width, input bounds]
+const FILTER_FIELDS = [
+  ['minAge', 'Min age', 90, { min: MIN_AGE, max: MAX_AGE, step: 1 }],
+  ['maxAge', 'Max age', 90, { min: MIN_AGE, max: MAX_AGE, step: 1 }],
+  ['maxDistance', 'Within km', 100, { min: 1, max: MAX_DISTANCE_KM, step: 'any' }],
+  ['minFame', 'Min fame', 90, { min: 0, max: MAX_FAME, step: 'any' }],
+  ['maxFame', 'Max fame', 90, { min: 0, max: MAX_FAME, step: 'any' }],
+];
+// Values that filter nothing on the server: not counted as active filters.
+const NO_OP_VALUES = { minAge: MIN_AGE, minFame: 0, maxFame: MAX_FAME };
+const sameFilters = (a, b) =>
+  FILTER_FIELDS.every(([k]) => String(a[k]).trim() === String(b[k]).trim()) &&
+  a.tags.length === b.tags.length && a.tags.every(t => b.tags.includes(t));
+const isActive = (k, v) => String(v).trim() !== '' && Number(v) !== NO_OP_VALUES[k];
+const countActive = f => FILTER_FIELDS.filter(([k]) => isActive(k, f[k])).length + (f.tags.length ? 1 : 0);
 
 // Empty inputs are left out so the server applies no bound.
 function toParams(sortBy, f, offset) {
@@ -33,7 +49,7 @@ function toParams(sortBy, f, offset) {
   };
 }
 
-function ProfileCard({ profile, onLike, onPreview, isPreview, drag, isDragging, onPointerDown, onPointerMove, onPointerUp }) {
+function ProfileCard({ profile, onLike, onOpenProfile, isPreview, drag, isDragging, onPointerDown, onPointerMove, onPointerUp }) {
   const rotation = drag.x * 0.035;
   const opacity = Math.max(0.4, 1 - Math.abs(drag.x) / 260);
   const name = displayName(profile, 'Unknown');
@@ -143,12 +159,18 @@ function ProfileCard({ profile, onLike, onPreview, isPreview, drag, isDragging, 
       {/* Actions */}
       <div style={{ padding: '6px 14px 14px', display: 'flex', gap: 8 }}>
         <Btn variant="secondary" onClick={e => { e.stopPropagation(); onLike(false); }} style={{ flex: 1, padding: '10px', fontSize: 13 }}>Pass</Btn>
-        <button onClick={e => { e.stopPropagation(); onPreview(profile); }} style={{
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onOpenProfile(profile); }}
+          aria-label={`Open ${name}'s full profile`}
+          title="Full profile"
+          style={{
           padding: '10px 14px', borderRadius: 'var(--r-full)',
           background: 'var(--cream2)', border: '1.5px solid var(--sand)',
           color: 'var(--ink3)', fontSize: 13, cursor: 'pointer',
           fontFamily: 'DM Sans, sans-serif',
-        }}>···</button>
+          display: 'flex', alignItems: 'center',
+        }}><User size={16} aria-hidden="true"/></button>
         <Btn variant="matcha" onClick={e => { e.stopPropagation(); onLike(true); }} style={{ flex: 1, padding: '10px', fontSize: 13 }}>Like <Sparkle size={13} fill="currentColor"/></Btn>
       </div>
     </div>
@@ -295,6 +317,33 @@ export default function BrowsePage() {
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
 
+  // Out-of-range values would be a 422 that replaces the stack with an error: flag them while
+  // typing and keep Apply disabled instead. "Applied" makes an unchanged draft visibly a no-op.
+  const draftErrors = filterErrors(draft);
+  const draftValid = Object.keys(draftErrors).length === 0;
+  const draftChanged = !sameFilters(draft, filters);
+  const activeFilters = countActive(filters);
+
+  function applyFilters() {
+    if (!draftValid || !draftChanged) return;
+    setFilters(draft);
+    setShowFilters(false); // the open panel pushed the card stack out of view
+  }
+
+  function toggleFilters() {
+    // Closing without Apply drops the unapplied edits, so reopening shows what is in effect.
+    if (showFilters) setDraft(filters);
+    setShowFilters(v => !v);
+  }
+
+  function toggleDraftTag(name) {
+    setDraft(d => {
+      if (d.tags.includes(name)) return { ...d, tags: d.tags.filter(x => x !== name) };
+      if (d.tags.length >= MAX_TAG_FILTERS) return d; // server limit; the panel says so
+      return { ...d, tags: [...d.tags, name] };
+    });
+  }
+
   const loadPage = useCallback(async (offset, replace) => {
     const request = ++requestRef.current;
     setLoading(true);
@@ -390,9 +439,15 @@ export default function BrowsePage() {
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8, alignItems: 'center', minWidth: 0 }}>
           <div style={{ fontSize: 12, color: 'var(--ink4)' }}>Sort:</div>
           {SORTS.map(([key, label]) => (
-            <Chip key={key} label={label} active={sortBy === key} onClick={() => setSortBy(key)}/>
+            <Chip key={key} label={label} active={sortBy === key} aria-pressed={sortBy === key} onClick={() => setSortBy(key)}/>
           ))}
-          <Chip label={showFilters ? 'hide filters' : 'filters'} active={showFilters} onClick={() => setShowFilters(v => !v)}/>
+          <Chip
+            label={showFilters ? 'hide filters' : activeFilters ? `filters · ${activeFilters}` : 'filters'}
+            active={showFilters || activeFilters > 0}
+            onClick={toggleFilters}
+            aria-expanded={showFilters}
+            aria-controls="browse-filters"
+          />
         </div>
         <button onClick={() => navigate('/matches')} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}>
           <Bell size={22} strokeWidth={1.75} color="var(--ink3)"/>
@@ -410,12 +465,20 @@ export default function BrowsePage() {
       </div>
 
       {showFilters && (
-        <div style={{ padding: '12px 24px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', flexShrink: 0 }}>
-          <FormInput label="Min age" type="number" value={draft.minAge} onChange={e => setDraft(d => ({ ...d, minAge: e.target.value }))} style={{ width: 90 }}/>
-          <FormInput label="Max age" type="number" value={draft.maxAge} onChange={e => setDraft(d => ({ ...d, maxAge: e.target.value }))} style={{ width: 90 }}/>
-          <FormInput label="Within km" type="number" value={draft.maxDistance} onChange={e => setDraft(d => ({ ...d, maxDistance: e.target.value }))} style={{ width: 100 }}/>
-          <FormInput label="Min fame" type="number" value={draft.minFame} onChange={e => setDraft(d => ({ ...d, minFame: e.target.value }))} style={{ width: 90 }}/>
-          <FormInput label="Max fame" type="number" value={draft.maxFame} onChange={e => setDraft(d => ({ ...d, maxFame: e.target.value }))} style={{ width: 90 }}/>
+        <div id="browse-filters" style={{ padding: '12px 24px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', flexShrink: 0 }}>
+          {FILTER_FIELDS.map(([key, label, width, bounds]) => (
+            <FormInput
+              key={key}
+              label={label}
+              type="number"
+              value={draft[key]}
+              onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))}
+              error={draftErrors[key]}
+              inputMode="decimal"
+              {...bounds}
+              style={{ width }}
+            />
+          ))}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, flexBasis: '100%' }}>
             {tagsError && (
               <div style={{ fontSize: 12, color: 'var(--ink3)' }}>Interest tags couldn't be loaded — reload the page to filter by tags.</div>
@@ -425,11 +488,17 @@ export default function BrowsePage() {
                 key={t.id}
                 label={`#${t.name}`}
                 active={draft.tags.includes(t.name)}
-                onClick={() => setDraft(d => ({ ...d, tags: d.tags.includes(t.name) ? d.tags.filter(x => x !== t.name) : [...d.tags, t.name] }))}
+                aria-pressed={draft.tags.includes(t.name)}
+                onClick={() => toggleDraftTag(t.name)}
               />
             ))}
+            <div aria-live="polite" style={{ flexBasis: '100%', fontSize: 12, color: 'var(--danger-fg)' }}>
+              {draftErrors.tags || (draft.tags.length >= MAX_TAG_FILTERS ? `Up to ${MAX_TAG_FILTERS} interests` : '')}
+            </div>
           </div>
-          <Btn onClick={() => setFilters(draft)}>Apply</Btn>
+          <Btn onClick={applyFilters} disabled={!draftValid || !draftChanged}>
+            {draftChanged || !draftValid ? 'Apply' : 'Applied'}
+          </Btn>
           <Btn variant="ghost" onClick={() => { setDraft(NO_FILTERS); setFilters(NO_FILTERS); }}>Reset</Btn>
         </div>
       )}
@@ -490,11 +559,12 @@ export default function BrowsePage() {
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
                 onLike={handleAction}
-                onPreview={p => setPreviewProfile(p)}
+                onOpenProfile={p => navigate(`/profile/${p.user_id}`)}
               />
 
               <div style={{ fontSize: 11, color: 'var(--ink4)', marginTop: 10, fontStyle: 'italic', textAlign: 'center' }}>
-                {sorted.length} {sorted.length === 1 ? 'person' : 'people'} nearby · drag or tap ···
+                {sorted.length}{hasMore ? '+' : ''}
+                {' in your stack'}{activeFilters ? ' · filtered' : ''} · drag the card or use the buttons
               </div>
 
               {/* Coming up strip */}
