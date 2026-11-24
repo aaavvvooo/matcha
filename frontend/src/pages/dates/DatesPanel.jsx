@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useNotifications } from '../../context/NotificationContext'
 import { getDates, acceptDate, declineDate, cancelDate } from '../../api/datesApi'
 import { formatDateTime } from '../../utils/dateTime'
+import { isInactive, isPast, refreshesDates, statusLabel } from '../../utils/dateStatus'
 import { apiError } from '../../api/errors'
 import { displayName } from '../../utils/displayName'
 import Avatar from '../../components/ui/Avatar'
@@ -16,25 +17,13 @@ const RELOAD_DEBOUNCE_MS = 300
 const ACTIONS = { accept: acceptDate, decline: declineDate, cancel: cancelDate }
 const BUSY_TEXT = { accept: 'Accepting…', decline: 'Declining…', cancel: 'Cancelling…' }
 
-// Frames that can change the list: every date_* event, and an unlike (which cancels dates).
-const refreshesDates = (frame) =>
-  frame?.type === 'notification' &&
-  (frame.event === 'unlike' || (typeof frame.event === 'string' && frame.event.startsWith('date_')))
-
-function statusLabel(date, mine, past) {
-  if (date.status === 'pending') {
-    if (past) return 'Expired'
-    return mine ? 'Waiting for a reply' : 'Needs your reply'
-  }
-  return { accepted: 'Confirmed', declined: 'Declined', cancelled: 'Cancelled' }[date.status] || date.status
-}
 
 function DateCard({ date, myId, busyAction, error, onAction }) {
   const mine = date.proposer_id === myId
-  const past = new Date(date.scheduled_at).getTime() < Date.now()
+  const past = isPast(date)
   const other = date.with_user
   const name = displayName(other, 'Unknown')
-  const dim = date.status === 'declined' || date.status === 'cancelled' || (past && date.status === 'pending')
+  const dim = isInactive(date, past)
   const busy = !!busyAction
 
   const buttons = []
