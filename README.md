@@ -16,7 +16,8 @@ Prerequisites: Docker with the Compose plugin.
    docker compose up --build
    ```
    On start the backend applies migrations and seeds the tag list plus **500+ profiles**
-   (`scripts/seed_profiles.py --target 500`, `scripts/seed_armenia_profiles.py --count 50`).
+   (`scripts/seed_profiles.py --target 500`, `scripts/seed_armenia_profiles.py --count 50`) and 300 parody profiles of
+   fictional characters (`scripts/seed_characters.py`).
 3. Open:
 
    | Service | URL |
@@ -25,7 +26,7 @@ Prerequisites: Docker with the Compose plugin.
    | API + OpenAPI docs | http://localhost:8000/docs |
    | MinIO console | http://localhost:9001 |
 
-Seeded accounts use emails ending in `@matcha-seed.example.org` or `@matcha-seed-am.example.org` (reserved, unregistrable domains; older `.dev` seeds are moved on the next start) and the password defined as `DEFAULT_PASSWORD` in
+Seeded accounts use emails ending in `@matcha-seed.example.org`, `@matcha-seed-am.example.org` or `@matcha-seed-characters.example.org` (reserved, unregistrable domains; older `.dev` seeds are moved on the next start) and the password defined as `DEFAULT_PASSWORD` in
 `backend/scripts/seed_common.py`. **Never run the seed scripts against a public deployment:** every seeded account
 shares that published password.
 

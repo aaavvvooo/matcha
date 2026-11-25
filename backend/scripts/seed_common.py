@@ -5,6 +5,7 @@ import urllib.request
 
 from application.repository.user_repo import UserRepository
 from application.repository.profile_repo import ProfileRepository
+from application.repository.social_repo import SocialRepository
 from application.clients.storage import upload_photo
 
 GENDER_MAP = {"male": "Man", "female": "Woman"}
@@ -25,6 +26,8 @@ DEFAULT_PASSWORD = "Seed1234!"
 # bought them could take seed accounts over via forgot-password or OAuth linking.
 SEED_DOMAIN = "matcha-seed.example.org"
 SEED_DOMAIN_AM = "matcha-seed-am.example.org"
+SEED_DOMAIN_CHARACTERS = "matcha-seed-characters.example.org"
+SEED_DOMAINS = (SEED_DOMAIN, SEED_DOMAIN_AM, SEED_DOMAIN_CHARACTERS)
 LEGACY_SEED_DOMAINS = {"matcha-seed.dev": SEED_DOMAIN, "matcha-seed-am.dev": SEED_DOMAIN_AM}
 
 
@@ -110,3 +113,45 @@ async def create_seed_user(
                 "UPDATE users SET is_validated = true WHERE id = $1", user_id
             )
     return user_id
+
+
+async def back_fame_with_views(db) -> None:
+    """Give every seed profile the visits its fame rating stands for.
+
+    Seeds start with a random rating. Without activity behind it, the first real visit
+    recalculates it (DESIGN.md section 9) and drops it to about 1, so the profile and its rank on
+    Discover change as soon as someone opens it. Idempotent: skips profiles that already have
+    visits from other seed accounts, which also repairs databases seeded before this existed.
+    """
+    rows = await db.fetch_all(
+        """
+        WITH seeds AS (
+            SELECT id FROM users WHERE split_part(email, '@', 2) = ANY($1::text[])
+        ),
+        targets AS (
+            SELECT up.user_id,
+                   CASE WHEN up.fame_rating > 1 THEN round(up.fame_rating)::int
+                        ELSE 1 + floor(random() * 60)::int END AS visits
+            FROM user_profiles up
+            JOIN seeds s ON s.id = up.user_id
+            WHERE NOT EXISTS (
+                SELECT 1 FROM profile_views pv JOIN seeds v ON v.id = pv.viewer_id
+                WHERE pv.viewed_id = up.user_id)
+        )
+        INSERT INTO profile_views (viewer_id, viewed_id, viewed_at)
+        SELECT v.id, t.user_id, now() - random() * interval '30 days'
+        FROM targets t
+        CROSS JOIN LATERAL (
+            SELECT s.id FROM seeds s WHERE s.id <> t.user_id ORDER BY random() LIMIT t.visits
+        ) v
+        ON CONFLICT DO NOTHING
+        RETURNING viewed_id
+        """,
+        list(SEED_DOMAINS),
+    )
+    social_repo = SocialRepository(db)
+    visited = {row["viewed_id"] for row in rows}
+    for user_id in visited:
+        await social_repo.recalculate_fame(user_id)
+    if visited:
+        print(f"Backed the fame rating of {len(visited)} seed profiles with {len(rows)} visits.")
