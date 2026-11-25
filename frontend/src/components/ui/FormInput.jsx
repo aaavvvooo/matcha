@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import PasswordInput from './PasswordInput';
 
 /** Labelled input. `error` (string) marks it invalid and replaces the hint with the message.
  * Other props (autoComplete, min, max, step, inputMode, aria-label, name…) go to the <input>. */
@@ -7,12 +8,13 @@ function FormInput({ label, type = 'text', value, onChange, onBlur, placeholder,
   const id = useId();
   const noteId = `${id}-note`;
   const note = error || hint;
+  const Input = type === 'password' ? PasswordInput : 'input';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, ...style }}>
       {label && (
         <label htmlFor={id} style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)' }}>{label}</label>
       )}
-      <input
+      <Input
         {...inputProps}
         id={id}
         type={type}

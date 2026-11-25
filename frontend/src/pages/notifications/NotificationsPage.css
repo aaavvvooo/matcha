@@ -5,18 +5,15 @@
 }
 
 .notif-inner {
-  max-width: 640px;
+  max-width: 792px;
   margin: 0 auto;
   padding: 28px 16px 48px;
 }
 
-.notif-title {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--ink);
-  margin: 0 0 20px;
+@media (max-width: 859px) {
+  .notif-inner {
+    padding: 16px 16px 24px;
+  }
 }
 
 .notif-empty {

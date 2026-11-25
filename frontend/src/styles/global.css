@@ -13,10 +13,10 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 22px;
+  padding: 13px 28px;
   border: none;
-  border-radius: var(--r-sm);
-  font-size: 14px;
+  border-radius: var(--r-full);
+  font-size: 15px;
   font-weight: 500;
   cursor: pointer;
   transition: var(--transition-base);
@@ -63,18 +63,16 @@
 .form-group label {
   font-size: 13px;
   font-weight: 500;
-  color: var(--ink3);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  color: var(--ink2);
 }
 
 .form-group input {
-  background: var(--cream2);
-  border: 1px solid var(--cream3);
+  background: var(--white);
+  border: 1.5px solid var(--sand);
   border-radius: var(--r-sm);
   color: var(--ink);
-  font-size: 14px;
-  padding: 10px 14px;
+  font-size: 15px;
+  padding: 13px 16px;
   outline: none;
   transition: var(--transition-base);
   width: 100%;
@@ -112,7 +110,7 @@
 /* ─── Auth pages ──────────────────────────────────────── */
 
 .auth-page {
-  min-height: calc(100vh - 60px);
+  min-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -136,17 +134,21 @@
 }
 
 .auth-logo {
-  font-size: 22px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 24px;
   font-weight: 700;
   color: var(--spice);
-  letter-spacing: -0.5px;
   margin-bottom: 20px;
+  text-transform: capitalize;
   display: block;
 }
 
 .auth-title {
-  font-size: 22px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 28px;
+  font-weight: 700;
   color: var(--ink);
   margin-bottom: 4px;
 }
@@ -178,7 +180,7 @@
 /* ─── Status cards (verify email, etc.) ──────────────── */
 
 .status-card {
-  min-height: calc(100vh - 60px);
+  min-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -200,8 +202,10 @@
 }
 
 .status-card__title {
-  font-size: 20px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 26px;
+  font-weight: 700;
   color: var(--ink);
 }
 

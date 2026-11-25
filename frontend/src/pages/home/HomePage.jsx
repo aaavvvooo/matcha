@@ -5,6 +5,7 @@ import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
 import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
+import './HomePage.css';
 
 const PREVIEW_CARDS = [
   { name: 'Aiko',  age: 24, tag: '#neuroscience', bio: 'Research neuroscience. Read sci-fi.', fame: 95, dx: -30, dy: -20, rot: -6, z: 1 },
@@ -35,117 +36,92 @@ function HomePage() {
   if (user) return <Navigate to="/browse" replace />;
 
   return (
-    <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+    <div className="screen landing" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
 
       {/* Navbar */}
-      <header style={{
-        padding: '18px 40px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        background: 'var(--white)',
-        borderBottom: '1.5px solid var(--cream3)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 10,
-        flexShrink: 0,
-      }}>
-        <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 26, fontWeight: 700, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <header className="landing-header">
+        <div className="landing-brand">
           <MatchaCup size={32} mood="happy" animate={false}/>
           Matcha
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <Btn variant="ghost" onClick={() => navigate('/login')} style={{ fontSize: 14 }}>Sign in</Btn>
-          <Btn onClick={() => navigate('/register')} style={{ fontSize: 14, padding: '10px 24px' }}>Get started</Btn>
+        <div className="landing-header-actions">
+          <Btn variant="ghost" onClick={() => navigate('/login')} style={{ fontSize: 'var(--landing-nav-font)', padding: 'var(--landing-nav-link-pad)' }}>Sign in</Btn>
+          <Btn onClick={() => navigate('/register')} style={{ fontSize: 'var(--landing-nav-font)', padding: 'var(--landing-nav-cta-pad)' }}>Get started</Btn>
         </div>
       </header>
 
       {/* display: contents keeps the existing flex layout while giving the page a real <main> landmark */}
       <main style={{ display: 'contents' }}>
       {/* Hero */}
-      <div style={{
-        padding: '80px 40px 60px',
-        display: 'flex',
-        gap: 60,
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--cream)',
-        position: 'relative',
-        overflow: 'hidden',
-        flexShrink: 0,
-      }}>
-        <div style={{ position: 'absolute', top: -80, right: -80, width: 360, height: 360, borderRadius: '50%', background: 'var(--spice)', opacity: .06, pointerEvents: 'none' }}/>
-        <div style={{ position: 'absolute', bottom: -60, left: -60, width: 280, height: 280, borderRadius: '50%', background: 'var(--matcha)', opacity: .06, pointerEvents: 'none' }}/>
+      <div className="landing-hero">
+        <div className="landing-hero-blob landing-hero-blob--spice"/>
+        <div className="landing-hero-blob landing-hero-blob--matcha"/>
 
-        {/* Left: text */}
-        <div className="anim-up" style={{ flex: 1, maxWidth: 480 }}>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 14px', borderRadius: 'var(--r-full)',
-            background: 'var(--cream2)', border: '1.5px solid var(--sand)',
-            fontSize: 12, color: 'var(--ink3)', marginBottom: 20, fontStyle: 'italic',
-          }}>
-            Because love, too, can be industrialized. <Sparkle size={12} fill="var(--ink3)"/>
-          </div>
-
-          <div style={{
-            fontFamily: 'Playfair Display, serif', fontStyle: 'italic',
-            fontSize: 56, fontWeight: 700, lineHeight: 1.1, color: 'var(--ink)',
-            letterSpacing: '-0.02em', marginBottom: 20,
-          }}>
-            Find people<br/>worth your<br/><span style={{ color: 'var(--spice)' }}>time.</span>
-          </div>
-
-          <div style={{ fontSize: 17, color: 'var(--ink3)', lineHeight: 1.7, marginBottom: 36, maxWidth: 400 }}>
-            No endless swiping. No gamification. Matcha connects you with people based on proximity, shared interests, and genuine compatibility.
-          </div>
-
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-            <Btn onClick={() => navigate('/register')} style={{ fontSize: 16, padding: '15px 36px' }}>Create free account</Btn>
-            <Btn variant="secondary" onClick={() => navigate('/login')} style={{ fontSize: 16, padding: '15px 28px' }}>Sign in →</Btn>
-          </div>
-
-          <div style={{ display: 'flex', gap: 32, marginTop: 40 }}>
-            {STATS.map(([n, l]) => (
-              <div key={l}>
-                <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 28, fontWeight: 700, color: 'var(--ink)' }}>{n}</div>
-                <div style={{ fontSize: 12, color: 'var(--ink4)', marginTop: 2 }}>{l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right: floating cards */}
-        <div className="anim-up" style={{ animationDelay: '.1s', position: 'relative', width: 320, height: 400, flexShrink: 0 }}>
-          {PREVIEW_CARDS.map(c => (
-            <div key={c.name} style={{
-              position: 'absolute',
-              left: '50%',
-              top: '50%',
-              transform: `translateX(calc(-50% + ${c.dx}px)) translateY(calc(-50% + ${c.dy}px)) rotate(${c.rot}deg)`,
-              zIndex: c.z,
-              background: 'var(--white)',
-              borderRadius: 20,
-              boxShadow: 'var(--shadow-lg)',
-              padding: '16px',
-              width: 200,
-              border: '1.5px solid var(--cream3)',
-            }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
-                <Avatar name={c.name} size={40}/>
-                <div>
-                  <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 16, fontWeight: 600, color: 'var(--ink)' }}>{c.name}, {c.age}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink4)' }}>{c.tag}</div>
-                </div>
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--ink3)', lineHeight: 1.5, marginBottom: 10 }}>{c.bio}</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <FameMeter score={c.fame}/>
-                <div style={{ padding: '5px 12px', borderRadius: 'var(--r-full)', background: 'var(--spice)', color: '#fff', fontSize: 11, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  Like <Sparkle size={11} fill="#fff"/>
-                </div>
-              </div>
+        <div className="landing-hero-inner">
+          {/* Text */}
+          <div className="landing-hero-text anim-up">
+            <div className="landing-hero-tagline">
+              Because love, too, can be industrialized. <Sparkle size={12} fill="var(--ink3)"/>
             </div>
-          ))}
+
+            <div className="landing-hero-title">
+              Find people<br/>worth your<br/><span style={{ color: 'var(--spice)' }}>time.</span>
+            </div>
+
+            <div className="landing-hero-lead">
+              No endless swiping. No gamification. Matcha connects you with people based on proximity, shared interests, and genuine compatibility.
+            </div>
+
+            <div className="landing-hero-cta">
+              <Btn onClick={() => navigate('/register')} style={{ fontSize: 16, padding: '15px 36px' }}>Create free account</Btn>
+              <Btn variant="secondary" onClick={() => navigate('/login')} style={{ fontSize: 16, padding: '15px 28px' }}>Sign in →</Btn>
+            </div>
+
+            <div className="landing-hero-stats">
+              {STATS.map(([n, l]) => (
+                <div key={l}>
+                  <div className="landing-hero-stat-value">{n}</div>
+                  <div className="landing-hero-stat-label">{l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Floating cards */}
+          <div className="landing-cards anim-up" style={{ animationDelay: '.1s' }}>
+            <div className="landing-cards-stage">
+              {PREVIEW_CARDS.map(c => (
+                <div key={c.name} style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  transform: `translateX(calc(-50% + ${c.dx}px)) translateY(calc(-50% + ${c.dy}px)) rotate(${c.rot}deg)`,
+                  zIndex: c.z,
+                  background: 'var(--white)',
+                  borderRadius: 20,
+                  boxShadow: 'var(--shadow-lg)',
+                  padding: '16px',
+                  width: 200,
+                  border: '1.5px solid var(--cream3)',
+                }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+                    <Avatar name={c.name} size={40}/>
+                    <div>
+                      <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 16, fontWeight: 600, color: 'var(--ink)' }}>{c.name}, {c.age}</div>
+                      <div style={{ fontSize: 11, color: 'var(--ink4)' }}>{c.tag}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--ink3)', lineHeight: 1.5, marginBottom: 10 }}>{c.bio}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <FameMeter score={c.fame}/>
+                    <div style={{ padding: '5px 12px', borderRadius: 'var(--r-full)', background: 'var(--spice)', color: '#fff', fontSize: 11, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      Like <Sparkle size={11} fill="#fff"/>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -185,12 +161,12 @@ function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer style={{ padding: '24px 40px', background: 'var(--white)', borderTop: '1.5px solid var(--cream3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-        <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 18, fontWeight: 700, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <footer className="landing-footer">
+        <div className="landing-brand">
           <MatchaCup size={24} mood="happy" animate={false}/>
           Matcha
         </div>
-        <div style={{ fontSize: 12, color: 'var(--ink4)' }}>© 2026 · Because love, too, can be industrialized.</div>
+        <div className="landing-footer-note">© 2026 · Because love, too, can be industrialized.</div>
       </footer>
     </div>
   );

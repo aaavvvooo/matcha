@@ -30,6 +30,7 @@ from application.repository.profile_repo import ProfileRepository  # noqa: E402
 from application.utils.password import get_password_hash  # noqa: E402
 from application.clients.storage import ensure_bucket  # noqa: E402
 from scripts.seed_common import (  # noqa: E402
+    back_fame_with_views,
     ORIENTATIONS,
     DEFAULT_PASSWORD,
     random_bio,
@@ -184,6 +185,7 @@ async def seed(count: int):
             randomuser_gender, gender_label, count,
         )
 
+    await back_fame_with_views(db)
     await db.disconnect()
     summary = ", ".join(f"{n} {g}" for g, n in created_by_gender.items())
     print(f"Done. Created {summary} in Armenia.")

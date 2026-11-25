@@ -1,5 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { HeaderProvider } from '../../context/HeaderContext';
 import BottomNav from './BottomNav';
 import Header from './Header';
 import Footer from './Footer';
@@ -23,10 +24,12 @@ function Layout({ children }) {
       <div className="app-shell-body">
         {showNav && <BottomNav />}
         <div className="app-shell-column">
-          {showChrome && <Header inApp={showNav} />}
-          <Content className="app-shell-content">
-            {children}
-          </Content>
+          <HeaderProvider>
+            {showChrome && <Header inApp={showNav} />}
+            <Content className="app-shell-content">
+              {children}
+            </Content>
+          </HeaderProvider>
         </div>
       </div>
       {/* Last in the shell: below the mobile tab bar, full width on desktop */}

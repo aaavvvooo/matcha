@@ -1,164 +1,476 @@
-.browse-page {
-  padding: 32px 0 64px;
-}
-
-.browse-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 28px;
-}
-
-.browse-header h1 {
-  font-size: 24px;
-  font-weight: 600;
-}
-
-.profiles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 20px;
-}
-
-/* ── Card ──────────────────────────────────── */
-
-.profile-card {
-  background: var(--white);
-  border: 1px solid var(--cream3);
-  border-radius: var(--r-md);
-  overflow: hidden;
-  transition: var(--transition-base);
-}
-
-.profile-card:hover {
-  border-color: var(--spice);
-  transform: translateY(-2px);
-}
-
-.card-photo-wrap {
-  display: block;
-  aspect-ratio: 3/4;
-  overflow: hidden;
-}
-
-.card-photo {
-  width: 100%;
+/* Discover layout. Below 860px (the app's desktop breakpoint) the card alone fills the screen,
+   with the filters behind a floating button. */
+.browse {
   height: 100%;
-  object-fit: cover;
-}
-
-.card-photo-placeholder {
-  width: 100%;
-  height: 100%;
-  background: var(--cream2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink3);
-  font-size: 13px;
-}
-
-.card-body {
-  padding: 14px;
   display: flex;
   flex-direction: column;
+  background: var(--cream);
+}
+
+.browse-sort {
+  display: flex;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  align-items: center;
   gap: 8px;
 }
 
-.card-name {
+.browse-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  background: var(--white);
+}
+
+.browse-filters-title {
+  flex-basis: 100%;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.browse-filter-controls {
+  flex-basis: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(216px, 100%), 1fr));
+  gap: 28px 32px;
+  margin-bottom: 8px;
+}
+
+.browse-filter-actions {
+  z-index: 1;
+  display: flex;
+  gap: 12px;
+}
+
+.browse-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.browse-stack {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--cream);
+}
+
+/* Horizontal drags are ours (like / pass); vertical ones belong to the browser (scrolling). */
+.browse-card {
+  touch-action: pan-y;
+}
+
+.browse-card-photo {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+}
+
+.browse-card-info {
+  padding: 14px 16px 10px;
+}
+
+.browse-card-name {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 20px;
   font-weight: 600;
-  font-size: 15px;
-}
-
-.card-name a {
   color: var(--ink);
-  text-decoration: none;
 }
 
-.card-name a:hover {
-  color: var(--spice);
-  opacity: 1;
-}
-
-.online-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--matcha);
-  flex-shrink: 0;
-}
-
-.card-location {
+.browse-card-meta {
+  margin-top: 1px;
   font-size: 12px;
   color: var(--ink3);
 }
 
-.card-tags {
+.browse-card-bio {
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink2);
+}
+
+.browse-card-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 5px;
 }
 
-.tag {
-  font-size: 11px;
-  padding: 2px 8px;
+.browse-card-tag {
+  padding: 3px 9px;
+  border: 1px solid var(--sand);
+  border-radius: var(--r-full);
   background: var(--cream2);
-  border-radius: 99px;
+  font-size: 10px;
   color: var(--ink3);
 }
 
-.card-footer {
+.browse-card-actions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 4px;
+  gap: 8px;
+  padding: 6px 14px 14px;
 }
 
-.fame-badge {
-  font-size: 11px;
-  color: var(--ink3);
+.browse-hint {
+  flex-shrink: 0;
 }
 
-.btn-like {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-  color: var(--ink3);
-  transition: var(--transition-base);
-  padding: 0;
-  line-height: 1;
+/* Desktop: one wide card, the photo on the left and the person on the right; the next people
+   underneath; the filters as a column of their own. */
+@media (min-width: 860px) {
+  .browse {
+    --card-width: clamp(1040px, 62vw, 1280px);
+    flex-direction: row;
+  }
+
+  .browse-filters {
+    order: 2;
+    flex: 0 0 344px;
+    align-content: flex-start;
+    padding: 24px;
+    overflow-y: auto;
+    border-left: 1.5px solid var(--cream3);
+  }
+
+  .browse-filter-actions {
+    position: sticky;
+    bottom: -24px;
+    flex: 0 0 calc(100% + 48px);
+    margin: auto -24px -24px;
+    padding: 12px 24px;
+    border-top: 1.5px solid var(--cream3);
+    background: var(--white);
+  }
+
+  .browse-stack {
+    padding: 28px;
+  }
+
+  .browse-card {
+    flex: 0 1 clamp(620px, 64vh, 760px);
+    min-height: 0;
+    max-width: var(--card-width);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .browse-card-photo {
+    grid-row: 1 / -1;
+  }
+
+  .browse-card-info {
+    min-height: 0;
+    padding: clamp(20px, 2.6vw, 40px) clamp(20px, 2.6vw, 40px) 12px;
+    overflow-y: auto;
+  }
+
+  .browse-card-name {
+    font-size: clamp(26px, 2.6vw, 38px);
+    font-weight: 700;
+    line-height: 1.15;
+  }
+
+  .browse-card-meta {
+    margin: 6px 0 16px;
+    font-size: 15px;
+  }
+
+  .browse-card-bio {
+    margin-bottom: 20px;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+
+  .browse-card-tags {
+    gap: 8px;
+  }
+
+  .browse-card-tag {
+    padding: 6px 13px;
+    font-size: 13px;
+    color: var(--ink2);
+  }
+
+  .browse-card-actions {
+    gap: 12px;
+    padding: 12px clamp(20px, 2.6vw, 40px) clamp(20px, 2.2vw, 32px);
+  }
+
+  .browse-card-actions > button {
+    min-height: 50px;
+    font-size: 16px !important;
+  }
+
+  .browse-next {
+    flex-shrink: 0;
+    width: 100%;
+    max-width: var(--card-width);
+    margin-top: 16px;
+  }
+
+  .browse-next-title {
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--ink3);
+  }
+
+  .browse-next-list {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .browse-next-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px;
+    border: 1.5px solid var(--cream3);
+    border-radius: var(--r-md);
+    background: var(--white);
+    text-align: left;
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .browse-next-item:hover {
+    border-color: var(--clay);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-2px);
+  }
+
+  .browse-next-item:focus-visible {
+    outline: 2px solid var(--spice);
+    outline-offset: 2px;
+  }
+
+  .browse-next-photo {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    background: var(--cream2) center / cover;
+  }
+
+  .browse-next-name {
+    min-width: 0;
+    display: -webkit-box;
+    overflow: hidden;
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--ink);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
 }
 
-.btn-like:hover,
-.btn-like.liked {
-  color: var(--spice);
+/* Not enough room for both: the open filters take the place of the card, as on phones. */
+@media (min-width: 860px) and (max-width: 1279px) {
+  .browse-filters {
+    flex: 1;
+    border-left: none;
+  }
+
+  .browse-filters ~ .browse-body {
+    display: none;
+  }
 }
 
-.btn-like:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+/* Fewer, readable neighbours when there is less room (small windows, filters open). */
+@media (min-width: 860px) and (max-width: 1279px) {
+  .browse-next-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .browse-next-item:nth-child(n + 4) {
+    display: none;
+  }
 }
 
-/* ── States ────────────────────────────────── */
+/* Short windows: the card matters more than what comes next. */
+@media (min-width: 860px) and (max-height: 720px) {
+  .browse-next,
+  .browse-hint {
+    display: none !important;
+  }
 
-.browse-spinner {
-  display: flex;
-  justify-content: center;
-  padding: 40px 0;
+  .browse-stack {
+    padding: 16px 28px;
+  }
 }
 
-.browse-more {
-  display: flex;
-  justify-content: center;
-  margin-top: 32px;
+@media (max-width: 859px) {
+  .browse {
+    position: relative;
+  }
+
+  .browse-filter-fab {
+    position: absolute;
+    top: 20px;
+    right: max(22px, calc(50% - 202px)); /* inside the card's corner, also when it is centred */
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 1.5px solid var(--sand);
+    border-radius: var(--r-full);
+    background: var(--white);
+    box-shadow: var(--shadow-md);
+    color: var(--ink2);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .browse-filter-fab:active {
+    transform: scale(.94);
+  }
+
+  .browse-filter-fab:focus-visible {
+    outline: 2px solid var(--spice);
+    outline-offset: 2px;
+  }
+
+  .browse-filter-fab--active {
+    border-color: var(--spice);
+    color: var(--spice);
+  }
+
+  .browse-filter-fab-count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 19px;
+    height: 19px;
+    padding: 0 5px;
+    border-radius: var(--r-full);
+    background: var(--spice);
+    color: var(--white);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 19px;
+    text-align: center;
+  }
+
+  /* Open, the panel takes the place of the card and scrolls on its own. */
+  .browse-filters {
+    flex: 1;
+    min-height: 0;
+    align-content: flex-start;
+    padding: 0 16px;
+    overflow-y: auto;
+  }
+
+  .browse-filters ~ .browse-body {
+    display: none;
+  }
+
+  /* Same corner as the floating button, which is the panel's close button. */
+  .browse-filters-title {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 24px 0 12px;
+    background: var(--white);
+    line-height: 36px;
+  }
+
+  .browse-filter-actions {
+    position: sticky;
+    bottom: 0;
+    flex-basis: 100%;
+    margin-top: auto;
+    padding: 10px 0;
+    background: var(--white);
+  }
+
+  .browse-stack {
+    padding: 10px 14px;
+  }
+
+  /* The card never outgrows the screen: the photo takes the space the text leaves, and only
+     the text scrolls when it is too long. Pass/Like stay at the bottom. */
+  .browse-card {
+    flex: 0 1 760px;
+    min-height: 0;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .browse-card-photo {
+    flex: 1 1 0;
+    min-height: 110px;
+    height: auto;
+  }
+
+  .browse-card-info {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .browse-card-actions {
+    flex-shrink: 0;
+  }
+
+  /* Takes the spare height, which keeps the card's corner under the filter button. */
+  .browse-hint {
+    margin-bottom: auto;
+  }
 }
 
-.browse-empty {
-  text-align: center;
-  color: var(--ink3);
-  margin-top: 60px;
+/* Short phones: the hint's line is better spent on the card. */
+@media (max-width: 859px) and (max-height: 680px) {
+  .browse-hint {
+    display: none;
+  }
+}
+
+/* Phones in landscape: photo on the left, text and buttons on the right. */
+@media (max-width: 859px) and (max-height: 500px) and (orientation: landscape) {
+  .browse-card {
+    flex: 1 1 auto;
+    max-width: 620px;
+    display: grid;
+    grid-template-columns: 42% 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .browse-card-photo {
+    grid-row: 1 / -1;
+    min-height: 0;
+  }
+
+  .browse-card-info {
+    padding-right: 66px; /* clear of the floating filter button */
+  }
+
+  .browse-filter-fab {
+    top: 18px;
+    right: max(22px, calc(50% - 302px));
+  }
+}
+
+/* As the panel's close button it sits on the panel's edge, wherever the card's corner is. */
+.browse-filter-fab--open {
+  right: 16px !important;
 }

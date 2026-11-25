@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { getViews } from '../../api/usersApi';
 import { useAuth } from '../../context/AuthContext';
+import { usePageHeader } from '../../context/HeaderContext';
 import Avatar from '../../components/ui/Avatar';
 import { displayName } from '../../utils/displayName';
 
@@ -15,6 +16,7 @@ function timeAgo(dateStr) {
 
 export default function ProfileViewersPage() {
   const navigate = useNavigate();
+  usePageHeader(useMemo(() => ({ title: 'Who viewed you', onBack: () => navigate(-1) }), [navigate]));
   const { user } = useAuth();
   const [viewers, setViewers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,12 +31,7 @@ export default function ProfileViewersPage() {
 
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', flexShrink: 0 }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink3)', lineHeight: 1 }}>←</button>
-        <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, fontWeight: 700, color: 'var(--ink)' }}>Who viewed your profile</div>
-      </div>
-
-      <div style={{ flex: 1, overflow: 'auto', padding: '16px 18px' }}>
+      <div className="page-scroll">
         {loading && (
           <div style={{ fontSize: 14, color: 'var(--ink4)', fontStyle: 'italic', textAlign: 'center', marginTop: 40 }}>Loading…</div>
         )}
@@ -47,10 +44,12 @@ export default function ProfileViewersPage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {viewers.map(v => (
-            <div
+            <Link
               key={v.id}
-              onClick={() => navigate(`/profile/${v.id}`)}
+              to={`/profile/${v.id}`}
+              className="list-card"
               style={{
+                color: 'inherit',
                 display: 'flex', alignItems: 'center', gap: 12,
                 background: 'var(--white)', border: '1.5px solid var(--cream3)',
                 borderRadius: 'var(--r-md)', padding: '10px 14px', cursor: 'pointer',
@@ -62,7 +61,7 @@ export default function ProfileViewersPage() {
                 <div style={{ fontSize: 12, color: 'var(--ink4)' }}>@{v.username}</div>
               </div>
               <div style={{ fontSize: 12, color: 'var(--ink4)', fontStyle: 'italic' }}>{timeAgo(v.viewed_at)}</div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>

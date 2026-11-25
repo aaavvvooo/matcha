@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import { LocateFixed, X } from 'lucide-react';
+import { usePageHeader } from '../../context/HeaderContext';
 import Avatar from '../../components/ui/Avatar';
 import Btn from '../../components/ui/Btn';
 import LocationPicker from '../../components/ui/LocationPicker';
@@ -101,7 +102,10 @@ function buildSelfIcon() {
   return L.divIcon({ html: root, className: 'map-pin-wrap', iconSize: [40, 40], iconAnchor: [20, 20] });
 }
 
+const PAGE_HEADER = { title: 'People near you', phoneTitle: false };
+
 export default function MapPage() {
+  usePageHeader(PAGE_HEADER);
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -285,7 +289,7 @@ export default function MapPage() {
 
   return (
     <div className="map-page">
-      <h1 className="map-sr-only">People near you</h1>
+      <h1 className="map-sr-only mobile-only">People near you</h1>
       <div ref={containerRef} className="map-canvas" aria-label="Map of people nearby" />
 
       {!ready && <div className="map-status">Loading map…</div>}

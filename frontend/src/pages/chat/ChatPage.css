@@ -1,224 +1,127 @@
-.chat-page {
-  height: calc(100vh - 56px);
-  display: flex;
-  flex-direction: column;
-}
-
-.chat-layout {
-  display: flex;
-  gap: 0;
-  flex: 1;
-  overflow: hidden;
-  padding: 0;
-  max-width: 100%;
-}
-
-.chat-loading {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* ── Sidebar ───────────────────────────────── */
-
-.chat-sidebar {
-  width: 280px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--cream3);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.chat-sidebar-title {
-  font-size: 15px;
-  font-weight: 600;
-  padding: 18px 16px 12px;
-  border-bottom: 1px solid var(--cream3);
-}
-
-.chat-empty-hint {
-  padding: 24px 16px;
-  font-size: 13px;
-  color: var(--ink3);
-  text-align: center;
-  line-height: 1.6;
-}
-
-.convo-list {
-  list-style: none;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.convo-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--cream3);
-  transition: var(--transition-base);
-}
-
-.convo-item:hover,
-.convo-item.active {
-  background: var(--cream2);
-}
-
-.convo-avatar {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
-  background: var(--cream2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  color: var(--ink3);
-  font-size: 16px;
-}
-
-.convo-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.convo-online {
-  position: absolute;
-  bottom: 1px;
-  right: 1px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--matcha);
-  border: 2px solid var(--cream);
-}
-
-.convo-info {
+/* Avatar + name: a link to the partner's profile. */
+.chat-partner-link {
   flex: 1;
   min-width: 0;
-}
-
-.convo-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.convo-last {
-  font-size: 12px;
-  color: var(--ink3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 2px;
-}
-
-/* ── Main area ─────────────────────────────── */
-
-.chat-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.chat-placeholder {
-  flex: 1;
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: var(--ink3);
-  font-size: 14px;
-}
-
-/* ── Thread ────────────────────────────────── */
-
-.chat-thread {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.thread-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.msg-row {
-  display: flex;
-}
-
-.msg-row.mine {
-  justify-content: flex-end;
-}
-
-.msg-bubble {
-  max-width: 65%;
-  padding: 10px 14px;
-  border-radius: var(--r-md);
-  font-size: 14px;
-  line-height: 1.5;
-  background: var(--white);
-  border: 1px solid var(--cream3);
-  color: var(--ink);
-  word-break: break-word;
-}
-
-.msg-row.mine .msg-bubble {
-  background: var(--spice);
-  border-color: var(--spice);
-  color: #fff;
-}
-
-.thread-input {
-  display: flex;
-  gap: 12px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--cream3);
-}
-
-.thread-input input {
-  flex: 1;
-  background: var(--cream2);
-  border: 1px solid var(--cream3);
+  gap: 8px;
   border-radius: var(--r-sm);
-  color: var(--ink);
-  font-size: 14px;
-  padding: 10px 14px;
-  outline: none;
-}
-
-.thread-input input:focus {
-  border-color: var(--spice);
-}
-
-@media (max-width: 640px) {
-  .chat-sidebar { width: 100%; border-right: none; }
-  .chat-main { display: none; }
-  .chat-layout { flex-direction: column; }
-}
-
-/* Header avatar + name: a link to the partner's profile. */
-.chat-partner-link {
-  border-radius: var(--r-sm);
+  color: inherit;
+  font-style: normal;
+  text-decoration: none;
 }
 
 .chat-partner-link:focus-visible {
   outline: 2px solid var(--spice);
   outline-offset: 2px;
+}
+
+.chat-partner-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-partner-name {
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-partner-status {
+  font-family: var(--font-body);
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ink4);
+}
+
+.chat-partner-status--online {
+  color: var(--matcha2);
+}
+
+.chat-composer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 16px;
+  background: var(--white);
+  border-top: 1.5px solid var(--cream3);
+}
+
+@media (max-width: 859px) {
+  .chat-composer {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .chat-partner-link {
+    min-height: 44px;
+  }
+}
+
+.chat-layout,
+.chat-list-pane,
+.chat-thread-pane {
+  height: 100%;
+}
+
+.chat-list-pane {
+  background: var(--cream);
+}
+
+@media (max-width: 859px) {
+  .chat-layout:not(.chat-layout--thread) .chat-thread-pane,
+  .chat-layout--thread .chat-list-pane {
+    display: none;
+  }
+}
+
+/* Desktop: every conversation beside the open one. */
+@media (min-width: 860px) {
+  .chat-layout {
+    display: grid;
+    grid-template-columns: clamp(248px, 30%, 344px) minmax(0, 1fr);
+  }
+
+  .chat-list-pane {
+    min-height: 0;
+    border-right: 1.5px solid var(--cream3);
+    background: var(--white);
+  }
+
+  .chat-thread-pane {
+    min-height: 0;
+  }
+
+  .chat-row--active {
+    border-color: var(--spice) !important;
+    background: var(--cream2) !important;
+  }
+
+  .chat-empty {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: var(--cream2);
+  }
+
+  .chat-empty-title {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--ink2);
+  }
 }

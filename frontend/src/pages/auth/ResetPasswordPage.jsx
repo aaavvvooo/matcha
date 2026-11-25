@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import PasswordInput from '../../components/ui/PasswordInput';
 import { resetPassword } from '../../api/authApi';
 import { confirmError, passwordError } from '../../utils/formValidation';
 import { useUrlToken } from '../../hooks/useUrlToken';
@@ -55,9 +56,8 @@ function ResetPasswordPage() {
         <form className="auth-form" onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="reset-password">New Password</label>
-            <input
+            <PasswordInput
               id="reset-password"
-              type="password"
               autoComplete="new-password"
               placeholder="••••••••"
               value={password}
@@ -72,9 +72,8 @@ function ResetPasswordPage() {
           </div>
           <div className="form-group">
             <label htmlFor="reset-confirm">Confirm Password</label>
-            <input
+            <PasswordInput
               id="reset-confirm"
-              type="password"
               autoComplete="new-password"
               placeholder="••••••••"
               value={confirm}

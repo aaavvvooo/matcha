@@ -1,9 +1,8 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Compass, Search, Map as MapIcon, Heart, MessageCircle, CircleUser, LogOut } from 'lucide-react';
+import { Compass, Search, Map as MapIcon, Heart, MessageCircle, CircleUser } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
-import { useLogout } from '../../hooks/useLogout';
 import MatchaCup from '../ui/MatchaCup';
 import './BottomNav.css';
 
@@ -13,7 +12,6 @@ function BottomNav() {
   const { unreadCount } = useNotifications();
   const { unreadMessages } = useChat();
   const { user } = useAuth();
-  const handleLogout = useLogout();
 
   const NAV_ITEMS = [
     { path: '/browse',                icon: Compass, label: 'Discover' },
@@ -100,6 +98,7 @@ function BottomNav() {
               key={item.path}
               onClick={() => navigate(item.path)}
               className={`side-nav-item${active ? ' active' : ''}`}
+              aria-current={active ? 'page' : undefined}
             >
               <Icon size={18} strokeWidth={active ? 2.25 : 1.75} fill={item.label === 'Matches' && active ? 'var(--spice)' : 'none'} className="icon"/>
               <span>{item.label}</span>
@@ -126,10 +125,7 @@ function BottomNav() {
           );
         })}
 
-        <button onClick={handleLogout} className="side-nav-item side-nav-signout">
-          <LogOut size={18} strokeWidth={1.75} className="icon"/>
-          <span>Sign out</span>
-        </button>
+        {user?.username && <div className="side-nav-user">@{user.username}</div>}
       </div>
     </>
   );

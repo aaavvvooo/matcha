@@ -1,14 +1,23 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Sparkle, CalendarPlus, Phone, Video } from 'lucide-react';
+import { Sparkle, CalendarPlus, Phone, Plus, Video } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import { useCall } from '../../context/CallContext';
+import { usePageHeader } from '../../context/HeaderContext';
+import ActionsMenu from '../../components/ui/ActionsMenu';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
 import Btn from '../../components/ui/Btn';
 import ProposeDateForm from '../../components/dates/ProposeDateForm';
 import ChatDates from '../../components/dates/ChatDates';
 import { displayName } from '../../utils/displayName';
+import './ChatPage.css';
+
+const LIST_HEADER = { title: 'Messages' };
+const CALLS = [
+  { media: 'audio', label: 'Audio call', icon: Phone },
+  { media: 'video', label: 'Video call', icon: Video },
+];
 
 const CONVERSATION_POLL_MS = 30000;
 const MAX_BODY = 2000; // keep in sync with MAX_BODY_LENGTH in backend chat_service.py
@@ -29,7 +38,7 @@ function formatTime(dateStr) {
   return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function ChatListView({ conversations, onSelect, state, onRetry }) {
+function ChatListView({ conversations, activeId, state, onRetry }) {
   if (state === 'loading' || state === 'idle') {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
@@ -38,11 +47,7 @@ function ChatListView({ conversations, onSelect, state, onRetry }) {
     );
   }
   return (
-    <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '16px 20px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', flexShrink: 0 }}>
-        <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, fontWeight: 700, color: 'var(--ink)' }}>Messages</div>
-        <div style={{ fontSize: 13, color: 'var(--ink4)', marginTop: 2 }}>Your connected matches</div>
-      </div>
+    <div className="screen" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
         {state === 'error' && conversations.length === 0 ? (
           <div role="alert" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, paddingTop: 48 }}>
@@ -62,7 +67,8 @@ function ChatListView({ conversations, onSelect, state, onRetry }) {
             const unread = c.unread_count || 0;
             const hasUnread = unread > 0;
             return (
-              <div key={c.user_id} onClick={() => onSelect(c.user_id)} style={{
+              <Link key={c.user_id} to={`/chat/${c.user_id}`} className={`list-card${c.user_id === activeId ? ' chat-row--active' : ''}`} aria-current={c.user_id === activeId ? 'page' : undefined} style={{
+                color: 'inherit',
                 padding: '14px 16px', marginBottom: 10,
                 background: 'var(--white)', borderRadius: 'var(--r-md)',
                 border: `1.5px solid ${hasUnread ? 'var(--sand)' : 'var(--cream3)'}`,
@@ -87,12 +93,29 @@ function ChatListView({ conversations, onSelect, state, onRetry }) {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>{unread > 99 ? '99+' : unread}</div>
                 )}
-              </div>
+              </Link>
             );
           })
         )}
       </div>
     </div>
+  );
+}
+
+// Avatar + name open the partner's profile (the server still applies blocks there).
+function PartnerLink({ id, name, photoUrl, online, notConnected }) {
+  return (
+    <Link to={`/profile/${id}`} aria-label={`View ${name}'s profile`} className="chat-partner-link">
+      <Avatar name={name} src={photoUrl} size={34} online={notConnected ? undefined : online}/>
+      <span className="chat-partner-text">
+        <span className="chat-partner-name">{name}</span>
+        {!notConnected && (
+          <span className={`chat-partner-status${online ? ' chat-partner-status--online' : ''}`}>
+            {online ? '● online' : 'offline'}
+          </span>
+        )}
+      </span>
+    </Link>
   );
 }
 
@@ -117,6 +140,50 @@ function ChatThreadView({
   const endRef = useRef(null);
   const stickToEndRef = useRef(true);
   const name = displayName(partner, 'Unknown');
+  const toggleProposing = useCallback(() => {
+    setProposing(p => !p);
+    setDateSent(false);
+  }, []);
+  usePageHeader(useMemo(() => ({
+    title: name,
+    onBack,
+    titleNode: (
+      <PartnerLink
+        id={partner.user_id}
+        name={name}
+        photoUrl={partner.photo_url}
+        online={partner.is_online}
+        notConnected={notConnected}
+      />
+    ),
+    tools: !notConnected && (
+      <>
+        {partner.is_online && CALLS.map(({ media, label, icon: Icon }) => (
+          <button
+            key={media}
+            type="button"
+            className="site-header-tool"
+            onClick={() => startCall(partner, media)}
+            disabled={inCall}
+            aria-label={`Start ${label.toLowerCase()}`}
+            title={inCall ? 'You are already in a call' : label}
+          >
+            <Icon size={18} strokeWidth={1.75} aria-hidden="true"/>
+          </button>
+        ))}
+        <button
+          type="button"
+          className="site-header-tool"
+          onClick={toggleProposing}
+          aria-label="Propose a date"
+          aria-expanded={proposing}
+          title="Propose a date"
+        >
+          <CalendarPlus size={18} strokeWidth={1.75} aria-hidden="true"/>
+        </button>
+      </>
+    ),
+  }), [name, onBack, partner, notConnected, startCall, inCall, proposing, toggleProposing]));
   const lastId = messages.length ? messages[messages.length - 1].id : null;
 
   // Scroll to the newest message when it changes, not when older ones are prepended.
@@ -145,67 +212,16 @@ function ChatThreadView({
 
   const canSend = !!input.trim() && !notConnected;
 
+  // Phones: the same actions as the header's on desktop, next to the message box.
+  const actions = [
+    ...(partner.is_online ? CALLS.map(({ media, label, icon }) => (
+      { label, icon, onSelect: () => startCall(partner, media), disabled: inCall }
+    )) : []),
+    { label: proposing ? 'Close date proposal' : 'Propose a date', icon: CalendarPlus, onSelect: toggleProposing },
+  ];
+
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream2)', display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{
-        padding: '12px 12px',
-        display: 'flex', gap: 8, alignItems: 'center',
-        background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)',
-        boxShadow: 'var(--shadow-sm)', flexShrink: 0,
-      }}>
-        <button onClick={onBack} aria-label="Back to conversations" style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink3)', lineHeight: 1, flexShrink: 0, padding: 0 }}>←</button>
-        {/* Avatar + name open the partner's profile (the server still applies blocks there). */}
-        <Link
-          to={`/profile/${partner.user_id}`}
-          aria-label={`View ${name}'s profile`}
-          className="chat-partner-link"
-          style={{ flex: 1, minWidth: 0, display: 'flex', gap: 8, alignItems: 'center', color: 'inherit', textDecoration: 'none' }}
-        >
-          <Avatar name={name} src={partner.photo_url} size={42} online={notConnected ? undefined : partner.is_online}/>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 17, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
-            {!notConnected && (
-              <div style={{ fontSize: 11, color: partner.is_online ? 'var(--matcha2)' : 'var(--ink4)' }}>
-                {partner.is_online ? '● online' : 'offline'}
-              </div>
-            )}
-          </div>
-        </Link>
-        {!notConnected && partner.is_online && ['audio', 'video'].map(media => (
-          <button
-            key={media}
-            onClick={() => startCall(partner, media)}
-            disabled={inCall}
-            aria-label={media === 'video' ? 'Start video call' : 'Start audio call'}
-            title={inCall ? 'You are already in a call' : (media === 'video' ? 'Video call' : 'Audio call')}
-            style={{
-              background: 'none', border: '1.5px solid var(--sand)',
-              borderRadius: 'var(--r-full)', width: 36, height: 36, flexShrink: 0,
-              cursor: inCall ? 'default' : 'pointer', opacity: inCall ? 0.5 : 1,
-              color: 'var(--matcha2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            {media === 'video' ? <Video size={18} strokeWidth={1.75} /> : <Phone size={18} strokeWidth={1.75} />}
-          </button>
-        ))}
-        {!notConnected && (
-          <button
-            onClick={() => { setProposing(p => !p); setDateSent(false); }}
-            aria-label="Propose a date"
-            aria-expanded={proposing}
-            title="Propose a date"
-            style={{
-              background: proposing ? 'var(--cream2)' : 'none', border: '1.5px solid var(--sand)',
-              borderRadius: 'var(--r-full)', width: 36, height: 36, flexShrink: 0, cursor: 'pointer',
-              color: 'var(--spice)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <CalendarPlus size={18} strokeWidth={1.75} />
-          </button>
-        )}
-      </div>
-
       {/* Dates with this person and their status (missed, confirmed, …); refetched after proposing. */}
       {/* Hidden once not connected (unlike/block): no stale dates with someone you can't reach. */}
       {!notConnected && <ChatDates partnerId={partner.user_id} myId={myId} reloadKey={datesVersion}/>}
@@ -307,7 +323,10 @@ function ChatThreadView({
       )}
 
       {/* Input bar */}
-      <div style={{ padding: '10px 16px 16px', background: 'var(--white)', borderTop: '1.5px solid var(--cream3)', display: 'flex', gap: 10, flexShrink: 0 }}>
+      <div className="chat-composer">
+        {!notConnected && (
+          <ActionsMenu className="mobile-only" label="Call or propose a date" icon={Plus} align="left" actions={actions}/>
+        )}
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
@@ -317,13 +336,13 @@ function ChatThreadView({
           maxLength={MAX_BODY}
           disabled={notConnected}
           style={{
-            flex: 1, padding: '12px 16px', borderRadius: 'var(--r-full)',
+            flex: 1, minWidth: 0, padding: '12px 16px', borderRadius: 'var(--r-full)',
             background: 'var(--cream)', border: '1.5px solid var(--sand)',
             color: 'var(--ink)', fontSize: 14,
           }}
         />
         <button onClick={handleSend} disabled={!canSend} aria-label="Send" style={{
-          width: 44, height: 44, borderRadius: '50%',
+          width: 44, height: 44, flexShrink: 0, borderRadius: '50%',
           background: canSend ? 'var(--spice)' : 'var(--sand)',
           border: 'none', color: canSend ? 'var(--white)' : 'var(--ink4)',
           fontSize: 18, cursor: canSend ? 'pointer' : 'default', transition: 'all .18s',
@@ -342,6 +361,8 @@ export default function ChatPage() {
     conversations, conversationsState, messages, hasMore, threadState, chatError, myId,
     setActiveUserId, loadConversations, refreshConversations, loadMessages, loadOlder, sendMessage, dismissChatError,
   } = useChat();
+
+  const backToList = useCallback(() => navigate('/chat'), [navigate]);
 
   const partnerId = routeUserId ? Number(routeUserId) : null;
   const validRoute = partnerId !== null && Number.isInteger(partnerId) && partnerId > 0;
@@ -392,52 +413,59 @@ export default function ChatPage() {
     if (!validRoute && routeUserId) navigate('/chat', { replace: true });
   }, [validRoute, routeUserId, navigate]);
 
-  if (!validRoute) {
-    return (
-      <ChatListView
-        conversations={conversations}
-        state={conversationsState}
-        onSelect={id => navigate(`/chat/${id}`)}
-        onRetry={loadConversations}
-      />
-    );
-  }
-
-  // Until the list is known we can't tell "not connected" from "not loaded yet": show the
-  // loading cup, or the list's error + retry if it failed. Never claim "not connected" on a failure.
-  if (!inList && !listReady) {
-    return (
-      <ChatListView
-        conversations={[]}
-        state={conversationsState === 'error' ? 'error' : 'loading'}
-        onSelect={id => navigate(`/chat/${id}`)}
-        onRetry={loadConversations}
-      />
-    );
-  }
-
   const state = inList ? threadState[partnerId] : 'forbidden';
   const notConnected =
     !inList ||
     state === 'forbidden' ||
     (chatError?.code === 'not_connected' && chatError.to === partnerId);
   const error = chatError && (chatError.to == null || chatError.to === partnerId) ? chatError : null;
+  const partner = useMemo(() => convo || { user_id: partnerId }, [convo, partnerId]);
+  // Until the list is known we can't tell "not connected" from "not loaded yet": show the
+  // loading cup, or the list's error + retry if it failed. Never claim "not connected" on a failure.
+  const threadReady = validRoute && (inList || listReady);
+  usePageHeader(threadReady ? undefined : LIST_HEADER);
 
+  // Phones show one pane at a time, desktop both.
   return (
-    <ChatThreadView
-      key={partnerId}
-      partner={convo || { user_id: partnerId }}
-      messages={messages[partnerId] || []}
-      myId={myId}
-      state={state}
-      hasMore={!!hasMore[partnerId]}
-      error={error}
-      notConnected={notConnected}
-      onSend={sendMessage}
-      onBack={() => navigate('/chat')}
-      onLoadOlder={() => loadOlder(partnerId)}
-      onRetry={() => loadMessages(partnerId)}
-      onDismissError={dismissChatError}
-    />
+    <div className={`chat-layout${validRoute ? ' chat-layout--thread' : ''}`}>
+      <div className="chat-list-pane">
+        <ChatListView
+          conversations={conversations}
+          activeId={partnerId}
+          state={conversationsState}
+          onRetry={loadConversations}
+        />
+      </div>
+      <div className="chat-thread-pane">
+        {threadReady ? (
+          <ChatThreadView
+            key={partnerId}
+            partner={partner}
+            messages={messages[partnerId] || []}
+            myId={myId}
+            state={state}
+            hasMore={!!hasMore[partnerId]}
+            error={error}
+            notConnected={notConnected}
+            onSend={sendMessage}
+            onBack={backToList}
+            onLoadOlder={() => loadOlder(partnerId)}
+            onRetry={() => loadMessages(partnerId)}
+            onDismissError={dismissChatError}
+          />
+        ) : validRoute ? (
+          <ChatListView
+            conversations={[]}
+            state={conversationsState === 'error' ? 'error' : 'loading'}
+            onRetry={loadConversations}
+          />
+        ) : (
+          <div className="chat-empty">
+            <MatchaCup size={96} mood="happy" animate={true}/>
+            <div className="chat-empty-title">Pick a conversation</div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

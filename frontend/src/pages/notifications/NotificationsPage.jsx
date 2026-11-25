@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../../context/NotificationContext'
+import { usePageHeader } from '../../context/HeaderContext'
 import Btn from '../../components/ui/Btn'
 import { notificationText, notificationLink } from '../../utils/notificationInfo'
 import './NotificationsPage.css'
@@ -17,6 +18,8 @@ function timeAgo(iso) {
 
 export default function NotificationsPage() {
   const { notifications, loadState, reload, clearUnread } = useNotifications()
+  const navigate = useNavigate()
+  usePageHeader(useMemo(() => ({ title: 'Notifications', onBack: () => navigate(-1) }), [navigate]))
 
   // Mark read once the list is in; on failure the unread dots simply stay.
   useEffect(() => {
@@ -26,8 +29,6 @@ export default function NotificationsPage() {
   return (
     <div className="notif-page">
       <div className="notif-inner">
-        <h1 className="notif-title">Notifications</h1>
-
         {loadState === 'error' && notifications.length === 0 ? (
           <div className="notif-empty" role="alert">
             <p>Couldn't load your notifications.</p>

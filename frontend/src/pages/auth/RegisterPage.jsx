@@ -5,6 +5,8 @@ import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
 import FormInput from '../../components/ui/FormInput';
 import OAuthButtons from '../../components/auth/OAuthButtons';
+import AuthAside from './AuthAside';
+import './AuthShell.css';
 import { USERNAME_HINT } from '../../utils/username';
 import {
   confirmError, emailError, nameError, passwordError, required, usernameError,
@@ -92,7 +94,9 @@ function RegisterPage() {
   const rs = STEPS[step];
 
   return (
-    <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
+    <div className="screen auth-shell">
+      <AuthAside/>
+      <div className="auth-shell-form">
       {/* Header */}
       <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <button
@@ -113,7 +117,7 @@ function RegisterPage() {
         <div style={{ width: 24 }}/>
       </div>
 
-      <div style={{ flex: 1, padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="auth-shell-fields" style={{ padding: '28px 24px', gap: 20 }}>
         <div>
           <div style={{ fontSize: 11, color: 'var(--ink4)', letterSpacing: '0.08em', marginBottom: 6 }}>
             {step + 1} OF {STEPS.length}
@@ -160,6 +164,7 @@ function RegisterPage() {
       <div style={{ padding: '12px 24px 32px', textAlign: 'center', fontSize: 13, color: 'var(--ink3)' }}>
         Already have an account?{' '}
         <span onClick={() => navigate('/login')} style={{ color: 'var(--spice)', cursor: 'pointer', fontWeight: 500 }}>Sign in</span>
+      </div>
       </div>
     </div>
   );

@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Ban, Sparkle, UserX, Flag } from 'lucide-react';
+import { Ban, Ellipsis, Sparkle, UserX, Flag } from 'lucide-react';
 import { getUser, likeUser, unlikeUser, blockUser, unblockUser, reportUser } from '../../api/usersApi';
 import { useAuth } from '../../context/AuthContext';
+import { usePageHeader } from '../../context/HeaderContext';
+import ActionsMenu from '../../components/ui/ActionsMenu';
 import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
 import Btn from '../../components/ui/Btn';
@@ -17,6 +19,12 @@ function timeAgo(dateStr) {
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
 }
+
+// The header turns solid once less than this much of the photo is left below it.
+const HEADER_SOLID_MARGIN = '-96px 0px 0px 0px';
+
+// Desktop shows the name right below the header, so the header names the page instead.
+const profileTitle = name => <><span className="mobile-only">{name}</span><span className="desktop-only">Profile</span></>;
 
 export default function ProfileViewPage() {
   const { id } = useParams();
@@ -58,6 +66,29 @@ export default function ProfileViewPage() {
   const photos = profile?.photos || [];
   const sortedPhotos = [...photos].sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0));
   const goToPhoto = (i) => setPhotoIdx((i + sortedPhotos.length) % sortedPhotos.length);
+
+  // Phones: the site header is this page's header, transparent while it lies over the photo.
+  const scrollerRef = useRef(null);
+  const heroRef = useRef(null);
+  const [pastPhoto, setPastPhoto] = useState(false);
+  const isShown = Boolean(profile) && !loading && !blocked && !blockedByThem;
+  const title = profile ? [displayName(profile, 'Unknown'), profile.age].filter(Boolean).join(', ') : '';
+
+  useEffect(() => {
+    setPastPhoto(false);
+    if (!isShown || !heroRef.current) return undefined;
+    const observer = new IntersectionObserver(
+      ([entry]) => setPastPhoto(!entry.isIntersecting),
+      { root: scrollerRef.current, rootMargin: HEADER_SOLID_MARGIN },
+    );
+    observer.observe(heroRef.current);
+    return () => observer.disconnect();
+  }, [isShown, id]);
+
+  usePageHeader(useMemo(() => {
+    if (!isShown) return null;
+    return { title, titleNode: profileTitle(title), overlay: true, solid: pastPhoto, onBack: isMe ? undefined : () => navigate(-1) };
+  }, [isShown, title, pastPhoto, isMe, navigate]));
 
   useEffect(() => {
     if (!previewOpen) return;
@@ -223,25 +254,11 @@ export default function ProfileViewPage() {
 
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Nav bar */}
-      <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', flexShrink: 0 }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink3)', lineHeight: 1 }}>←</button>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {isMe ? (
-            <Btn variant="secondary" onClick={() => navigate('/profile/settings')} style={{ fontSize: 12, padding: '6px 12px' }}>Settings</Btn>
-          ) : (
-            <>
-              <Btn variant="ghost" onClick={() => setConfirmReportOpen(true)} style={{ fontSize: 12, padding: '6px 12px' }}>Report</Btn>
-              <Btn variant="danger" onClick={() => setConfirmBlockOpen(true)} style={{ fontSize: 12, padding: '6px 12px' }}>Block</Btn>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div ref={scrollerRef} style={{ flex: 1, overflow: 'auto' }}>
         <div className="profile-view-body">
           {/* Hero photo carousel */}
-          <div className="profile-view-hero">
+          <div className="profile-view-media">
+          <div className="profile-view-hero" ref={heroRef}>
             {currentPhoto ? (
               <img
                 src={currentPhoto.url}
@@ -259,23 +276,15 @@ export default function ProfileViewPage() {
               <>
                 <button
                   onClick={() => goToPhoto(photoIdx - 1)}
-                  style={{
-                    position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-                    background: 'rgba(0,0,0,0.35)', border: 'none', color: '#fff',
-                    width: 32, height: 32, borderRadius: '50%', fontSize: 16,
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
+                  className="profile-view-arrow profile-view-arrow--left"
+                  aria-label="Previous photo"
                 >‹</button>
                 <button
                   onClick={() => goToPhoto(photoIdx + 1)}
-                  style={{
-                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                    background: 'rgba(0,0,0,0.35)', border: 'none', color: '#fff',
-                    width: 32, height: 32, borderRadius: '50%', fontSize: 16,
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
+                  className="profile-view-arrow profile-view-arrow--right"
+                  aria-label="Next photo"
                 >›</button>
-                <div style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 6 }}>
+                <div className="profile-view-dots">
                   {sortedPhotos.map((p, i) => (
                     <div key={p.id} onClick={() => goToPhoto(i)} style={{
                       width: 6, height: 6, borderRadius: '50%',
@@ -287,13 +296,25 @@ export default function ProfileViewPage() {
               </>
             )}
 
-            <div style={{
-              position: 'absolute', top: 12, right: 14,
+            <div className="profile-view-presence" style={{
               fontSize: 11, color: profile.is_online ? 'var(--matcha2)' : 'var(--ink4)',
               background: 'rgba(255,255,255,.85)', padding: '3px 9px', borderRadius: 20,
             }}>
               {profile.is_online ? '● online now' : profile.last_seen ? `last seen ${timeAgo(profile.last_seen)}` : 'offline'}
             </div>
+          </div>
+
+          {!isMe && (
+            <ActionsMenu
+              className="profile-view-more"
+              label="More actions"
+              icon={Ellipsis}
+              actions={[
+                { label: 'Report', icon: Flag, onSelect: () => setConfirmReportOpen(true) },
+                { label: 'Block', icon: Ban, onSelect: () => setConfirmBlockOpen(true), danger: true },
+              ]}
+            />
+          )}
           </div>
 
           <div className="profile-view-content">
