@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Sparkle } from 'lucide-react';
-import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
 import LocationPicker from '../../components/ui/LocationPicker';
 import { apiError } from '../../api/errors';
@@ -159,11 +158,8 @@ function ProfileSetupPage() {
   }
 
   return (
-    <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
+    <div className="screen setup-shell" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, fontWeight: 600, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <MatchaCup size={26} mood="happy" animate={false}/>Matcha
-        </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {STEPS.map((_, i) => (
             <div key={i} style={{

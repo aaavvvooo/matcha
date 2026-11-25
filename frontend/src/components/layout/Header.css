@@ -45,6 +45,17 @@
   background: var(--cream);
 }
 
+.site-header-icon.active {
+  color: var(--spice);
+}
+
+.site-header-icon:focus-visible,
+.site-header-logout:focus-visible,
+.site-header-back:focus-visible {
+  outline: 2px solid var(--spice);
+  outline-offset: -2px;
+}
+
 .site-header-badge {
   position: absolute;
   top: 2px;
@@ -59,15 +70,6 @@
   font-weight: 700;
   line-height: 16px;
   text-align: center;
-}
-
-.site-header-user {
-  font-size: 14px;
-  color: var(--ink3);
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .site-header-logout {
@@ -112,21 +114,102 @@
   .site-header {
     padding: 0 14px;
   }
+}
 
-  .site-header-user,
-  .site-header-logout span {
+/* Desktop: the side menu shows the brand, the header the page's title and tools. */
+@media (min-width: 860px) {
+  .site-header {
+    height: 64px;
+    padding: 0 28px;
+  }
+
+  .site-header--app .site-header-brand {
     display: none;
   }
 
-  .site-header-logout {
-    padding: 8px;
+  .site-header-lead {
+    flex: 1;
   }
-}
 
-/* On desktop the side menu already shows the brand. */
-@media (min-width: 860px) {
-  .site-header--app .site-header-brand {
-    visibility: hidden;
+  .site-header-back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    margin: 0 8px 0 -10px;
+    border: none;
+    border-radius: var(--r-full);
+    background: none;
+    color: var(--ink2);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .site-header-back:hover {
+    background: var(--cream2);
+  }
+
+  .site-header-title {
+    min-width: 0;
+    padding-left: 2px;
+    overflow: hidden;
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--ink);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .site-header-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    padding-right: 16px;
+    border-right: 1.5px solid var(--cream3);
+  }
+
+  .site-header-tool {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1.5px solid var(--sand);
+    border-radius: var(--r-full);
+    background: var(--white);
+    color: var(--ink2);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .site-header-tool:hover:not(:disabled),
+  .site-header-tool[aria-expanded="true"] {
+    border-color: var(--spice);
+    color: var(--spice);
+  }
+
+  .site-header-tool:active:not(:disabled) {
+    transform: scale(.94);
+  }
+
+  .site-header-tool:disabled {
+    opacity: .5;
+    cursor: default;
+  }
+
+  .site-header-tool:focus-visible {
+    outline: 2px solid var(--spice);
+    outline-offset: 2px;
+  }
+
+  .site-header-actions {
+    flex-shrink: 0;
   }
 }
 
@@ -165,5 +248,170 @@
 @media (max-height: 500px) and (orientation: landscape) {
   .site-header {
     height: 44px;
+  }
+}
+
+.site-header-lead {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* ── Phones: icon-only actions, and the page's title in place of the brand ── */
+@media (max-width: 859px) {
+  .site-header {
+    gap: 8px;
+    padding-right: 6px;
+  }
+
+  .site-header--back {
+    padding-left: 6px;
+  }
+
+  .site-header-lead {
+    flex: 1;
+  }
+
+  .site-header--app .site-header-actions {
+    flex-shrink: 0;
+    gap: 0;
+  }
+
+  .site-header-logout span {
+    display: none;
+  }
+
+  .site-header-icon,
+  .site-header-logout,
+  .site-header-back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    border-radius: var(--r-full);
+    background: transparent;
+    color: var(--ink2);
+    cursor: pointer;
+    transition: var(--transition-fast);
+  }
+
+  .site-header-icon:active,
+  .site-header-logout:active,
+  .site-header-back:active {
+    transform: scale(.94);
+  }
+
+  .site-header-badge {
+    top: 5px;
+    right: 3px;
+  }
+
+  .site-header-brand {
+    min-height: 44px;
+  }
+
+  .site-header-title {
+    min-width: 0;
+    padding-left: 4px; /* italic capitals overhang to the left */
+    overflow: hidden;
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1.5;
+    color: var(--ink);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Main screens keep the cup next to their title; inner ones have the back button instead. */
+  .site-header--titled:not(.site-header--overlay) .site-header-word,
+  .site-header--titled.site-header--back:not(.site-header--overlay) .site-header-brand {
+    display: none;
+  }
+
+  .site-header--titled:not(.site-header--back) .site-header-title {
+    margin-left: 6px;
+  }
+
+  /* Laid over a photo: no bar, only a shade that keeps the white controls readable. */
+  .site-header--overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    transition: background-color .2s ease;
+  }
+
+  .site-header--clear {
+    border-bottom-color: transparent;
+    background: linear-gradient(rgba(44, 32, 22, .62), rgba(44, 32, 22, 0)) border-box;
+  }
+
+  .site-header--clear .site-header-brand,
+  .site-header--clear .site-header-icon,
+  .site-header--clear .site-header-logout,
+  .site-header--clear .site-header-back {
+    color: var(--white);
+  }
+
+  .site-header--clear .site-header-actions {
+    gap: 4px;
+  }
+
+  .site-header--clear .site-header-icon,
+  .site-header--clear .site-header-logout,
+  .site-header--clear .site-header-back {
+    background: rgba(44, 32, 22, .34);
+  }
+
+  /* Brand and name share one cell; scrolling past the photo swaps one for the other. */
+  .site-header--overlay .site-header-lead {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 4px;
+  }
+
+  .site-header--overlay:not(.site-header--back) .site-header-lead {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-header--overlay .site-header-brand,
+  .site-header--overlay .site-header-title {
+    grid-row: 1;
+    grid-column: -2 / -1;
+    margin-left: 0;
+    transition: opacity .2s ease, transform .2s ease, visibility .2s;
+  }
+
+  .site-header--clear .site-header-title {
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  .site-header--overlay.site-header--titled .site-header-brand {
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@media (max-width: 360px) {
+  .site-header-title {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-header--overlay,
+  .site-header--overlay .site-header-brand,
+  .site-header--overlay .site-header-title {
+    transition: none;
   }
 }

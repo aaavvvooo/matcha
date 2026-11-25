@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserX } from 'lucide-react';
 import { getBlockedUsers, unblockUser } from '../../api/usersApi';
+import { usePageHeader } from '../../context/HeaderContext';
 import Avatar from '../../components/ui/Avatar';
 import Btn from '../../components/ui/Btn';
 import { displayName } from '../../utils/displayName';
 
 export default function BlockedUsersPage() {
   const navigate = useNavigate();
+  usePageHeader(useMemo(() => ({ title: 'Blocked users', onBack: () => navigate(-1) }), [navigate]));
   const [blocked, setBlocked] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirmTarget, setConfirmTarget] = useState(null);
@@ -31,12 +33,7 @@ export default function BlockedUsersPage() {
 
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', flexShrink: 0 }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink3)', lineHeight: 1 }}>←</button>
-        <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, fontWeight: 700, color: 'var(--ink)' }}>Blocked users</div>
-      </div>
-
-      <div style={{ flex: 1, overflow: 'auto', padding: '16px 18px' }}>
+      <div className="page-scroll">
         {loading && (
           <div style={{ fontSize: 14, color: 'var(--ink4)', fontStyle: 'italic', textAlign: 'center', marginTop: 40 }}>Loading…</div>
         )}

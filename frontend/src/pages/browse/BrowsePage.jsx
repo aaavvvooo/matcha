@@ -1,41 +1,44 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkle, Bell, User } from 'lucide-react';
+import { Sparkle, User, SlidersHorizontal, X } from 'lucide-react';
 import { browse, getAllTags } from '../../api/profilesApi';
 import { likeUser } from '../../api/usersApi';
 import { apiError } from '../../api/errors';
-import { useNotifications } from '../../context/NotificationContext';
+import { useAuth } from '../../context/AuthContext';
+import { usePageHeader } from '../../context/HeaderContext';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
 import Btn from '../../components/ui/Btn';
 import Chip from '../../components/ui/Chip';
 import { displayName } from '../../utils/displayName';
-import FormInput from '../../components/ui/FormInput';
-import { filterErrors, MAX_AGE, MAX_DISTANCE_KM, MAX_FAME, MAX_TAG_FILTERS, MIN_AGE } from '../../utils/formValidation';
+import AgeRange from '../../components/filters/AgeRange';
+import DistanceRadar from '../../components/filters/DistanceRadar';
+import FameRange from '../../components/filters/FameRange';
+import SortPicker from '../../components/filters/SortPicker';
+import { SORTS } from '../../components/filters/sorts';
+import { filterErrors, MAX_FAME, MAX_TAG_FILTERS, MIN_AGE } from '../../utils/formValidation';
+import { loadBrowseSession, saveBrowseSession } from './browseSession';
 import './BrowsePage.css';
 
 const PAGE_SIZE = 20;
-const SORTS = [['score', 'best match'], ['distance', 'distance'], ['age', 'age'], ['fame', 'fame'], ['tags', 'common tags']];
+const COMING_UP = 5;
+// Coming back, the first page is wider and starts before the first unseen profile: ranks move a
+// little (a visit raises fame), and the profile you left on must still be in it.
+const RESUME_SIZE = 50; // server maximum
+const RESUME_OVERLAP = 25;
 const NO_FILTERS = { minAge: '', maxAge: '', maxDistance: '', minFame: '', maxFame: '', tags: [] };
-// [key, label, width, input bounds]
-const FILTER_FIELDS = [
-  ['minAge', 'Min age', 90, { min: MIN_AGE, max: MAX_AGE, step: 1 }],
-  ['maxAge', 'Max age', 90, { min: MIN_AGE, max: MAX_AGE, step: 1 }],
-  ['maxDistance', 'Within km', 100, { min: 1, max: MAX_DISTANCE_KM, step: 'any' }],
-  ['minFame', 'Min fame', 90, { min: 0, max: MAX_FAME, step: 'any' }],
-  ['maxFame', 'Max fame', 90, { min: 0, max: MAX_FAME, step: 'any' }],
-];
+const RANGE_KEYS = ['minAge', 'maxAge', 'maxDistance', 'minFame', 'maxFame'];
 // Values that filter nothing on the server: not counted as active filters.
 const NO_OP_VALUES = { minAge: MIN_AGE, minFame: 0, maxFame: MAX_FAME };
 const sameFilters = (a, b) =>
-  FILTER_FIELDS.every(([k]) => String(a[k]).trim() === String(b[k]).trim()) &&
+  RANGE_KEYS.every(k => String(a[k]).trim() === String(b[k]).trim()) &&
   a.tags.length === b.tags.length && a.tags.every(t => b.tags.includes(t));
 const isActive = (k, v) => String(v).trim() !== '' && Number(v) !== NO_OP_VALUES[k];
-const countActive = f => FILTER_FIELDS.filter(([k]) => isActive(k, f[k])).length + (f.tags.length ? 1 : 0);
+const countActive = f => RANGE_KEYS.filter(k => isActive(k, f[k])).length + (f.tags.length ? 1 : 0);
 
 // Empty inputs are left out so the server applies no bound.
-function toParams(sortBy, f, offset) {
+function toParams(sortBy, f, offset, limit) {
   const num = v => (v === '' || v == null ? undefined : Number(v));
   return {
     sort_by: sortBy,
@@ -45,12 +48,12 @@ function toParams(sortBy, f, offset) {
     min_fame: num(f.minFame),
     max_fame: num(f.maxFame),
     tags: f.tags.length ? f.tags.join(',') : undefined,
-    limit: PAGE_SIZE,
+    limit,
     offset,
   };
 }
 
-function SortChips({ sortBy, onSort, className }) {
+function SortChips({ sortBy, onSort, className = '' }) {
   return (
     <div className={`browse-sort ${className}`} role="group" aria-label="Sort by">
       <div style={{ fontSize: 12, color: 'var(--ink4)' }}>Sort:</div>
@@ -61,7 +64,7 @@ function SortChips({ sortBy, onSort, className }) {
   );
 }
 
-function ProfileCard({ profile, onLike, onOpenProfile, isPreview, drag, isDragging, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }) {
+function ProfileCard({ profile, onLike, onOpenProfile, drag, isDragging, onPointerDown, onPointerMove, onPointerUp, onPointerCancel }) {
   const rotation = drag.x * 0.035;
   const opacity = Math.max(0.4, 1 - Math.abs(drag.x) / 260);
   const name = displayName(profile, 'Unknown');
@@ -82,10 +85,9 @@ function ProfileCard({ profile, onLike, onOpenProfile, isPreview, drag, isDraggi
         position: 'relative',
         zIndex: 1,
         width: '100%',
-        maxWidth: 360,
         background: 'var(--white)',
         borderRadius: 24,
-        border: isPreview ? '2px solid var(--spice)' : '1.5px solid var(--cream3)',
+        border: '1.5px solid var(--cream3)',
         boxShadow: 'var(--shadow-lg)',
         overflow: 'hidden',
         transform: `translateX(${drag.x}px) translateY(${drag.y}px) rotate(${rotation}deg)`,
@@ -140,28 +142,24 @@ function ProfileCard({ profile, onLike, onOpenProfile, isPreview, drag, isDraggi
       </div>
 
       {/* Info */}
-      <div style={{ padding: '14px 16px 10px' }}>
+      <div className="browse-card-info">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
           <div>
-            <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, fontWeight: 600, color: 'var(--ink)' }}>
+            <div className="browse-card-name">
               {name}{profile.age ? `, ${profile.age}` : ''}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--ink3)', marginTop: 1 }}>
+            <div className="browse-card-meta">
               {profile.distance_km ? `${profile.distance_km.toFixed(0)} km · ` : ''}{profile.location_label || ''}
             </div>
           </div>
           <FameMeter score={profile.fame_rating || 0}/>
         </div>
         {profile.bio && (
-          <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.5, marginBottom: 8 }}>{profile.bio}</div>
+          <div className="browse-card-bio">{profile.bio}</div>
         )}
         <div className="browse-card-tags">
           {tags.map(t => (
-            <span key={t} style={{
-              padding: '3px 9px', borderRadius: 'var(--r-full)',
-              background: 'var(--cream2)', border: '1px solid var(--sand)',
-              fontSize: 10, color: 'var(--ink3)',
-            }}>#{t}</span>
+            <span key={t} className="browse-card-tag">#{t}</span>
           ))}
         </div>
       </div>
@@ -182,90 +180,6 @@ function ProfileCard({ profile, onLike, onOpenProfile, isPreview, drag, isDraggi
           display: 'flex', alignItems: 'center',
         }}><User size={16} aria-hidden="true"/></button>
         <Btn variant="matcha" onClick={e => { e.stopPropagation(); onLike(true); }} style={{ flex: 1, padding: '10px', fontSize: 13 }}>Like <Sparkle size={13} fill="currentColor"/></Btn>
-      </div>
-    </div>
-  );
-}
-
-function RightPanel({ profile, onProfile, onLike, myTags = [] }) {
-  if (!profile) {
-    return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-        <div style={{ textAlign: 'center', opacity: .5 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>←</div>
-          <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 18, color: 'var(--ink3)' }}>Select a profile to preview</div>
-        </div>
-      </div>
-    );
-  }
-
-  const name = displayName(profile, 'Unknown');
-  const tags = profile.tags || [];
-  const shared = tags.filter(t => myTags.includes(t));
-  const firstPhoto = profile.photos?.[0]?.url;
-
-  return (
-    <div className="anim-scale" key={profile.user_id} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-      <div style={{
-        height: 220,
-        background: firstPhoto
-          ? `url(${firstPhoto}) center/cover`
-          : 'linear-gradient(160deg, var(--cream2), var(--cream3))',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        position: 'relative', flexShrink: 0,
-        borderBottom: '1.5px solid var(--cream3)',
-      }}>
-        {!firstPhoto && <Avatar name={name} size={100} online={profile.is_online}/>}
-        <div style={{
-          position: 'absolute', bottom: 12, right: 16,
-          fontSize: 11, color: profile.is_online ? 'var(--matcha2)' : 'var(--ink4)',
-          background: 'rgba(255,255,255,.85)', padding: '3px 10px', borderRadius: 20,
-        }}>
-          {profile.is_online ? '● online now' : 'offline'}
-        </div>
-      </div>
-
-      <div style={{ padding: '20px 24px 32px', flex: 1 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-          <div>
-            <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 30, fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>{name}</div>
-            <div style={{ fontSize: 14, color: 'var(--ink3)', marginTop: 4 }}>
-              {profile.age ? `${profile.age} · ` : ''}{profile.location_label || ''}{profile.distance_km ? ` · ${profile.distance_km.toFixed(0)} km` : ''}
-            </div>
-          </div>
-          <FameMeter score={profile.fame_rating || 0} size="lg"/>
-        </div>
-
-        {profile.bio && (
-          <div style={{ background: 'var(--white)', borderRadius: 'var(--r-md)', padding: '14px 16px', marginBottom: 14, border: '1.5px solid var(--cream3)' }}>
-            <div style={{ fontSize: 10, color: 'var(--ink4)', letterSpacing: '0.08em', marginBottom: 6 }}>ABOUT</div>
-            <div style={{ fontSize: 14, color: 'var(--ink)', lineHeight: 1.65 }}>{profile.bio}</div>
-          </div>
-        )}
-
-        {tags.length > 0 && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 10, color: 'var(--ink4)', letterSpacing: '0.08em', marginBottom: 10 }}>INTERESTS</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {tags.map(t => (
-                <span key={t} style={{ padding: '6px 13px', borderRadius: 'var(--r-full)', background: 'var(--white)', border: '1.5px solid var(--sand)', fontSize: 12, color: 'var(--ink2)' }}>#{t}</span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {shared.length > 0 && (
-          <div style={{ padding: '11px 14px', borderRadius: 'var(--r-md)', background: '#f0f7ee', border: '1.5px solid #c8dfc4', marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: 'var(--matcha2)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Sparkle size={12} fill="var(--matcha2)"/> {shared.length} shared interest{shared.length > 1 ? 's' : ''}: {shared.map(t => `#${t}`).join(', ')}
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 10, marginTop: 'auto' }}>
-          <Btn variant="secondary" onClick={() => onProfile(profile)} style={{ flex: 1 }}>Full profile</Btn>
-          <Btn variant="matcha" onClick={() => onLike(true)} style={{ flex: 1 }}>Like <Sparkle size={14} fill="currentColor"/></Btn>
-        </div>
       </div>
     </div>
   );
@@ -303,21 +217,27 @@ function MatchOverlay({ profile, onChat, onClose }) {
 }
 
 export default function BrowsePage() {
+  const { user } = useAuth();
+  const userId = user?.id;
+  const [resumed] = useState(() => loadBrowseSession(userId));
   const [queue, setQueue] = useState([]);
-  const [sortBy, setSortBy] = useState('score');
-  const [filters, setFilters] = useState(NO_FILTERS);
-  const [draft, setDraft] = useState(NO_FILTERS);
+  const [sortBy, setSortBy] = useState(resumed?.sortBy ?? 'score');
+  const [filters, setFilters] = useState(resumed?.filters ?? NO_FILTERS);
+  const [draft, setDraft] = useState(filters);
   const [showFilters, setShowFilters] = useState(false);
   const [allTags, setAllTags] = useState([]);
   const [tagsError, setTagsError] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [hasMore, setHasMore] = useState(false);
-  // Liked people drop out of the server's list, passed ones stay: the next page
-  // starts after the ones passed in this sort/filter session.
-  const passedRef = useRef(0);
+  // Liked people drop out of the server's list, passed ones stay: the next page starts after
+  // the ones passed in this sort/filter session. currentId is where a resumed session left off.
+  const progressRef = useRef({
+    sortBy, filters, passedIds: resumed?.passedIds ?? [], currentId: resumed?.currentId ?? null,
+  });
   // Only the latest request may update the stack (sort/filter can change mid-flight).
   const requestRef = useRef(0);
-  const [previewProfile, setPreviewProfile] = useState(null);
+  // `loading` as of now: effects run in the same flush as loadPage still see the old state.
+  const loadingRef = useRef(false);
   const [matchProfile, setMatchProfile] = useState(null);
   const [drag, setDrag] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -327,7 +247,6 @@ export default function BrowsePage() {
   // One like at a time: the card stays until the server answers, so it can be tapped again.
   const likingRef = useRef(false);
   const navigate = useNavigate();
-  const { unreadCount } = useNotifications();
 
   // Out-of-range values would be a 422 that replaces the stack with an error: flag them while
   // typing and keep Apply disabled instead. "Applied" makes an unchanged draft visibly a no-op.
@@ -342,13 +261,30 @@ export default function BrowsePage() {
     setShowFilters(false); // the open panel pushed the card stack out of view
   }
 
-  function toggleFilters() {
+  const toggleFilters = useCallback(() => {
     // Closing without Apply drops the unapplied edits, so reopening shows what is in effect.
     if (showFilters) setDraft(filters);
     setShowFilters(v => !v);
-  }
+  }, [showFilters, filters]);
 
-  // Phones only: the panel covers the card, so show the re-sorted stack unless edits are pending.
+  usePageHeader(useMemo(() => ({
+    title: 'Discover',
+    phoneTitle: false,
+    tools: (
+      <>
+        <SortChips className="wide-only" sortBy={sortBy} onSort={setSortBy}/>
+        <Chip
+          label={showFilters ? 'hide filters' : activeFilters ? `filters · ${activeFilters}` : 'filters'}
+          active={showFilters || activeFilters > 0}
+          onClick={toggleFilters}
+          aria-expanded={showFilters}
+          aria-controls={showFilters ? 'browse-filters' : undefined}
+        />
+      </>
+    ),
+  }), [sortBy, showFilters, activeFilters, toggleFilters]));
+
+  // The panel covers the card on phones, so show the re-sorted stack unless edits are pending.
   function sortFromPanel(key) {
     setSortBy(key);
     if (!draftChanged) setShowFilters(false);
@@ -362,28 +298,43 @@ export default function BrowsePage() {
     });
   }
 
-  const loadPage = useCallback(async (offset, replace) => {
+  const loadPage = useCallback(async (replace) => {
     const request = ++requestRef.current;
+    const { passedIds, currentId } = progressRef.current;
+    const resuming = replace && (passedIds.length > 0 || currentId !== null);
+    const limit = resuming ? RESUME_SIZE : PAGE_SIZE;
+    const offset = resuming ? Math.max(0, passedIds.length - RESUME_OVERLAP) : passedIds.length;
+    loadingRef.current = true;
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await browse(toParams(sortBy, filters, offset));
+      const data = await browse(toParams(sortBy, filters, offset, limit));
       if (request !== requestRef.current) return;
-      setQueue(q => (replace ? data : [...q, ...data]));
-      setHasMore(data.length === PAGE_SIZE);
+      const unseen = data.filter(p => !passedIds.includes(p.user_id));
+      const first = unseen.filter(p => p.user_id === currentId);
+      const ordered = [...first, ...unseen.filter(p => p.user_id !== currentId)];
+      setQueue(q => (replace ? ordered : [...q, ...ordered]));
+      // A full page with nobody new would otherwise be requested over and over.
+      setHasMore(data.length === limit && unseen.length > 0);
     } catch (err) {
       if (request !== requestRef.current) return;
       if (replace) setQueue([]);
       setLoadError(apiError(err, 'Could not load suggestions'));
     } finally {
-      if (request === requestRef.current) setLoading(false);
+      if (request === requestRef.current) {
+        loadingRef.current = false;
+        setLoading(false);
+      }
     }
   }, [sortBy, filters]);
 
   useEffect(() => {
-    passedRef.current = 0;
-    loadPage(0, true);
-  }, [loadPage]);
+    const progress = progressRef.current;
+    if (progress.sortBy !== sortBy || progress.filters !== filters) {
+      progressRef.current = { sortBy, filters, passedIds: [], currentId: null };
+    }
+    loadPage(true);
+  }, [loadPage, sortBy, filters]);
 
   useEffect(() => {
     getAllTags().then(setAllTags).catch(() => setTagsError(true));
@@ -391,12 +342,25 @@ export default function BrowsePage() {
 
   // Fetch the next page when the stack runs out.
   useEffect(() => {
-    if (!loading && !loadError && queue.length === 0 && hasMore) loadPage(passedRef.current, false);
+    if (!loading && !loadError && queue.length === 0 && hasMore) loadPage(false);
   }, [queue.length, hasMore, loading, loadError, loadPage]);
 
   const sorted = queue;
 
   const currentProfile = sorted[0];
+  const currentId = currentProfile?.user_id ?? null;
+
+  useEffect(() => {
+    if (loading || loadError) return; // an empty stack here is not where the user left off
+    const isLoading = loadingRef.current;
+    const everyoneSeen = currentId === null && !hasMore && !isLoading; // the next visit starts over
+    saveBrowseSession(userId, {
+      sortBy,
+      filters,
+      passedIds: everyoneSeen ? [] : progressRef.current.passedIds,
+      currentId: isLoading ? null : currentId, // the card on screen belongs to the previous order
+    });
+  }, [userId, sortBy, filters, currentId, hasMore, loading, loadError]);
 
   const handleAction = useCallback(async (yes) => {
     if (!currentProfile || likingRef.current) return;
@@ -420,10 +384,12 @@ export default function BrowsePage() {
         likingRef.current = false;
       }
     }
-    if (!yes) passedRef.current += 1;
+    if (!yes) {
+      const { passedIds, ...progress } = progressRef.current;
+      progressRef.current = { ...progress, passedIds: [...passedIds, currentProfile.user_id] };
+    }
     setQueue(q => q.filter(p => p.user_id !== currentProfile.user_id));
     setDrag({ x: 0, y: 0 });
-    setPreviewProfile(null);
   }, [currentProfile]);
 
   const onPointerDown = useCallback(e => {
@@ -457,53 +423,35 @@ export default function BrowsePage() {
 
   return (
     <div className="screen browse">
-      {/* Top bar. On phones the site header already shows the brand and the bell, and
-          sorting lives in the filter panel. */}
-      <div className="browse-bar">
-        <div className="browse-brand desktop-only">
-          <MatchaCup size={30} mood="happy" animate={false}/>Matcha
-        </div>
-        <div className="browse-controls">
-          <SortChips className="desktop-only" sortBy={sortBy} onSort={setSortBy}/>
-          <Chip
-            label={showFilters ? 'hide filters' : activeFilters ? `filters · ${activeFilters}` : 'filters'}
-            active={showFilters || activeFilters > 0}
-            onClick={toggleFilters}
-            aria-expanded={showFilters}
-            aria-controls="browse-filters"
-          />
-        </div>
-        <button className="browse-bell desktop-only" onClick={() => navigate('/matches')}>
-          <Bell size={22} strokeWidth={1.75} color="var(--ink3)"/>
-          {unreadCount > 0 && (
-            <div style={{
-              position: 'absolute', top: 0, right: 0,
-              width: 16, height: 16, borderRadius: '50%',
-              background: 'var(--rose)', color: '#fff',
-              fontSize: 9, fontWeight: 700,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: '2px solid var(--white)',
-            }}>{unreadCount}</div>
-          )}
-        </button>
-      </div>
+      <button
+        type="button"
+        className={`browse-filter-fab mobile-only${showFilters || activeFilters ? ' browse-filter-fab--active' : ''}${showFilters ? ' browse-filter-fab--open' : ''}`}
+        onClick={toggleFilters}
+        aria-label={`${showFilters ? 'Hide filters' : 'Show filters'}${activeFilters ? `, ${activeFilters} active` : ''}`}
+        aria-expanded={showFilters}
+        aria-controls={showFilters ? 'browse-filters' : undefined}
+      >
+        {showFilters ? <X size={20} aria-hidden="true"/> : <SlidersHorizontal size={19} aria-hidden="true"/>}
+        {activeFilters > 0 && !showFilters && <span className="browse-filter-fab-count">{activeFilters}</span>}
+      </button>
 
       {showFilters && (
         <div id="browse-filters" className="browse-filters">
-          <SortChips className="mobile-only" sortBy={sortBy} onSort={sortFromPanel}/>
-          {FILTER_FIELDS.map(([key, label, width, bounds]) => (
-            <FormInput
-              key={key}
-              label={label}
-              type="number"
-              value={draft[key]}
-              onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))}
-              error={draftErrors[key]}
-              inputMode="decimal"
-              {...bounds}
-              style={{ width }}
+          <div className="browse-filters-title">Filters</div>
+          <div className="browse-filter-controls">
+            <SortPicker className="narrow-only" value={sortBy} onChange={sortFromPanel}/>
+            <AgeRange
+              min={draft.minAge}
+              max={draft.maxAge}
+              onChange={({ min, max }) => setDraft(d => ({ ...d, minAge: min, maxAge: max }))}
             />
-          ))}
+            <FameRange
+              min={draft.minFame}
+              max={draft.maxFame}
+              onChange={({ min, max }) => setDraft(d => ({ ...d, minFame: min, maxFame: max }))}
+            />
+            <DistanceRadar value={draft.maxDistance} onChange={km => setDraft(d => ({ ...d, maxDistance: km }))}/>
+          </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, flexBasis: '100%' }}>
             {tagsError && (
               <div style={{ fontSize: 12, color: 'var(--ink3)' }}>Interest tags couldn't be loaded — reload the page to filter by tags.</div>
@@ -539,9 +487,7 @@ export default function BrowsePage() {
         />
       )}
 
-      {/* Two-column body */}
       <div className="browse-body">
-        {/* Left: card stack */}
         <div className="browse-stack">
           {loading ? (
             <div style={{ textAlign: 'center', padding: 40 }}>
@@ -550,25 +496,8 @@ export default function BrowsePage() {
             </div>
           ) : currentProfile ? (
             <>
-              {/* Ghost card behind */}
-              {sorted[1] && (
-                <div className="desktop-only" style={{
-                  position: 'absolute',
-                  width: 340,
-                  background: 'var(--white)',
-                  borderRadius: 24,
-                  height: 340,
-                  opacity: .45,
-                  transform: 'scale(.95) translateY(14px)',
-                  border: '1.5px solid var(--sand)',
-                  pointerEvents: 'none',
-                  zIndex: 0,
-                }}/>
-              )}
-
               <ProfileCard
                 profile={currentProfile}
-                isPreview={previewProfile?.user_id === currentProfile.user_id}
                 drag={drag}
                 isDragging={isDragging}
                 onPointerDown={onPointerDown}
@@ -579,32 +508,29 @@ export default function BrowsePage() {
                 onOpenProfile={p => navigate(`/profile/${p.user_id}`)}
               />
 
-              <div style={{ fontSize: 11, color: 'var(--ink4)', marginTop: 10, fontStyle: 'italic', textAlign: 'center' }}>
+              <div className="browse-hint" style={{ fontSize: 11, color: 'var(--ink4)', marginTop: 10, fontStyle: 'italic', textAlign: 'center' }}>
                 {sorted.length}{hasMore ? '+' : ''}
                 {' in your stack'}{activeFilters ? ' · filtered' : ''} · drag the card or use the buttons
               </div>
 
-              {/* Coming up strip */}
               {sorted.length > 1 && (
-                <div className="desktop-only" style={{ width: '100%', maxWidth: 360, marginTop: 14 }}>
-                  <div style={{ fontSize: 11, color: 'var(--ink4)', marginBottom: 8 }}>Coming up</div>
-                  <div style={{ display: 'flex', gap: 8, overflow: 'hidden' }}>
-                    {sorted.slice(1, 4).map(p => {
-                      const n = displayName(p, '?');
+                <div className="browse-next desktop-only">
+                  <div className="browse-next-title">Coming up</div>
+                  <div className="browse-next-list">
+                    {sorted.slice(1, 1 + COMING_UP).map(p => {
+                      const name = displayName(p, 'Unknown');
+                      const photo = p.photos?.[0]?.url;
                       return (
-                        <div key={p.user_id} onClick={() => setPreviewProfile(p)} style={{
-                          flex: '0 0 auto', padding: '8px 10px',
-                          background: 'var(--white)', borderRadius: 12,
-                          border: previewProfile?.user_id === p.user_id ? '1.5px solid var(--spice)' : '1.5px solid var(--cream3)',
-                          display: 'flex', gap: 8, alignItems: 'center',
-                          cursor: 'pointer', transition: 'border .15s',
-                        }}>
-                          <Avatar name={n} size={28} online={p.is_online}/>
-                          <div>
-                            <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 12, fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap' }}>{n}</div>
-                            {p.distance_km && <div style={{ fontSize: 10, color: 'var(--ink4)', whiteSpace: 'nowrap' }}>{p.distance_km.toFixed(0)} km</div>}
-                          </div>
-                        </div>
+                        <button
+                          key={p.user_id}
+                          type="button"
+                          className="browse-next-item"
+                          aria-label={`Open ${name}'s full profile`}
+                          onClick={() => navigate(`/profile/${p.user_id}`)}
+                        >
+                          <span className="browse-next-photo" style={photo ? { backgroundImage: `url(${photo})` } : undefined}/>
+                          <span className="browse-next-name">{name}{p.age ? `, ${p.age}` : ''}</span>
+                        </button>
                       );
                     })}
                   </div>
@@ -614,7 +540,7 @@ export default function BrowsePage() {
           ) : loadError ? (
             <div role="alert" style={{ textAlign: 'center', padding: 40, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
               <div style={{ fontSize: 14, color: 'var(--ink2)' }}>{loadError}</div>
-              <Btn variant="secondary" onClick={() => loadPage(passedRef.current, true)}>Try again</Btn>
+              <Btn variant="secondary" onClick={() => loadPage(true)}>Try again</Btn>
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: 40 }}>
@@ -625,14 +551,6 @@ export default function BrowsePage() {
           )}
         </div>
 
-        {/* Right: profile detail panel */}
-        <div className="browse-detail">
-          <RightPanel
-            profile={previewProfile || currentProfile}
-            onProfile={p => navigate(`/profile/${p.user_id}`)}
-            onLike={handleAction}
-          />
-        </div>
       </div>
 
       {likeError && (

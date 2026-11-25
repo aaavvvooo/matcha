@@ -26,7 +26,7 @@ function Btn({ children, variant = 'primary', onClick, style = {}, disabled = fa
       type={type}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      className={className}
+      className={`btn-ui${className ? ` ${className}` : ''}`}
       style={{ ...base, ...VARIANTS[variant], ...style }}
     >
       {children}

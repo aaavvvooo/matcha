@@ -1,0 +1,108 @@
+.auth-shell {
+  height: 100%;
+  background: var(--cream);
+}
+
+.auth-shell-form {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-shell-title {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.auth-shell-fields {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 860px) {
+  .auth-shell {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .auth-shell-aside {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 20px;
+    min-height: 0;
+    padding: 24px clamp(40px, 6vw, 112px);
+    overflow: hidden;
+    background: var(--cream2);
+    border-right: 1.5px solid var(--cream3);
+  }
+
+  .auth-shell-claim {
+    max-width: 9em;
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: clamp(40px, 4.4vw, 68px);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -.02em;
+    color: var(--ink);
+  }
+
+  .auth-shell-claim span {
+    color: var(--spice);
+  }
+
+  .auth-shell-lead {
+    max-width: 26em;
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--ink3);
+  }
+
+  /* Centred, but never cut off when the window is short. */
+  .auth-shell-form {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 32px 24px;
+  }
+
+  .auth-shell-form > * {
+    width: 100%;
+    max-width: 432px;
+    flex: none;
+    margin-inline: auto;
+  }
+
+  .auth-shell-form > :first-child {
+    margin-top: auto;
+  }
+
+  .auth-shell-form > :last-child {
+    margin-bottom: auto;
+  }
+
+  .auth-shell-fields {
+    overflow: visible;
+  }
+
+  .auth-shell-fields > .btn-ui {
+    margin-top: 8px !important;
+  }
+
+  .auth-shell-title {
+    margin-bottom: 12px;
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .auth-shell-cup {
+    display: none !important;
+  }
+}

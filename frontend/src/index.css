@@ -146,6 +146,55 @@ input:focus, textarea:focus {
 @media (max-width: 859px) {
   .desktop-only { display: none !important; }
 }
+/* Room for a page's secondary tools in the header. */
+@media (min-width: 1180px) {
+  .narrow-only { display: none !important; }
+}
+@media (max-width: 1179px) {
+  .wide-only { display: none !important; }
+}
+
+/* ── Page column: one scrolling area per screen, content centred with equal edges ── */
+.page-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+@media (min-width: 860px) {
+  .page-scroll {
+    padding: 28px max(28px, calc((100% - var(--page-width, 760px)) / 2)) 40px;
+  }
+}
+
+/* ── Pointer feedback ────────────────────────────────────────── */
+.btn-ui:hover:not(:disabled),
+.chip-ui:hover {
+  filter: brightness(.96);
+}
+.btn-ui:active:not(:disabled),
+.chip-ui:active {
+  transform: scale(.97);
+}
+.btn-ui:focus-visible,
+.chip-ui:focus-visible,
+.list-card:focus-visible {
+  outline: 2px solid var(--spice);
+  outline-offset: 2px;
+}
+.list-card {
+  transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+@media (hover: hover) {
+  .list-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--clay) !important;
+    box-shadow: var(--shadow-sm) !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-ui:active:not(:disabled), .chip-ui:active, .list-card:hover { transform: none; }
+}
 
 /* ── Photo gallery (B2) ──────────────────────────────────────── */
 .photo-dropzone:focus-visible,
@@ -157,3 +206,12 @@ input:focus, textarea:focus {
 .photo-tile[draggable="true"] { cursor: grab; }
 .photo-tile.dragging { opacity: 0.4; }
 .photo-tile.drop-target img, .photo-tile.drop-target .photo-thumb { outline: 2px dashed var(--spice); outline-offset: 2px; }
+
+/* Profile setup: one readable column on desktop. */
+@media (min-width: 860px) {
+  .setup-shell > * {
+    width: 100%;
+    max-width: 640px;
+    margin-inline: auto;
+  }
+}

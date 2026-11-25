@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { usePageHeader } from '../../context/HeaderContext';
 import { getMyProfile, updateProfile, getAllTags, deletePhotos, setProfilePic } from '../../api/profilesApi';
 import { updateMe } from '../../api/usersApi';
 import { apiError } from '../../api/errors';
@@ -15,8 +16,8 @@ import LocationPicker from '../../components/ui/LocationPicker';
 import { displayName } from '../../utils/displayName';
 import { USERNAME_HINT } from '../../utils/username';
 import { emailError, nameError, required, usernameError } from '../../utils/formValidation';
-import { useLogout } from '../../hooks/useLogout';
 import PhotoGallery from './PhotoGallery';
+import './ProfileEditPage.css';
 
 const GENDERS = ['Man', 'Woman', 'Non-binary', 'Other'];
 const ORIENTATIONS = ['Heterosexual', 'Homosexual', 'Bisexual', 'Other'];
@@ -40,8 +41,9 @@ function Section({ children, style, onClick }) {
 
 export default function ProfileEditPage() {
   const { user, refreshUser } = useAuth();
-  const handleLogout = useLogout();
   const navigate = useNavigate();
+  const profilePath = `/profile/${user?.id}`;
+  usePageHeader(useMemo(() => ({ title: 'Settings', onBack: () => navigate(profilePath) }), [navigate, profilePath]));
   const [profile, setProfile] = useState(null);
   const [availableTags, setAvailableTags] = useState([]);
   const [form, setForm] = useState({
@@ -187,22 +189,13 @@ export default function ProfileEditPage() {
 
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '16px 20px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button onClick={() => navigate(`/profile/${user.id}`)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--ink3)', lineHeight: 1 }}>←</button>
-          <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, fontWeight: 700, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <MatchaCup size={28} mood="happy" animate={false}/> Settings
-          </div>
-        </div>
-        <Btn variant="ghost" onClick={handleLogout} className="mobile-only" style={{ fontSize: 13, color: 'var(--ink4)' }}>Sign out</Btn>
-      </div>
-
       {loading ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <MatchaCup size={60} mood="happy" animate={true} style={{ animation: 'float 3s ease-in-out infinite' }}/>
         </div>
       ) : (
-        <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px 24px' }}>
+        <div className="page-scroll settings-scroll">
+          <div className="settings-side">
 
           <Section style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <Avatar name={name} src={profile?.photos?.find(p => p.is_main)?.url} size={64}/>
@@ -232,6 +225,9 @@ export default function ProfileEditPage() {
               onSaved={(result) => setProfile(p => ({ ...p, ...result }))}
             />
           </Section>
+          </div>
+
+          <div className="settings-main">
 
           <Section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <FormInput label="First name" value={form.first_name} onChange={e => setField('first_name', e.target.value)} error={fieldErrors.first_name}/>
@@ -319,6 +315,7 @@ export default function ProfileEditPage() {
           <Btn onClick={handleSave} style={{ width: '100%' }}>
             {saved ? <><Check size={16}/> Saved!</> : 'Save changes'}
           </Btn>
+          </div>
         </div>
       )}
 

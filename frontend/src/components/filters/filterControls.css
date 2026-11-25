@@ -1,0 +1,339 @@
+/* The age, fame and distance filters of Discover and Search. */
+.filter-control {
+  min-width: 0;
+}
+
+.filter-control-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.filter-control-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink2);
+}
+
+.filter-control-value {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--spice2);
+  text-align: right;
+}
+
+.filter-control-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink3);
+}
+
+/* ── Slider: 44px handles to grab, 26px to see ─────────────────── */
+.range-slider {
+  --grab: 44px;
+  --knob: 26px;
+  position: relative;
+  isolation: isolate; /* its stacked handles stay below sticky bars */
+  height: var(--grab);
+  margin-inline: calc((var(--knob) - var(--grab)) / 2); /* the visible knob ends on the column's edge */
+}
+
+.range-slider-track {
+  position: absolute;
+  top: calc(50% - 4px);
+  left: calc((var(--grab) - var(--knob)) / 2); /* ends on the column's edge, as the knob does */
+  right: calc((var(--grab) - var(--knob)) / 2);
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: var(--cream3);
+}
+
+.range-slider-track::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  left: calc(var(--knob) / 2 + var(--low) * (100% - var(--knob)));
+  right: calc(var(--knob) / 2 + (1 - var(--high)) * (100% - var(--knob)));
+  border-radius: inherit;
+  background: var(--spice);
+}
+
+/* One handle: filled from the very start of the track. */
+.range-slider--single .range-slider-track::after {
+  left: 0;
+}
+
+.range-slider input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: none;
+  pointer-events: none; /* only the handles take the pointer, so both stay reachable */
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.range-slider input:only-of-type {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.range-slider input:focus {
+  outline: none;
+}
+
+.range-slider-top {
+  z-index: 1;
+}
+
+.range-slider input::-webkit-slider-thumb {
+  width: var(--grab);
+  height: var(--grab);
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--white) 0 8px, var(--spice) 8.5px 12.5px, transparent 13px);
+  cursor: grab;
+  pointer-events: auto;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: transform .15s ease;
+}
+
+.range-slider input::-moz-range-thumb {
+  width: var(--grab);
+  height: var(--grab);
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--white) 0 8px, var(--spice) 8.5px 12.5px, transparent 13px);
+  cursor: grab;
+  pointer-events: auto;
+  transition: transform .15s ease;
+}
+
+.range-slider input::-moz-range-track {
+  background: none;
+}
+
+.range-slider input:hover::-webkit-slider-thumb,
+.range-slider input:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+.range-slider input:hover::-moz-range-thumb,
+.range-slider input:active::-moz-range-thumb {
+  transform: scale(1.12);
+}
+
+.range-slider input:focus-visible::-webkit-slider-thumb {
+  background: radial-gradient(circle, var(--white) 0 8px, var(--spice) 8.5px 12.5px, var(--white) 13px 14px, var(--spice2) 14.5px 16.5px, transparent 17px);
+}
+
+.range-slider input:focus-visible::-moz-range-thumb {
+  background: radial-gradient(circle, var(--white) 0 8px, var(--spice) 8.5px 12.5px, var(--white) 13px 14px, var(--spice2) 14.5px 16.5px, transparent 17px);
+}
+
+/* ── Age: decades ──────────────────────────────────────────────── */
+.sort-options,
+.decades,
+.fame-cups {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.sort-option,
+.decade,
+.fame-cup {
+  min-height: 44px;
+  padding: 0;
+  border: 1.5px solid var(--sand);
+  border-radius: var(--r-sm);
+  background: var(--white);
+  color: var(--ink2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.sort-option:hover,
+.decade:hover,
+.fame-cup:hover {
+  border-color: var(--spice);
+}
+
+.sort-option:active,
+.decade:active,
+.fame-cup:active {
+  transform: scale(.95);
+}
+
+.sort-option:focus-visible,
+.decade:focus-visible,
+.fame-cup:focus-visible {
+  outline: 2px solid var(--spice);
+  outline-offset: 2px;
+}
+
+/* ── Sort: one row, the same five columns as the filters ───────── */
+.sort-picker {
+  grid-column: 1 / -1; /* a row of its own above the filters */
+}
+
+.sort-options {
+  margin-top: 8px;
+}
+
+.sort-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 56px;
+}
+
+.sort-option[aria-pressed="true"] {
+  border-color: var(--spice);
+  background: var(--spice);
+  color: var(--white);
+}
+
+.sort-option span {
+  font-size: 11.5px;
+  line-height: 1.2;
+}
+
+.decade {
+  font-size: 12px;
+}
+
+.decade--in {
+  border-color: var(--clay);
+  background: var(--cream2);
+}
+
+.decade[aria-pressed="true"] {
+  border-color: var(--spice);
+  background: var(--spice);
+  color: var(--white);
+}
+
+/* ── Fame: cups that fill up ───────────────────────────────────── */
+.fame-cups {
+  margin-top: 8px;
+}
+
+.fame-cup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 0;
+}
+
+.fame-cup svg {
+  width: 36px;
+  height: 48px;
+}
+
+.fame-cup-glass {
+  fill: var(--cream);
+}
+
+.fame-cup-drink {
+  fill: var(--sand);
+  transition: fill .2s ease;
+}
+
+.fame-cup-line {
+  fill: none;
+  stroke: var(--ink4);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke .2s ease;
+}
+
+.fame-cup--in {
+  border-color: var(--matcha);
+  background: var(--white);
+}
+
+.fame-cup--in .fame-cup-drink {
+  fill: var(--matcha);
+}
+
+.fame-cup--in .fame-cup-line {
+  stroke: var(--matcha2);
+}
+
+.fame-cup[aria-pressed="true"] {
+  background: #f0f7ee;
+}
+
+/* ── Distance: how far around you ──────────────────────────────── */
+.radar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.radar svg {
+  flex-shrink: 0;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  background: var(--cream2);
+}
+
+.radar-reach {
+  fill: var(--spice);
+  opacity: .3;
+  transform-origin: 50px 50px;
+  transition: transform .25s cubic-bezier(.34, 1.4, .64, 1);
+}
+
+.radar-ring {
+  fill: none;
+  stroke: var(--clay);
+  stroke-width: .8;
+  stroke-dasharray: 2 2;
+}
+
+.radar-you {
+  fill: var(--spice2);
+  stroke: var(--white);
+  stroke-width: 1.5;
+}
+
+.radar-place {
+  font-size: 15px;
+  color: var(--ink2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-reach,
+  .fame-cup-drink,
+  .fame-cup-line,
+  .sort-option,
+  .decade,
+  .fame-cup,
+  .range-slider input::-webkit-slider-thumb {
+    transition: none;
+  }
+
+  .range-slider input::-moz-range-thumb {
+    transition: none;
+  }
+}

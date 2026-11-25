@@ -40,3 +40,10 @@
     display: none;
   }
 }
+
+/* Same edges as the header. */
+@media (min-width: 860px) {
+  .site-footer {
+    padding: 6px 28px;
+  }
+}

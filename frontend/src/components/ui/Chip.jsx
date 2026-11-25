@@ -3,6 +3,7 @@ function Chip({ label, active, onClick, ...buttonProps }) {
   return (
     <button
       type="button"
+      className="chip-ui"
       {...buttonProps}
       onClick={onClick}
       style={{

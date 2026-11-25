@@ -67,13 +67,22 @@
     flex-shrink: 0;
   }
 
-  .side-nav-signout {
-    margin-top: auto;
-    color: var(--ink4);
+  .side-nav-item:active {
+    transform: scale(.98);
   }
 
-  .side-nav-signout:hover {
-    background: var(--cream);
-    color: var(--rose);
+  .side-nav-item:focus-visible {
+    outline: 2px solid var(--spice);
+    outline-offset: -2px;
+  }
+
+  .side-nav-user {
+    margin-top: auto;
+    padding: 8px 14px;
+    overflow: hidden;
+    font-size: 13px;
+    color: var(--ink3);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }

@@ -19,6 +19,7 @@
   flex: 1;
   min-height: 0;
   min-width: 0;
+  position: relative; /* a page's own header is laid over it on phones */
   display: flex;
   flex-direction: column;
   order: 1;

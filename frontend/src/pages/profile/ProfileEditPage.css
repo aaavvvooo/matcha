@@ -1,0 +1,13 @@
+.settings-scroll {
+  --page-width: 1080px;
+}
+
+/* Desktop: who you are on the left, what you can edit on the right. */
+@media (min-width: 860px) {
+  .settings-scroll {
+    display: grid;
+    grid-template-columns: minmax(300px, 5fr) minmax(0, 7fr);
+    align-items: start;
+    gap: 20px;
+  }
+}

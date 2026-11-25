@@ -5,11 +5,15 @@ import {
   CalendarHeart, CalendarCheck, CalendarX, CalendarClock,
 } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext';
+import { usePageHeader } from '../../context/HeaderContext';
 import { useChat } from '../../context/ChatContext';
 import Avatar from '../../components/ui/Avatar';
 import { displayName } from '../../utils/displayName';
 import { notificationText, notificationLink } from '../../utils/notificationInfo';
 import DatesPanel from '../dates/DatesPanel';
+import './MatchesPage.css';
+
+const PAGE_HEADER = { title: 'Matches' };
 
 const NOTIF_ICONS = {
   like:    <Sparkle size={16} fill="currentColor"/>,
@@ -36,6 +40,7 @@ function timeAgo(dateStr) {
 }
 
 export default function MatchesPage() {
+  usePageHeader(PAGE_HEADER);
   // '/dates' shows the Dates tab; on '/matches' the tab is local state.
   const [localTab, setLocalTab] = useState('chats');
   const location = useLocation();
@@ -61,16 +66,14 @@ export default function MatchesPage() {
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ padding: '16px 20px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', flexShrink: 0 }}>
-        <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>Matches</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div className="matches-bar">
+        <div className="matches-tabs">
           {[
             ['chats', 'Chats', () => selectLocalTab('chats')],
             ['dates', 'Dates', () => navigate('/dates')],
             ['notifs', `Notifications${unread ? ` (${unread})` : ''}`, handleNotifTab],
           ].map(([id, label, handler]) => (
-            <button key={id} onClick={handler} style={{
-              padding: '7px 16px',
+            <button key={id} className="matches-tab chip-ui" aria-pressed={tab === id} onClick={handler} style={{
               borderRadius: 'var(--r-full)',
               background: tab === id ? 'var(--spice)' : 'transparent',
               border: `1.5px solid ${tab === id ? 'var(--spice)' : 'var(--sand)'}`,
@@ -82,7 +85,7 @@ export default function MatchesPage() {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+      <div className="page-scroll">
 
         {/* Chats tab */}
         {tab === 'chats' && (
@@ -98,7 +101,8 @@ export default function MatchesPage() {
                 const name = displayName(c, 'Unknown');
                 const hasUnread = (c.unread_count || 0) > 0;
                 return (
-                  <div key={c.user_id} onClick={() => navigate(`/chat/${c.user_id}`)} style={{
+                  <Link key={c.user_id} to={`/chat/${c.user_id}`} className="list-card" style={{
+                    color: 'inherit',
                     padding: '14px 16px',
                     background: 'var(--white)',
                     borderRadius: 'var(--r-md)',
@@ -106,7 +110,6 @@ export default function MatchesPage() {
                     display: 'flex', gap: 14, alignItems: 'center',
                     cursor: 'pointer',
                     boxShadow: hasUnread ? 'var(--shadow-sm)' : 'none',
-                    transition: 'transform .15s',
                   }}>
                     <Avatar name={name} src={c.photo_url} size={52} online={c.is_online}/>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -119,7 +122,7 @@ export default function MatchesPage() {
                       </div>
                     </div>
                     {hasUnread && <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--spice)', flexShrink: 0 }}/>}
-                  </div>
+                  </Link>
                 );
               })
             )}
@@ -146,7 +149,7 @@ export default function MatchesPage() {
                 // A real link (keyboard focusable, middle-click) when the notification leads somewhere.
                 const Row = link ? Link : 'div';
                 return (
-                  <Row key={n.id} {...(link ? { to: link } : {})} style={{
+                  <Row key={n.id} className={link ? 'list-card' : undefined} {...(link ? { to: link } : {})} style={{
                     textDecoration: 'none', color: 'inherit',
                     padding: '13px 16px',
                     background: n.is_read ? 'var(--white)' : 'var(--cream2)',

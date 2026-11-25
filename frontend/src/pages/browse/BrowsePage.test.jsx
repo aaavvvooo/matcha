@@ -1,5 +1,6 @@
 import { act, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import BrowsePage from './BrowsePage';
+import BrowsePageAlone from './BrowsePage';
+import { HeaderProvider, usePageHeaderConfig } from '../../context/HeaderContext';
 import { browse } from '../../api/profilesApi';
 import { likeUser } from '../../api/usersApi';
 
@@ -7,7 +8,12 @@ jest.mock('react-router-dom', () => ({ useNavigate: () => jest.fn() }), { virtua
 jest.mock('../../api/profilesApi', () => ({ browse: jest.fn(), getAllTags: jest.fn() }));
 jest.mock('../../api/usersApi', () => ({ likeUser: jest.fn() }));
 jest.mock('../../api/errors', () => ({ apiError: (_, fallback) => fallback }));
-jest.mock('../../context/NotificationContext', () => ({ useNotifications: () => ({ unreadCount: 0 }) }));
+let mockUserId = 1;
+jest.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { id: mockUserId } }) }));
+
+// The sort and filter chips are rendered by the site header.
+const HeaderTools = () => usePageHeaderConfig()?.tools ?? null;
+const BrowsePage = () => <HeaderProvider><HeaderTools /><BrowsePageAlone /></HeaderProvider>;
 
 const profile = (id, name) => ({ user_id: id, first_name: name, last_name: '', username: name, tags: [], photos: [] });
 
@@ -24,6 +30,7 @@ async function renderCard() {
 }
 
 beforeEach(() => {
+  mockUserId += 1; // Discover remembers its place per user: every test starts as someone new
   browse.mockReset().mockResolvedValue([profile(1, 'Ann'), profile(2, 'Bob'), profile(3, 'Cleo')]);
   require('../../api/profilesApi').getAllTags.mockReset().mockResolvedValue([]);
   likeUser.mockReset().mockResolvedValue({ is_match: false });
@@ -60,7 +67,7 @@ test('the filter panel offers sorting; picking one closes it when no filter edit
   fireEvent.click(screen.getByRole('button', { name: 'filters' }));
   const panel = document.getElementById('browse-filters');
 
-  fireEvent.click([...panel.querySelectorAll('button')].find(b => b.textContent === 'distance'));
+  fireEvent.click([...panel.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === 'distance'));
 
   await waitFor(() => expect(browse).toHaveBeenLastCalledWith(expect.objectContaining({ sort_by: 'distance' })));
   expect(document.getElementById('browse-filters')).toBeNull();
@@ -72,10 +79,10 @@ test('picking a sort keeps the panel open while a filter edit is pending', async
   fireEvent.change(screen.getByLabelText('Min age'), { target: { value: '30' } });
   const panel = document.getElementById('browse-filters');
 
-  fireEvent.click([...panel.querySelectorAll('button')].find(b => b.textContent === 'fame'));
+  fireEvent.click([...panel.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === 'fame'));
 
   await waitFor(() => expect(browse).toHaveBeenLastCalledWith(expect.objectContaining({ sort_by: 'fame' })));
-  expect(screen.getByLabelText('Min age')).toHaveValue(30);
+  expect(screen.getByLabelText('Min age')).toHaveValue('30');
 });
 
 test('tapping Like or Pass again while a like is being sent does nothing', async () => {
@@ -116,4 +123,117 @@ test('a swipe whose like fails puts the card back', async () => {
 
   expect(card).toHaveTextContent('Ann');
   expect(card.style.transform).toContain('translateX(0px)');
+});
+
+test('the phone filter button opens and closes the panel and reports active filters', async () => {
+  await renderCard();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Show filters' }));
+  expect(document.getElementById('browse-filters')).not.toBeNull();
+  expect(screen.getByRole('button', { name: 'Hide filters' })).toHaveAttribute('aria-expanded', 'true');
+
+  fireEvent.change(screen.getByLabelText('Min age'), { target: { value: '30' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Apply' })); });
+
+  expect(document.getElementById('browse-filters')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Show filters, 1 active' })).toHaveAttribute('aria-expanded', 'false');
+});
+
+describe('coming back to Discover', () => {
+  const button = (card, name) => [...card.querySelectorAll('button')].find(b => b.textContent.startsWith(name));
+
+  async function passAnnAndLeave() {
+    const { unmount } = render(<BrowsePage />);
+    const card = await screen.findByTestId('browse-card');
+    fireEvent.click(button(card, 'Pass'));
+    await waitFor(() => expect(screen.getByTestId('browse-card')).toHaveTextContent('Bob'));
+    unmount();
+  }
+
+  test('shows the profile you left on, even when its rank changed, and not the passed ones', async () => {
+    await passAnnAndLeave();
+    browse.mockResolvedValue([profile(3, 'Cleo'), profile(1, 'Ann'), profile(2, 'Bob')]);
+
+    render(<BrowsePage />);
+
+    expect(await screen.findByTestId('browse-card')).toHaveTextContent('Bob');
+    expect(screen.queryByText('Ann')).toBeNull();
+    expect(screen.getByText('Cleo')).toBeInTheDocument();
+  });
+
+  test('does not bring back someone the server no longer returns (liked, or a block)', async () => {
+    await passAnnAndLeave();
+    browse.mockResolvedValue([profile(1, 'Ann'), profile(3, 'Cleo')]);
+
+    render(<BrowsePage />);
+
+    expect(await screen.findByTestId('browse-card')).toHaveTextContent('Cleo');
+    expect(screen.queryByText('Bob')).toBeNull();
+  });
+
+  test('keeps the sort and filters', async () => {
+    const { unmount } = render(<BrowsePage />);
+    await screen.findByTestId('browse-card');
+    fireEvent.click(screen.getByRole('button', { name: 'fame' }));
+    await waitFor(() => expect(browse).toHaveBeenLastCalledWith(expect.objectContaining({ sort_by: 'fame' })));
+    await screen.findByTestId('browse-card');
+    unmount();
+    browse.mockClear();
+
+    render(<BrowsePage />);
+
+    await screen.findByTestId('browse-card');
+    expect(browse).toHaveBeenCalledWith(expect.objectContaining({ sort_by: 'fame' }));
+  });
+
+  test('leaving while a new sort loads does not pin the person from the old order', async () => {
+    const { unmount } = render(<BrowsePage />);
+    await screen.findByTestId('browse-card');
+    browse.mockReturnValue(new Promise(() => {}));
+    fireEvent.click(screen.getByRole('button', { name: 'fame' }));
+    unmount();
+    browse.mockResolvedValue([profile(3, 'Cleo'), profile(1, 'Ann')]);
+
+    render(<BrowsePage />);
+
+    expect(await screen.findByTestId('browse-card')).toHaveTextContent('Cleo');
+  });
+
+  test('leaving while the next page loads keeps everyone you passed', async () => {
+    const people = Array.from({ length: 20 }, (_, i) => profile(i + 1, `P${i + 1}`));
+    browse.mockResolvedValueOnce(people).mockReturnValue(new Promise(() => {}));
+    const { unmount } = render(<BrowsePage />);
+    for (let i = 0; i < 20; i += 1) {
+      const card = await screen.findByTestId('browse-card');
+      await act(async () => { fireEvent.click(button(card, 'Pass')); });
+    }
+    unmount();
+    browse.mockReset().mockResolvedValue([...people, profile(21, 'Newcomer')]);
+
+    render(<BrowsePage />);
+
+    expect(await screen.findByTestId('browse-card')).toHaveTextContent('Newcomer');
+  });
+
+  test('is forgotten when someone else signs in', async () => {
+    await passAnnAndLeave();
+    mockUserId += 1;
+
+    render(<BrowsePage />);
+
+    expect(await screen.findByTestId('browse-card')).toHaveTextContent('Ann');
+  });
+
+  test('a page made only of passed people ends the stack instead of reloading forever', async () => {
+    const people = Array.from({ length: 20 }, (_, i) => profile(i + 1, `P${i + 1}`));
+    browse.mockResolvedValue(people);
+    render(<BrowsePage />);
+    for (let i = 0; i < 20; i += 1) {
+      const card = await screen.findByTestId('browse-card');
+      await act(async () => { fireEvent.click(button(card, 'Pass')); });
+    }
+
+    expect(await screen.findByText(/everyone for now/)).toBeInTheDocument();
+    expect(browse.mock.calls.length).toBeLessThan(4);
+  });
 });

@@ -1,25 +1,58 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Search as SearchIcon } from 'lucide-react';
 import { search, getAllTags } from '../../api/profilesApi';
-import Avatar from '../../components/ui/Avatar';
 import FameMeter from '../../components/ui/FameMeter';
 import Chip from '../../components/ui/Chip';
 import Btn from '../../components/ui/Btn';
 import FormInput from '../../components/ui/FormInput';
+import AgeRange from '../../components/filters/AgeRange';
+import DistanceRadar from '../../components/filters/DistanceRadar';
+import FameRange from '../../components/filters/FameRange';
+import SortPicker from '../../components/filters/SortPicker';
+import { SORTS } from '../../components/filters/sorts';
 import { filterErrors } from '../../utils/formValidation';
+import { usePageHeader } from '../../context/HeaderContext';
 import { displayName } from '../../utils/displayName';
 import { apiError } from '../../api/errors';
-
-const SORTS = [['score', 'best match'], ['distance', 'distance'], ['age', 'age'], ['fame', 'fame'], ['tags', 'common tags']];
+import './SearchPage.css';
 
 const PAGE_SIZE = 50;
 const MAX_OFFSET = 1000; // server bound (DiscoveryQuery.offset)
 
+const PAGE_HEADER = { title: 'Find someone' };
+
 const num = v => (v === '' || v == null ? undefined : Number(v));
 
+function ResultCard({ profile }) {
+  const name = displayName(profile, 'Unknown');
+  const photo = profile.photos?.[0]?.url;
+  return (
+    <Link to={`/profile/${profile.user_id}`} className="result-card list-card">
+      <span className="result-photo">
+        {photo ? <img src={photo} alt="" loading="lazy"/> : <span aria-hidden="true">{name[0]}</span>}
+        {profile.is_online && <span className="result-online">online</span>}
+      </span>
+      <span className="result-text">
+        <span className="result-name">{name}{profile.age ? `, ${profile.age}` : ''}</span>
+        <span className="result-meta">
+          {profile.distance_km ? `${profile.distance_km.toFixed(0)} km · ` : ''}{profile.location_label || ''}
+        </span>
+        <span className="result-tags">
+          {(profile.tags || []).slice(0, 3).map(t => <span key={t} className="result-tag">#{t}</span>)}
+        </span>
+      </span>
+      <FameMeter score={profile.fame_rating || 0}/>
+    </Link>
+  );
+}
+
+// Desktop shows the filters and the results side by side (index.css breakpoint).
+const SIDE_BY_SIDE = '(min-width: 860px)';
+
 export default function SearchPage() {
-  const [filters, setFilters] = useState({ ageMin: '18', ageMax: '', fameMin: 0, fameMax: 100, maxDistance: '', tags: [], location: '' });
+  usePageHeader(PAGE_HEADER);
+  const [filters, setFilters] = useState({ ageMin: '', ageMax: '', fameMin: '', fameMax: '', maxDistance: '', tags: [], location: '' });
   const [sortBy, setSortBy] = useState('score');
   const [allTags, setAllTags] = useState([]);
   const [error, setError] = useState(null);
@@ -29,12 +62,9 @@ export default function SearchPage() {
   const [tagsError, setTagsError] = useState(false);
   // Only the latest request may update the results (sort can change mid-flight).
   const requestRef = useRef(0);
-  const navigate = useNavigate();
 
-  // Same bounds as the server (fame comes from sliders, always in range).
-  const searchErrors = filterErrors({
-    minAge: filters.ageMin, maxAge: filters.ageMax, maxDistance: filters.maxDistance, tags: filters.tags,
-  });
+  // The sliders are always in range; only the tags can break a server bound.
+  const searchErrors = filterErrors({ tags: filters.tags });
   const searchValid = Object.keys(searchErrors).length === 0;
 
   const toggleTag = t => setFilters(f => ({
@@ -56,8 +86,8 @@ export default function SearchPage() {
         sort_by: sort,
         min_age: num(filters.ageMin),
         max_age: num(filters.ageMax),
-        min_fame: filters.fameMin > 0 ? filters.fameMin : undefined,
-        max_fame: filters.fameMax < 100 ? filters.fameMax : undefined,
+        min_fame: num(filters.fameMin),
+        max_fame: num(filters.fameMax),
         max_distance_km: num(filters.maxDistance),
         tags: filters.tags.join(',') || undefined,
         location: filters.location.trim() || undefined,
@@ -82,170 +112,111 @@ export default function SearchPage() {
     }
   }
 
+  // Side by side, an empty results half would say nothing: start with everyone nearby.
+  useEffect(() => {
+    if (window.matchMedia(SIDE_BY_SIDE).matches) runSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, with the initial filters
+  }, []);
+
   function changeSort(key) {
     runSearch(key);
   }
 
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '16px 20px', background: 'var(--white)', borderBottom: '1.5px solid var(--cream3)', flexShrink: 0 }}>
-        <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, fontWeight: 700, color: 'var(--ink)' }}>Find someone</div>
-      </div>
+      <div className={`search-layout${results ? ' search-layout--results' : ''}`}>
+        <div className="search-form">
 
-      <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
-        {results === null ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="search-section">
+            <AgeRange
+              min={filters.ageMin}
+              max={filters.ageMax}
+              onChange={({ min, max }) => setFilters(f => ({ ...f, ageMin: min, ageMax: max }))}
+            />
+          </div>
 
-            {/* Age range */}
-            <div style={{ background: 'var(--white)', borderRadius: 'var(--r-md)', padding: 16, border: '1.5px solid var(--cream3)' }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 12 }}>Age range</div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <FormInput
-                  label="Min"
-                  type="number"
-                  value={filters.ageMin}
-                  onChange={e => setFilters(f => ({ ...f, ageMin: e.target.value }))}
-                  error={searchErrors.minAge}
-                  placeholder="18"
-                  style={{ flex: 1 }}
-                />
-                <FormInput
-                  label="Max"
-                  type="number"
-                  value={filters.ageMax}
-                  onChange={e => setFilters(f => ({ ...f, ageMax: e.target.value }))}
-                  error={searchErrors.maxAge}
-                  placeholder="50"
-                  style={{ flex: 1 }}
-                />
-              </div>
+          <div className="search-section">
+            <FameRange
+              min={filters.fameMin}
+              max={filters.fameMax}
+              onChange={({ min, max }) => setFilters(f => ({ ...f, fameMin: min, fameMax: max }))}
+            />
+          </div>
+
+          {/* Location */}
+          <div className="search-section">
+            <FormInput
+              label="Location"
+              value={filters.location}
+              onChange={e => setFilters(f => ({ ...f, location: e.target.value }))}
+              placeholder="City or neighbourhood (default: your location)"
+            />
+            <div style={{ marginTop: 20 }}>
+              <DistanceRadar value={filters.maxDistance} onChange={km => setFilters(f => ({ ...f, maxDistance: km }))}/>
             </div>
+          </div>
 
-            {/* Fame rating */}
-            <div style={{ background: 'var(--white)', borderRadius: 'var(--r-md)', padding: 16, border: '1.5px solid var(--cream3)' }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 4 }}>Fame rating</div>
-              {[['fameMin', 'min'], ['fameMax', 'max']].map(([key, label]) => (
-                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ fontSize: 12, color: 'var(--ink3)', minWidth: 28 }}>{label}</span>
-                  <input
-                    type="range" min={0} max={100} value={filters[key]}
-                    aria-label={`${label} fame rating`}
-                    onChange={e => {
-                      const v = +e.target.value;
-                      setFilters(f => key === 'fameMin'
-                        ? { ...f, fameMin: Math.min(v, f.fameMax) }
-                        : { ...f, fameMax: Math.max(v, f.fameMin) });
-                    }}
-                    style={{ flex: 1, accentColor: 'var(--spice)' }}
-                  />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--spice)', minWidth: 28 }}>{filters[key]}</span>
-                </div>
+          {/* Tags */}
+          <div className="search-section">
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 12 }}>Interests</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {tagsError && (
+                <div style={{ fontSize: 12, color: 'var(--ink3)' }}>Interest tags couldn't be loaded — reload the page to filter by tags.</div>
+              )}
+              {allTags.map(t => (
+                <Chip
+                  key={t.id}
+                  label={`#${t.name}`}
+                  active={filters.tags.includes(t.name)}
+                  aria-pressed={filters.tags.includes(t.name)}
+                  onClick={() => toggleTag(t.name)}
+                />
               ))}
             </div>
+            <div aria-live="polite" style={{ fontSize: 12, color: 'var(--danger-fg)', marginTop: 8 }}>{searchErrors.tags || ''}</div>
+          </div>
 
-            {/* Location */}
-            <div style={{ background: 'var(--white)', borderRadius: 'var(--r-md)', padding: 16, border: '1.5px solid var(--cream3)' }}>
-              <FormInput
-                label="Location"
-                value={filters.location}
-                onChange={e => setFilters(f => ({ ...f, location: e.target.value }))}
-                placeholder="City or neighbourhood (default: your location)"
-              />
-              <FormInput
-                label="Within km"
-                type="number"
-                value={filters.maxDistance}
-                onChange={e => setFilters(f => ({ ...f, maxDistance: e.target.value }))}
-                error={searchErrors.maxDistance}
-                placeholder="Any distance"
-                style={{ marginTop: 12 }}
-              />
-            </div>
-
-            {/* Tags */}
-            <div style={{ background: 'var(--white)', borderRadius: 'var(--r-md)', padding: 16, border: '1.5px solid var(--cream3)' }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginBottom: 12 }}>Interests</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {tagsError && (
-                  <div style={{ fontSize: 12, color: 'var(--ink3)' }}>Interest tags couldn't be loaded — reload the page to filter by tags.</div>
-                )}
-                {allTags.map(t => (
-                  <Chip
-                    key={t.id}
-                    label={`#${t.name}`}
-                    active={filters.tags.includes(t.name)}
-                    aria-pressed={filters.tags.includes(t.name)}
-                    onClick={() => toggleTag(t.name)}
-                  />
-                ))}
-              </div>
-              <div aria-live="polite" style={{ fontSize: 12, color: 'var(--danger-fg)', marginTop: 8 }}>{searchErrors.tags || ''}</div>
-            </div>
-
-            {error && <div role="alert" style={{ fontSize: 13, color: 'var(--rose)' }}>{error}</div>}
+          {error && <div role="alert" className="mobile-only" style={{ fontSize: 13, color: 'var(--rose)' }}>{error}</div>}
+          <div className="search-submit">
             <Btn onClick={() => runSearch()} disabled={loading || !searchValid} style={{ width: '100%' }}>
               {loading ? 'Searching…' : 'Search →'}
             </Btn>
           </div>
-        ) : (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ fontSize: 14, color: 'var(--ink3)', fontStyle: 'italic' }}>{loading ? 'Searching…' : `${results.length}${hasMore ? '+' : ''} results`}</div>
-              <button onClick={() => { requestRef.current += 1; setLoading(false); setResults(null); setError(null); }} style={{ background: 'none', border: 'none', color: 'var(--spice)', fontSize: 13, cursor: 'pointer', fontWeight: 500, fontFamily: 'DM Sans, sans-serif' }}>
-                ← Edit search
-              </button>
-            </div>
+        </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-              {SORTS.map(([key, label]) => (
-                <Chip key={key} label={label} active={sortBy === key} onClick={() => changeSort(key)}/>
-              ))}
-            </div>
-            {error && <div role="alert" style={{ fontSize: 13, color: 'var(--rose)', marginBottom: 12 }}>{error}</div>}
-
-            {results.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                <SearchIcon size={36} strokeWidth={1.5} color="var(--sand)" style={{ marginBottom: 12 }}/>
-                <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, color: 'var(--ink2)' }}>No matches found</div>
-                <div style={{ fontSize: 14, color: 'var(--ink4)', marginTop: 8 }}>Try broadening your filters</div>
-              </div>
-            ) : (
-              results.map(p => {
-                const name = displayName(p, 'Unknown');
-                return (
-                  <div key={p.user_id} onClick={() => navigate(`/profile/${p.user_id}`)} style={{
-                    padding: '14px 16px', marginBottom: 10,
-                    background: 'var(--white)', borderRadius: 'var(--r-md)',
-                    border: '1.5px solid var(--cream3)',
-                    display: 'flex', gap: 14, alignItems: 'center',
-                    cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
-                  }}>
-                    <Avatar name={name} size={48} online={p.is_online}/>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 16, fontWeight: 600, color: 'var(--ink)' }}>
-                        {name}{p.age ? `, ${p.age}` : ''}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--ink3)', marginTop: 2 }}>
-                        {p.distance_km ? `${p.distance_km.toFixed(0)} km · ` : ''}{p.location_label || ''}
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
-                        {(p.tags || []).slice(0, 3).map(t => (
-                          <span key={t} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: 'var(--cream2)', color: 'var(--ink3)', border: '1px solid var(--sand)' }}>#{t}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <FameMeter score={p.fame_rating || 0}/>
-                  </div>
-                );
-              })
-            )}
-            {hasMore && results.length > 0 && (
-              <Btn variant="secondary" onClick={() => runSearch(sortBy, results.length)} disabled={loading} style={{ width: '100%', marginTop: 6 }}>
-                {loading ? 'Loading…' : 'Load more'}
-              </Btn>
-            )}
+        <div className="search-results">
+          <div className="search-summary">
+            <div style={{ fontSize: 14, color: 'var(--ink3)', fontStyle: 'italic' }}>{loading || !results ? (error ? '' : 'Searching…') : `${results.length}${hasMore ? '+' : ''} results`}</div>
+            <button className="mobile-only" onClick={() => { requestRef.current += 1; setLoading(false); setResults(null); setError(null); }} style={{ background: 'none', border: 'none', color: 'var(--spice)', fontSize: 13, cursor: 'pointer', fontWeight: 500, fontFamily: 'DM Sans, sans-serif' }}>
+              ← Edit search
+            </button>
           </div>
-        )}
+
+          <SortPicker className="mobile-only search-sort-picker" value={sortBy} onChange={changeSort}/>
+          <div className="search-sorts desktop-only">
+            {SORTS.map(([key, label]) => (
+              <Chip key={key} label={label} active={sortBy === key} aria-pressed={sortBy === key} onClick={() => changeSort(key)}/>
+            ))}
+          </div>
+          {error && <div role="alert" style={{ fontSize: 13, color: 'var(--rose)', marginBottom: 12 }}>{error}</div>}
+
+          {!results ? null : results.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+              <SearchIcon size={36} strokeWidth={1.5} color="var(--sand)" style={{ marginBottom: 12 }}/>
+              <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, color: 'var(--ink2)' }}>No matches found</div>
+              <div style={{ fontSize: 14, color: 'var(--ink4)', marginTop: 8 }}>Try broadening your filters</div>
+            </div>
+          ) : (
+            <div className="search-grid">
+              {results.map(p => <ResultCard key={p.user_id} profile={p}/>)}
+            </div>
+          )}
+          {hasMore && results?.length > 0 && (
+            <Btn variant="secondary" onClick={() => runSearch(sortBy, results.length)} disabled={loading} style={{ width: '100%', marginTop: 6 }}>
+              {loading ? 'Loading…' : 'Load more'}
+            </Btn>
+          )}
+        </div>
       </div>
     </div>
   );

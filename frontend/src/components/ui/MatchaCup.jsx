@@ -1,6 +1,13 @@
+import { useId } from 'react';
+
 function MatchaCup({ size = 80, mood = 'happy', animate = true, style: extraStyle = {} }) {
   const s = size;
   const h = size * 110 / 80;
+  // Own ids per cup: a shared one resolves to the first cup in the page, whose gradients do not
+  // paint while it is hidden, and every other cup would lose its green.
+  const uid = useId().replace(/[^\w-]/g, '');
+  const bodyId = `cupBody${uid}`;
+  const lidId = `cupLid${uid}`;
 
   const eyes = {
     happy:   { type: 'arc',   lx: 28, ly: 66, rx: 52, ry: 66 },
@@ -15,12 +22,12 @@ function MatchaCup({ size = 80, mood = 'happy', animate = true, style: extraStyl
   return (
     <svg viewBox="0 0 80 110" width={s} height={h} style={{ display: 'block', overflow: 'visible', ...extraStyle }}>
       <defs>
-        <linearGradient id={`cupBody_${mood}_${size}`} x1="0" y1="0" x2="1" y2="0">
+        <linearGradient id={bodyId} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0"   stopColor="#d4f0c8"/>
           <stop offset="0.4" stopColor="#e8f8dc"/>
           <stop offset="1"   stopColor="#c0e4b0"/>
         </linearGradient>
-        <linearGradient id={`lidGrad_${mood}_${size}`} x1="0" y1="0" x2="1" y2="0">
+        <linearGradient id={lidId} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0"   stopColor="#b8d4a8"/>
           <stop offset="0.5" stopColor="#cce8b8"/>
           <stop offset="1"   stopColor="#a8c898"/>
@@ -32,14 +39,14 @@ function MatchaCup({ size = 80, mood = 'happy', animate = true, style: extraStyl
       <rect x="51.5" y="2" width="2" height="42" rx="1" fill="white" opacity=".35"/>
 
       {/* lid */}
-      <ellipse cx="40" cy="30" rx="26" ry="7" fill={`url(#lidGrad_${mood}_${size})`} stroke="#7ab568" strokeWidth="1.2"/>
-      <path d="M14 30 Q14 38 17 40 L63 40 Q66 38 66 30" fill={`url(#lidGrad_${mood}_${size})`} stroke="#7ab568" strokeWidth="1.2"/>
+      <ellipse cx="40" cy="30" rx="26" ry="7" fill={`url(#${lidId})`} stroke="#7ab568" strokeWidth="1.2"/>
+      <path d="M14 30 Q14 38 17 40 L63 40 Q66 38 66 30" fill={`url(#${lidId})`} stroke="#7ab568" strokeWidth="1.2"/>
       <ellipse cx="40" cy="40" rx="23" ry="6" fill="#b8dca8" stroke="#7ab568" strokeWidth="1"/>
       <ellipse cx="30" cy="29" rx="5" ry="2.5" fill="#7ab568" opacity=".6"/>
       <ellipse cx="30" cy="29" rx="3.5" ry="1.5" fill="#5a9450"/>
 
       {/* cup body */}
-      <path d="M17 40 L13 98 Q13 104 40 104 Q67 104 67 98 L63 40 Z" fill={`url(#cupBody_${mood}_${size})`}/>
+      <path d="M17 40 L13 98 Q13 104 40 104 Q67 104 67 98 L63 40 Z" fill={`url(#${bodyId})`}/>
       <path d="M20 44 L17 90 Q17 93 22 95 L24 48 Z" fill="white" opacity=".25"/>
       <path d="M17 40 L13 98 Q13 104 40 104 Q67 104 67 98 L63 40 Z" fill="none" stroke="#7ab568" strokeWidth="1.5"/>
 
