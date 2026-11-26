@@ -1,7 +1,7 @@
 from datetime import datetime
 from asyncpg.connection import Connection
 from application.database import Database
-from typing import Optional
+from typing import Optional, cast
 
 
 class TokenRepository:
@@ -102,28 +102,95 @@ class TokenRepository:
             user_id,
         )
 
-    # --- Refresh tokens (one row per user, keyed by the immutable user id) ---
+    # --- Refresh tokens: one session per signed-in device, keyed by the immutable user id ---
+    # Everything that adds or ends sessions locks the user's row first, so a refresh can't slip a
+    # new token past a logout or a password reset (which updates that row) happening meanwhile.
 
-    async def upsert_refresh_token(self, user_id: int, token_hash: str, expires_at: datetime):
-        query = """
-            INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (user_id) DO UPDATE
-                SET token_hash = EXCLUDED.token_hash,
-                    expires_at = EXCLUDED.expires_at
+    async def _lock_user(self, user_id: int, connection: Connection) -> None:
+        await connection.execute("SELECT 1 FROM users WHERE id = $1 FOR NO KEY UPDATE", user_id)
+
+    async def create_session(
+        self, user_id: int, token_hash: str, expires_at: datetime, max_sessions: int
+    ) -> None:
+        """A new session; beyond max_sessions the ones idle the longest end."""
+        async with self.db.require_pool().acquire() as connection:
+            async with connection.transaction():
+                await self._lock_user(user_id, cast(Connection, connection))
+                await connection.execute(
+                    "INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
+                    user_id, token_hash, expires_at,
+                )
+                await connection.execute(
+                    """
+                    DELETE FROM refresh_tokens WHERE user_id = $1 AND session_id NOT IN (
+                        SELECT session_id FROM refresh_tokens WHERE user_id = $1
+                        GROUP BY session_id ORDER BY max(id) DESC LIMIT $2)
+                    """,
+                    user_id, max_sessions,
+                )
+
+    async def rotate_refresh_token(
+        self, user_id: int, token_version: int, old_hash: str, new_hash: str, expires_at: datetime,
+        grace_seconds: int, max_tokens: int,
+    ) -> bool:
+        """Replaces a live token with a new one of the same session; False if it isn't live or the
+        account's token version has moved on.
+
+        The old one stays valid for grace_seconds (from its first use: LEAST), so tabs sharing the
+        cookie can't invalidate each other. At most max_tokens of a session are kept.
         """
-        await self.db.execute(query, user_id, token_hash, expires_at)
+        async with self.db.require_pool().acquire() as connection:
+            async with connection.transaction():
+                await self._lock_user(user_id, cast(Connection, connection))
+                session_id = await connection.fetchval(
+                    """
+                    UPDATE refresh_tokens
+                    SET expires_at = LEAST(expires_at, now() + make_interval(secs => $3))
+                    WHERE token_hash = $2 AND user_id = $1 AND expires_at > now()
+                      AND EXISTS (SELECT 1 FROM users WHERE id = $1 AND token_version = $4)
+                    RETURNING session_id
+                    """,
+                    user_id, old_hash, grace_seconds, token_version,
+                )
+                if session_id is None:
+                    return False
+                await connection.execute(
+                    """
+                    INSERT INTO refresh_tokens (user_id, session_id, token_hash, expires_at)
+                    VALUES ($1, $2, $3, $4)
+                    """,
+                    user_id, session_id, new_hash, expires_at,
+                )
+                await connection.execute(
+                    """
+                    DELETE FROM refresh_tokens WHERE session_id = $1 AND id NOT IN (
+                        SELECT id FROM refresh_tokens WHERE session_id = $1 ORDER BY id DESC LIMIT $2)
+                    """,
+                    session_id, max_tokens,
+                )
+                return True
 
-    async def get_refresh_token(self, user_id: int):
-        query = "SELECT token_hash FROM refresh_tokens WHERE user_id = $1 AND expires_at > NOW()"
-        return await self.db.fetch_one(query, user_id)
+    async def delete_session(self, user_id: int, token_hash: str) -> None:
+        """Ends the session the token belongs to, if it is one of the user's."""
+        async with self.db.require_pool().acquire() as connection:
+            async with connection.transaction():
+                await self._lock_user(user_id, cast(Connection, connection))
+                await connection.execute(
+                    """
+                    DELETE FROM refresh_tokens WHERE user_id = $1 AND session_id = (
+                        SELECT session_id FROM refresh_tokens WHERE user_id = $1 AND token_hash = $2)
+                    """,
+                    user_id, token_hash,
+                )
 
-    async def delete_refresh_token(self, user_id: int, transaction: Optional[Connection] = None):
-        query = "DELETE FROM refresh_tokens WHERE user_id = $1"
-        if transaction is None:
-            await self.db.execute(query, user_id)
-        else:
-            await transaction.execute(query, user_id)
+    async def delete_all_sessions(self, user_id: int, transaction: Optional[Connection] = None):
+        if transaction is not None:
+            await self._lock_user(user_id, transaction)
+            await transaction.execute("DELETE FROM refresh_tokens WHERE user_id = $1", user_id)
+            return
+        async with self.db.require_pool().acquire() as connection:
+            async with connection.transaction():
+                await self.delete_all_sessions(user_id, cast(Connection, connection))
 
     # --- Token blacklist ---
 

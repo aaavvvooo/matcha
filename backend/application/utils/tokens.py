@@ -43,10 +43,16 @@ def parse_session_claims(payload: dict) -> tuple[int, int] | None:
     return user_id, ver
 
 
+def _token_id() -> str:
+    # Without it, tokens minted for one user in the same second would be identical, and revoking
+    # one would revoke the other.
+    return secrets.token_hex(16)
+
+
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "type": "access"})
+    to_encode.update({"exp": expire, "type": "access", "jti": _token_id()})
     secret, algorithm = _get_jwt_settings()
     encoded_jwt = jwt.encode(to_encode, secret, algorithm=algorithm)
     return encoded_jwt
@@ -55,7 +61,7 @@ def create_access_token(data: dict):
 def create_refresh_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "type": "refresh"})
+    to_encode.update({"exp": expire, "type": "refresh", "jti": _token_id()})
     secret, algorithm = _get_jwt_settings()
     encoded_jwt = jwt.encode(to_encode, secret, algorithm=algorithm)
     return encoded_jwt
