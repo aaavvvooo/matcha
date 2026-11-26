@@ -95,7 +95,8 @@ blocks           (blocker_id, blocked_id) PK
 reports          (reporter_id, reported_id) PK, created_at
 verification_tokens  id PK, user_id FK, token UQ (SHA-256 of the mailed secret), token_type, expires_at, used, created_at,
                  new_email NULL (pending email change), index ix_verification_tokens_user_type (user_id, token_type, created_at)
-refresh_tokens   id PK, user_id FK→users ON DELETE CASCADE UQ, token_hash, expires_at, created_at  -- one row per user
+refresh_tokens   id PK, user_id FK→users ON DELETE CASCADE (indexed), session_id UUID, token_hash UQ, expires_at, created_at
+                 -- a session = the tokens one signed-in device rotates through; at most 10 per user, 5 tokens each
 token_blacklist  id PK, token_hash UQ, expires_at, created_at
 oauth_accounts   id PK, user_id FK→users ON DELETE CASCADE, provider VARCHAR(20), provider_user_id VARCHAR(64),
                  created_at, UQ(provider, provider_user_id), UQ(user_id, provider)   -- B1
@@ -136,9 +137,9 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 | POST | `/login` | Form body (username or email + password) · body `{access_token, token_type}` only (the refresh token is never in a response body), sets the refresh and `access_token` cookies · 5/min |
 | GET | `/me` | Current user: `id`, `first_name`, `last_name`, `username`, `email`, `is_validated`, `has_profile`, `pending_email` (address of an unconfirmed email change, or null) |
 | POST | `/forget-password` | Always same message (no user enumeration) · 3/min per IP, and per account at most one reset mail per 2 minutes (a request inside the cooldown gets the same answer and sends nothing); a new reset link invalidates the previous ones |
-| POST | `/logout` | Idempotent: blacklists a live access token, revokes the refresh token (user id from the access or refresh token, if it still matches the account's `token_version`), closes all of that user's WebSockets (1008 `logged_out`), always clears both cookies |
-| POST | `/refresh` | Rotates the refresh token (httpOnly, SameSite=Strict cookie); body `{access_token, token_type}`. **204 No Content** (empty body) when the request carries no `refresh_token` cookie (nothing to restore: a signed-out page load must not log a console error); 401 when a cookie is present but invalid, expired or revoked. 10/min |
-| POST | `/reset-password` | Token + new password in body · 5/min · only `password_reset` tokens. Ends every session of the account: all its outstanding tokens are spent, `token_version` is bumped (every access/refresh JWT dies at once), the refresh row is deleted, its sockets are closed (1008 `logged_out`). The link went to the account's address, so a reset also marks an unverified account verified |
+| POST | `/logout` | Idempotent: blacklists a live access token, ends this device's session (user id from the access or refresh token, if it still matches the account's `token_version`; without a cookie, all of them), closes all of that user's WebSockets (1008 `logged_out`; other devices reconnect with their own session), always clears both cookies |
+| POST | `/refresh` | Rotates the refresh token (httpOnly, SameSite=Strict cookie) within its session; the old one works for 30 s more, so tabs sharing the cookie can refresh together; body `{access_token, token_type}`. **204 No Content** (empty body) when the request carries no `refresh_token` cookie (nothing to restore: a signed-out page load must not log a console error); 401 when a cookie is present but invalid, expired or revoked. 10/min |
+| POST | `/reset-password` | Token + new password in body · 5/min · only `password_reset` tokens. Ends every session of the account: all its outstanding tokens are spent, `token_version` is bumped (every access/refresh JWT dies at once), all its sessions are deleted, its sockets are closed (1008 `logged_out`). The link went to the account's address, so a reset also marks an unverified account verified |
 | GET | `/oauth/providers` | `{"providers": [...]}` — only providers with credentials configured (B1) |
 | GET | `/oauth/{provider}/start` | `provider` ∈ `42`·`github` and configured, else 404 · 302 to the provider with `state` (+ PKCE S256 for GitHub) · sets the `oauth_flow` cookie · 20/min |
 | GET | `/oauth/{provider}/callback` | `code`, `state` (or provider `error`) · always 302 to `{FRONTEND_URL}/oauth/callback?status=ok\|verify_email` or `?error=<code>`; on success sets the same cookies as `/login` · 20/min |
@@ -229,7 +230,7 @@ identity → JWT `sub` is the immutable user id (string) plus `ver`; never the u
            (sub=<username>, no ver) never resolve: everyone signed in before the upgrade signs in again
 email    → change: PATCH /users/me stores new_email with an `email` token, mails the NEW address; users.email changes
            only when that link is confirmed (uniqueness re-checked). Reset tokens never verify an email and vice versa
-reset    → POST /auth/reset-password: spends all of the user's tokens, bumps token_version, deletes the refresh row,
+reset    → POST /auth/reset-password: spends all of the user's tokens, bumps token_version, deletes every session,
            closes the user's sockets; outstanding access tokens are rejected immediately (no 15-minute residual)
 boot     → AuthContext calls refreshAccessToken() (api/client.js) once: 200 restores the session, 204 (no cookie)
            leaves the user signed out without any failed request, 401 (stale cookie) also signed out
@@ -240,7 +241,7 @@ expired  → axios interceptor → single-flight refresh in api/client.js (share
 ws token → the socket lives as long as the access token it last presented (§7): the client sends a fresh token in-band
            (`{"type":"auth"}`) after every refresh and refreshes ahead of the socket's expiry even when idle
 logout   → client token cleared first (socket closes, an in-flight refresh result is discarded), then the server
-           call: access token hash → token_blacklist; refresh row deleted, cookie cleared; user's sockets closed
+           call: access token hash → token_blacklist; this device's session deleted, cookie cleared; user's sockets closed
 tokens   → JWTs carry type=access|refresh; every bearer/cookie/WS credential check requires type=access,
            /auth/refresh requires type=refresh (a refresh JWT is never an access credential)
 ```
@@ -541,7 +542,8 @@ so shared tags or fame never lift a distant candidate above a nearby one. Explic
 
 ## 9. Fame rating
 
-Recomputed synchronously by `SocialRepository.recalculate_fame` on like, unlike, view, and block:
+Recomputed synchronously by `SocialRepository.recalculate_fame` on view (of the viewed user) and, for both users, on
+like, unlike and block, since a connection counts towards both:
 
 ```
 fame_rating = min(100, likes_received * 3 + profile_viewers * 1 + connections * 5)
@@ -582,7 +584,7 @@ Stored in `user_profiles.fame_rating`. `profile_viewers` counts distinct viewers
 | Same-site assumption | The Strict refresh cookie (session restore, OAuth hand-off) needs SPA and API on one site: true in Compose, false for the vercel.app / run.app production split (§6) | ⚠️ known gap |
 | Email change without password | `PATCH /users/me` needs a valid session but not the current password: someone holding a live session could move the account to their mailbox (then reset the password). Mitigated by short access tokens, validated-only sessions and the confirm-by-new-mailbox step | ⚠️ known gap |
 | Reset-link churn | Anyone can request a reset for a username every 2 minutes; each new link invalidates the previous one, so a slow user may click a dead link (the newest mail always works) | ⚠️ accepted |
-| Refresh-token reuse | Rotation keeps one refresh row per user; replaying an already-rotated refresh token is refused, but it does not revoke the session family (no reuse detection) | ⚠️ known gap |
+| Refresh-token reuse | Tokens are unique (`jti`) and rotate within one session per device; replaying a rotated token is refused after 30 s of grace, but it does not revoke the session family (no reuse detection) | ⚠️ known gap |
 | Login CSRF | `/auth/login` has no Origin check; a cross-site form can sign a browser into an attacker's account (SameSite=Strict cookies limit what follows) | ⚠️ known gap |
 | Public API docs | `/docs` and `/openapi.json` are public (handy for the evaluation; disable in a real deployment) | ⚠️ known gap |
 | Seed accounts | Seeded profiles share one password (`scripts/seed_common.py`); never run the seed scripts against a public deployment | ⚠️ known gap |
