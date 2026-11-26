@@ -128,7 +128,7 @@ function HomePage() {
       {/* How it works */}
       <div style={{ padding: '60px 40px', background: 'var(--white)', borderTop: '1.5px solid var(--cream3)', flexShrink: 0 }}>
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
-          <MatchaCup size={56} mood="happy" animate={true} style={{ margin: '0 auto 12px', animation: 'float 3s ease-in-out infinite' }}/>
+          <MatchaCup size={56} mood="love" animate={true} style={{ margin: '0 auto 12px', animation: 'float 3s ease-in-out infinite' }}/>
           <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 36, fontWeight: 700, color: 'var(--ink)' }}>How it works</div>
           <div style={{ fontSize: 15, color: 'var(--ink3)', marginTop: 8 }}>Four steps to finding someone worth meeting.</div>
         </div>

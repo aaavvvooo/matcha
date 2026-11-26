@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { verifyEmail } from '../../api/authApi';
 import { useUrlToken } from '../../hooks/useUrlToken';
+import MatchaCup from '../../components/ui/MatchaCup';
 
 function VerifyEmailPage() {
   const token = useUrlToken();
@@ -19,7 +20,7 @@ function VerifyEmailPage() {
     return (
       <div className="status-card">
         <div className="status-card__inner">
-          <div className="status-card__spinner" />
+          <MatchaCup size={60} mood="searching" className="cup-float"/>
           <p className="status-card__body">Verifying your email…</p>
         </div>
       </div>
@@ -30,7 +31,7 @@ function VerifyEmailPage() {
     return (
       <div className="status-card">
         <div className="status-card__inner">
-          <span className="status-card__icon">&#10003;</span>
+          <MatchaCup size={72} mood="excited"/>
           <h1 className="status-card__title">Email verified</h1>
           <p className="status-card__body">Your account is active. You can now sign in.</p>
           <Link to="/login" className="btn btn-primary">Sign in</Link>
@@ -42,7 +43,7 @@ function VerifyEmailPage() {
   return (
     <div className="status-card">
       <div className="status-card__inner">
-        <span className="status-card__icon">&#10007;</span>
+        <MatchaCup size={72} mood="sad"/>
         <h1 className="status-card__title">Verification failed</h1>
         <p className="status-card__body">The link is invalid or has expired.</p>
         <Link to="/login" className="btn btn-ghost">Back to Sign in</Link>

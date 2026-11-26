@@ -6,6 +6,8 @@ import { useAuth } from '../../context/AuthContext';
 import { usePageHeader } from '../../context/HeaderContext';
 import ActionsMenu from '../../components/ui/ActionsMenu';
 import Avatar from '../../components/ui/Avatar';
+import CupLoading from '../../components/ui/CupLoading';
+import LoadError from '../../components/ui/LoadError';
 import FameMeter from '../../components/ui/FameMeter';
 import Btn from '../../components/ui/Btn';
 import MatchaCup from '../../components/ui/MatchaCup';
@@ -36,6 +38,8 @@ export default function ProfileViewPage() {
   const [blocked, setBlocked] = useState(false);
   const [blockedByThem, setBlockedByThem] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [photoIdx, setPhotoIdx] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmBlockOpen, setConfirmBlockOpen] = useState(false);
@@ -45,23 +49,33 @@ export default function ProfileViewPage() {
   const [reported, setReported] = useState(false);
   const [likeError, setLikeError] = useState(null);
 
+  // `attempt` re-runs the load (Try again).
   useEffect(() => {
+    let isCurrent = true; // a slow answer for another profile must not land on this one
     setLoading(true);
+    setLoadFailed(false);
+    setProfile(null);
+    setLiked(false);
+    setBlocked(false);
     setPhotoIdx(0);
     setBlockedByThem(false);
     setReported(false);
     getUser(id)
       .then(data => {
+        if (!isCurrent) return;
         setProfile(data);
         setLiked(data.is_liked_by_me || false);
         setBlocked(data.is_blocked_by_me || false);
       })
       .catch(err => {
+        if (!isCurrent) return;
         const status = err?.response?.status;
         if (status === 403 || status === 404) setBlockedByThem(true);
+        else setLoadFailed(true);
       })
-      .finally(() => setLoading(false));
-  }, [id]);
+      .finally(() => { if (isCurrent) setLoading(false); });
+    return () => { isCurrent = false; };
+  }, [id, attempt]);
 
   const photos = profile?.photos || [];
   const sortedPhotos = [...photos].sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0));
@@ -133,7 +147,6 @@ export default function ProfileViewPage() {
       setBlocked(true);
       setLiked(false);
     } catch (err) {
-      console.error('Failed to block user', err);
       showError(err, 'Could not block this user');
     }
   }
@@ -145,7 +158,6 @@ export default function ProfileViewPage() {
       setBlocked(false);
       setReported(false);
     } catch (err) {
-      console.error('Failed to unblock user', err);
       showError(err, 'Could not unblock this user');
     }
   }
@@ -164,7 +176,6 @@ export default function ProfileViewPage() {
         setTimeout(() => setReported(false), 4000);
       }
     } catch (err) {
-      console.error('Failed to report user', err);
       showError(err, 'Could not report this user');
     }
   }
@@ -172,7 +183,7 @@ export default function ProfileViewPage() {
   if (blockedByThem) {
     return (
       <div style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 40 }}>
-        <UserX size={48} strokeWidth={1.5} color="var(--ink4)"/>
+        <MatchaCup size={72} mood="sad"/>
         <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, color: 'var(--ink2)', textAlign: 'center' }}>
           This profile isn't available
         </div>
@@ -181,11 +192,18 @@ export default function ProfileViewPage() {
     );
   }
 
+  if (loadFailed) {
+    return (
+      <div style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <LoadError onRetry={() => setAttempt(n => n + 1)}>Couldn't load this profile.</LoadError>
+        <Btn variant="ghost" onClick={() => navigate(-1)}>← Go back</Btn>
+      </div>
+    );
+  }
+
   if (loading || !profile) {
     return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cream)' }}>
-        <div style={{ fontSize: 14, color: 'var(--ink4)', fontStyle: 'italic' }}>Loading…</div>
-      </div>
+      <div className="cup-page"><CupLoading/></div>
     );
   }
 

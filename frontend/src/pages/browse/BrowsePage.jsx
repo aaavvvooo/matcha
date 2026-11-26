@@ -8,6 +8,9 @@ import { useAuth } from '../../context/AuthContext';
 import { usePageHeader } from '../../context/HeaderContext';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
+import CupLoading from '../../components/ui/CupLoading';
+import CupMessage from '../../components/ui/CupMessage';
+import LoadError from '../../components/ui/LoadError';
 import FameMeter from '../../components/ui/FameMeter';
 import Btn from '../../components/ui/Btn';
 import Chip from '../../components/ui/Chip';
@@ -23,6 +26,7 @@ import './BrowsePage.css';
 
 const PAGE_SIZE = 20;
 const COMING_UP = 5;
+const POP_MS = 900; // cupMessages.css cupPop
 // Coming back, the first page is wider and starts before the first unseen profile: ranks move a
 // little (a visit raises fame), and the profile you left on must still be in it.
 const RESUME_SIZE = 50; // server maximum
@@ -194,7 +198,7 @@ function MatchOverlay({ profile, onChat, onClose }) {
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       animation: 'fadeIn .2s ease',
     }}>
-      <MatchaCup size={100} mood="excited" animate={true} style={{ animation: 'wiggle .6s ease-in-out infinite', marginBottom: 8 }}/>
+      <MatchaCup size={100} mood="match" animate={true} style={{ animation: 'wiggle .6s ease-in-out infinite', marginBottom: 8 }}/>
       <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 36, fontWeight: 700, color: '#fff', textAlign: 'center', lineHeight: 1.2 }}>
         It's a match!
       </div>
@@ -243,6 +247,7 @@ export default function BrowsePage() {
   const [isDragging, setIsDragging] = useState(false);
   const [loading, setLoading] = useState(true);
   const [likeError, setLikeError] = useState(null);
+  const [popId, setPopId] = useState(null); // the person just liked, while the cup pops
   const dragRef = useRef(null);
   // One like at a time: the card stays until the server answers, so it can be tapped again.
   const likingRef = useRef(false);
@@ -351,6 +356,12 @@ export default function BrowsePage() {
   const currentId = currentProfile?.user_id ?? null;
 
   useEffect(() => {
+    if (popId === null) return undefined;
+    const timer = setTimeout(() => setPopId(null), POP_MS);
+    return () => clearTimeout(timer);
+  }, [popId]);
+
+  useEffect(() => {
     if (loading || loadError) return; // an empty stack here is not where the user left off
     const isLoading = loadingRef.current;
     const everyoneSeen = currentId === null && !hasMore && !isLoading; // the next visit starts over
@@ -371,14 +382,13 @@ export default function BrowsePage() {
         if (result?.is_match) {
           setMatchProfile(currentProfile);
           setTimeout(() => setMatchProfile(null), 3000);
+        } else {
+          setPopId(currentProfile.user_id);
         }
       } catch (err) {
         setDrag({ x: 0, y: 0 });
-        const msg = err?.response?.data?.detail;
-        if (msg) {
-          setLikeError(msg);
-          setTimeout(() => setLikeError(null), 4000);
-        }
+        setLikeError(apiError(err, 'Could not send your like. Try again.'));
+        setTimeout(() => setLikeError(null), 4000);
         return;
       } finally {
         likingRef.current = false;
@@ -489,11 +499,13 @@ export default function BrowsePage() {
 
       <div className="browse-body">
         <div className="browse-stack">
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: 40 }}>
-              <MatchaCup size={60} mood="happy" animate={true} style={{ margin: '0 auto 12px', animation: 'float 3s ease-in-out infinite' }}/>
-              <div style={{ fontSize: 14, color: 'var(--ink4)', fontStyle: 'italic' }}>Finding people nearby…</div>
+          {popId !== null && (
+            <div key={popId} className="cup-pop">
+              <MatchaCup size={110} mood="love" animate={false}/>
             </div>
+          )}
+          {loading ? (
+            <CupLoading mood="searching" size={60}>Finding people nearby…</CupLoading>
           ) : currentProfile ? (
             <>
               <ProfileCard
@@ -538,16 +550,9 @@ export default function BrowsePage() {
               )}
             </>
           ) : loadError ? (
-            <div role="alert" style={{ textAlign: 'center', padding: 40, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
-              <div style={{ fontSize: 14, color: 'var(--ink2)' }}>{loadError}</div>
-              <Btn variant="secondary" onClick={() => loadPage(true)}>Try again</Btn>
-            </div>
+            <LoadError onRetry={() => loadPage(true)}>{loadError}</LoadError>
           ) : (
-            <div style={{ textAlign: 'center', padding: 40 }}>
-              <MatchaCup size={80} mood="sleepy" animate={true} style={{ margin: '0 auto 12px' }}/>
-              <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 22, color: 'var(--ink2)', marginBottom: 8 }}>That's everyone for now.</div>
-              <div style={{ fontSize: 14, color: 'var(--ink4)' }}>Check back later — new people join every day.</div>
-            </div>
+            <CupMessage mood="sleepy" size={80} title="That's everyone for now.">Check back later — new people join every day.</CupMessage>
           )}
         </div>
 

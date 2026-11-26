@@ -4,6 +4,7 @@ import PasswordInput from '../../components/ui/PasswordInput';
 import { resetPassword } from '../../api/authApi';
 import { confirmError, passwordError } from '../../utils/formValidation';
 import { useUrlToken } from '../../hooks/useUrlToken';
+import MatchaCup from '../../components/ui/MatchaCup';
 
 function ResetPasswordPage() {
   const token = useUrlToken();
@@ -17,7 +18,7 @@ function ResetPasswordPage() {
     return (
       <div className="status-card">
         <div className="status-card__inner">
-          <span className="status-card__icon">&#10007;</span>
+          <MatchaCup size={72} mood="sad"/>
           <h1 className="status-card__title">Invalid link</h1>
           <p className="status-card__body">This reset link is missing a token.</p>
           <Link to="/forgot-password" className="btn btn-ghost">Request a new link</Link>
@@ -48,7 +49,7 @@ function ResetPasswordPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-header">
-          <span className="auth-logo">matcha</span>
+          <span className="auth-logo"><MatchaCup size={44} mood="happy"/>Matcha</span>
           <h1 className="auth-title">Reset password</h1>
           <p className="auth-subtitle">Choose a new password</p>
         </div>

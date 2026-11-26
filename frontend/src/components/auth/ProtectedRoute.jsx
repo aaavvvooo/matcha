@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import CupLoading from '../ui/CupLoading';
 
 const PROFILE_EXEMPT_PATHS = ['/profile/setup'];
 
 function Spinner() {
   return (
-    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cream)' }}>
-      <div style={{ fontSize: 14, color: 'var(--ink4)', fontStyle: 'italic', fontFamily: 'DM Sans, sans-serif' }}>Loading…</div>
-    </div>
+    <div className="cup-page"><CupLoading/></div>
   );
 }
 

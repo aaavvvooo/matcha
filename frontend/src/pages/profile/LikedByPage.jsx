@@ -1,42 +1,39 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Sparkle } from 'lucide-react';
 import { getLikes } from '../../api/usersApi';
 import { useAuth } from '../../context/AuthContext';
 import { usePageHeader } from '../../context/HeaderContext';
+import { useList } from '../../hooks/useList';
 import Avatar from '../../components/ui/Avatar';
+import CupLoading from '../../components/ui/CupLoading';
+import CupMessage from '../../components/ui/CupMessage';
+import LoadError from '../../components/ui/LoadError';
 import { displayName } from '../../utils/displayName';
 
 export default function LikedByPage() {
   const navigate = useNavigate();
   usePageHeader(useMemo(() => ({ title: 'Who liked you', onBack: () => navigate(-1) }), [navigate]));
   const { user } = useAuth();
-  const [likers, setLikers] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    getLikes(user.id)
-      .then(setLikers)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [user?.id]);
+  const userId = user?.id;
+  const load = useMemo(() => (userId ? () => getLikes(userId) : null), [userId]);
+  const { items: likers, state, reload } = useList(load);
 
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div className="page-scroll">
-        {loading && (
-          <div style={{ fontSize: 14, color: 'var(--ink4)', fontStyle: 'italic', textAlign: 'center', marginTop: 40 }}>Loading…</div>
+        {state === 'loading' && (
+          <CupLoading/>
         )}
 
-        {!loading && likers.length === 0 && (
-          <div style={{ fontSize: 14, color: 'var(--ink4)', fontStyle: 'italic', textAlign: 'center', marginTop: 40 }}>
-            No one has liked you yet.
-          </div>
+        {state === 'error' && <LoadError onRetry={reload}>Couldn't load who liked you.</LoadError>}
+
+        {state === 'ready' && likers.length === 0 && (
+          <CupMessage mood="shy" title="No one has liked you yet."/>
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {likers.map(l => (
+          {state === 'ready' && likers.map(l => (
             <Link
               key={l.id}
               to={`/profile/${l.id}`}

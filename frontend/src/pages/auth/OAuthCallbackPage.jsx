@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import MatchaCup from '../../components/ui/MatchaCup';
 
 // The backend redirects here with only `status` or `error` from a fixed set.
 // Messages come from this map; URL text is never rendered.
@@ -18,11 +19,11 @@ const ERROR_MESSAGES = {
   session_failed: 'We couldn’t start your session. Please try again.',
 };
 
-function StatusCard({ icon, title, body }) {
+function StatusCard({ mood, title, body }) {
   return (
     <div className="status-card">
       <div className="status-card__inner">
-        {icon && <span className="status-card__icon">{icon}</span>}
+        <MatchaCup size={72} mood={mood}/>
         <h1 className="status-card__title">{title}</h1>
         <p className="status-card__body">{body}</p>
         <Link to="/login" className="btn btn-ghost">Back to Sign in</Link>
@@ -52,19 +53,19 @@ function OAuthCallbackPage() {
       return (
         <div className="status-card">
           <div className="status-card__inner">
-            <div className="status-card__spinner" />
+            <MatchaCup size={60} mood="happy" className="cup-float"/>
             <p className="status-card__body">Signing you in…</p>
           </div>
         </div>
       );
     }
-    return <StatusCard icon={"\u2717"} title="Sign-in failed" body={ERROR_MESSAGES.session_failed} />;
+    return <StatusCard mood="sad" title="Sign-in failed" body={ERROR_MESSAGES.session_failed} />;
   }
 
   if (status === 'verify_email') {
     return (
       <StatusCard
-        icon={"\u2709"}
+        mood="excited"
         title="Check your email"
         body="Your account was created. We sent you a verification link — click it, then sign in again."
       />
@@ -74,7 +75,7 @@ function OAuthCallbackPage() {
   const message = Object.prototype.hasOwnProperty.call(ERROR_MESSAGES, error)
     ? ERROR_MESSAGES[error]
     : ERROR_MESSAGES.server_error;
-  return <StatusCard icon={"\u2717"} title="Sign-in failed" body={message} />;
+  return <StatusCard mood="sad" title="Sign-in failed" body={message} />;
 }
 
 export default OAuthCallbackPage;

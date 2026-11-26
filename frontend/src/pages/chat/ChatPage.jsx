@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Sparkle, CalendarPlus, Phone, Plus, Video } from 'lucide-react';
+import { CalendarPlus, Phone, Plus, Video } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 import { useCall } from '../../context/CallContext';
 import { usePageHeader } from '../../context/HeaderContext';
 import ActionsMenu from '../../components/ui/ActionsMenu';
 import MatchaCup from '../../components/ui/MatchaCup';
 import Avatar from '../../components/ui/Avatar';
+import CupMessage from '../../components/ui/CupMessage';
+import LoadError from '../../components/ui/LoadError';
 import Btn from '../../components/ui/Btn';
 import ProposeDateForm from '../../components/dates/ProposeDateForm';
 import ChatDates from '../../components/dates/ChatDates';
@@ -50,17 +52,9 @@ function ChatListView({ conversations, activeId, state, onRetry }) {
     <div className="screen" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
         {state === 'error' && conversations.length === 0 ? (
-          <div role="alert" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, paddingTop: 48 }}>
-            <div style={{ fontSize: 14, color: 'var(--ink3)' }}>Couldn't load your conversations.</div>
-            <Btn variant="secondary" onClick={onRetry}>Try again</Btn>
-          </div>
+          <LoadError onRetry={onRetry}>Couldn't load your conversations.</LoadError>
         ) : conversations.length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, paddingTop: 48 }}>
-            <MatchaCup size={56} mood="shy" animate={true}/>
-            <div style={{ fontSize: 13, color: 'var(--ink4)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 4 }}>
-              Like someone and wait for a match to start chatting <Sparkle size={12}/>
-            </div>
-          </div>
+          <CupMessage mood="shy" title="No conversations yet">Like someone and wait for a match to start chatting.</CupMessage>
         ) : (
           conversations.map(c => {
             const name = displayName(c, 'Unknown');
@@ -242,7 +236,8 @@ function ChatThreadView({
           padding: '10px 18px', background: 'var(--cream3)', color: 'var(--ink2)', fontSize: 13,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexShrink: 0,
         }}>
-          <span>Date proposed to {name}. <Link to="/dates">See your dates</Link></span>
+          <MatchaCup size={22} mood="excited" animate={false} style={{ flexShrink: 0 }}/>
+          <span style={{ flex: 1 }}>Date proposed to {name}. <Link to="/dates">See your dates</Link></span>
           <button onClick={() => setDateSent(false)} aria-label="Dismiss" style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>×</button>
         </div>
       )}

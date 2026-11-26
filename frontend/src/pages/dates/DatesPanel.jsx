@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarHeart, MapPin, Clock } from 'lucide-react'
+import { MapPin, Clock } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useNotifications } from '../../context/NotificationContext'
 import { getDates, acceptDate, declineDate, cancelDate } from '../../api/datesApi'
@@ -8,6 +8,9 @@ import { formatDateTime } from '../../utils/dateTime'
 import { isInactive, isPast, refreshesDates, statusLabel } from '../../utils/dateStatus'
 import { apiError } from '../../api/errors'
 import { displayName } from '../../utils/displayName'
+import CupLoading from '../../components/ui/CupLoading'
+import CupMessage from '../../components/ui/CupMessage'
+import LoadError from '../../components/ui/LoadError'
 import Avatar from '../../components/ui/Avatar'
 import Btn from '../../components/ui/Btn'
 
@@ -226,15 +229,10 @@ export default function DatesPanel() {
   )
 
   if (state === 'loading') {
-    return <p style={{ textAlign: 'center', color: 'var(--ink4)', padding: '48px 0' }}>Loading…</p>
+    return <CupLoading/>
   }
   if (state === 'error') {
-    return (
-      <div role="alert" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, paddingTop: 48 }}>
-        <div style={{ fontSize: 14, color: 'var(--ink3)' }}>Couldn't load your dates.</div>
-        <Btn variant="secondary" onClick={() => { setState('loading'); loadUpcoming() }}>Try again</Btn>
-      </div>
-    )
+    return <LoadError onRetry={() => { setState('loading'); loadUpcoming() }}>Couldn't load your dates.</LoadError>
   }
 
   const awaiting = upcoming.filter(d => d.status === 'pending' && d.invitee_id === myId)
@@ -243,15 +241,7 @@ export default function DatesPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {upcoming.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <CalendarHeart size={44} strokeWidth={1.5} color="var(--sand)" style={{ marginBottom: 12 }} aria-hidden="true" />
-          <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, color: 'var(--ink2)', marginBottom: 8 }}>
-            No upcoming dates
-          </div>
-          <div style={{ fontSize: 14, color: 'var(--ink4)' }}>
-            Open a chat with a match and propose one.
-          </div>
-        </div>
+        <CupMessage mood="shy" title="No upcoming dates">Open a chat with a match and propose one.</CupMessage>
       ) : (
         <>
           {awaiting.length > 0 && <Section title="Waiting for your answer">{awaiting.map(renderCard)}</Section>}

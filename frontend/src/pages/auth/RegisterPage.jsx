@@ -95,7 +95,7 @@ function RegisterPage() {
 
   return (
     <div className="screen auth-shell">
-      <AuthAside/>
+      <AuthAside mood="excited"/>
       <div className="auth-shell-form">
       {/* Header */}
       <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

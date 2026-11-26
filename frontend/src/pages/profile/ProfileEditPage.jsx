@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePageHeader } from '../../context/HeaderContext';
 import { getMyProfile, updateProfile, getAllTags, deletePhotos, setProfilePic } from '../../api/profilesApi';
@@ -313,7 +312,7 @@ export default function ProfileEditPage() {
           )}
 
           <Btn onClick={handleSave} style={{ width: '100%' }}>
-            {saved ? <><Check size={16}/> Saved!</> : 'Save changes'}
+            {saved ? <><MatchaCup size={18} mood="excited" animate={false}/> Saved!</> : 'Save changes'}
           </Btn>
           </div>
         </div>
