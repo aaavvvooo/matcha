@@ -58,8 +58,6 @@ EMAIL_CONFIGURED = bool(BREVO_API_KEY and FRONTEND_URL)
 OAUTH_REDIRECT_BASE_URL = os.getenv("OAUTH_REDIRECT_BASE_URL")
 OAUTH_42_CLIENT_ID = os.getenv("OAUTH_42_CLIENT_ID")
 OAUTH_42_CLIENT_SECRET = os.getenv("OAUTH_42_CLIENT_SECRET")
-OAUTH_GITHUB_CLIENT_ID = os.getenv("OAUTH_GITHUB_CLIENT_ID")
-OAUTH_GITHUB_CLIENT_SECRET = os.getenv("OAUTH_GITHUB_CLIENT_SECRET")
 
 # Cookies (session + OAuth flow) get the Secure flag when the API's public base URL is https.
 # OAUTH_REDIRECT_BASE_URL is that URL when OAuth is configured; REACT_APP_API_URL otherwise.

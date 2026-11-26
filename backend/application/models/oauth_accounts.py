@@ -16,7 +16,7 @@ class OAuthAccount(Base):
     __table_args__ = (
         UniqueConstraint("provider", "provider_user_id", name="uq_oauth_accounts_provider_user"),
         UniqueConstraint("user_id", "provider", name="uq_oauth_accounts_user_provider"),
-        CheckConstraint("provider IN ('42', 'github')", name="ck_oauth_accounts_provider"),
+        CheckConstraint("provider IN ('42')", name="ck_oauth_accounts_provider"),
     )
 
     id = Column(Integer, primary_key=True)

@@ -110,7 +110,7 @@ Value sets (shared by frontend, seed scripts, and matching; `Literal` types in
 - `notifications.type`: `like` · `view` · `message` · `match` · `unlike` · `date_proposed` · `date_accepted` ·
   `date_declined` · `date_cancelled` · `date_reminder`
 - `dates.status` (`ck_dates_status`): `pending` · `accepted` · `declined` · `cancelled`
-- `oauth_accounts.provider`: `42` · `github` (`ck_oauth_accounts_provider`; allowlist in `clients/oauth_client.py`)
+- `oauth_accounts.provider`: `42` (`ck_oauth_accounts_provider`; allowlist in `clients/oauth_client.py`)
 - `verification_tokens.token_type`: `email` (sign-up verification; with `new_email` set, a pending email change) ·
   `password_reset` (`TOKEN_EMAIL` / `TOKEN_PASSWORD_RESET` in `service/auth_service.py`). Each consumer accepts only its own type.
 - Username rule (`schema/fields.Username`, register / `PATCH /users/me` / OAuth generator): `^[A-Za-z0-9_.-]{3,30}$`,
@@ -141,7 +141,7 @@ else, including `/auth/me`, requires `Authorization: Bearer <access>`.
 | POST | `/refresh` | Rotates the refresh token (httpOnly, SameSite=Strict cookie) within its session; the old one works for 30 s more, so tabs sharing the cookie can refresh together; body `{access_token, token_type}`. **204 No Content** (empty body) when the request carries no `refresh_token` cookie (nothing to restore: a signed-out page load must not log a console error); 401 when a cookie is present but invalid, expired or revoked. 10/min |
 | POST | `/reset-password` | Token + new password in body · 5/min · only `password_reset` tokens. Ends every session of the account: all its outstanding tokens are spent, `token_version` is bumped (every access/refresh JWT dies at once), all its sessions are deleted, its sockets are closed (1008 `logged_out`). The link went to the account's address, so a reset also marks an unverified account verified |
 | GET | `/oauth/providers` | `{"providers": [...]}` — only providers with credentials configured (B1) |
-| GET | `/oauth/{provider}/start` | `provider` ∈ `42`·`github` and configured, else 404 · 302 to the provider with `state` (+ PKCE S256 for GitHub) · sets the `oauth_flow` cookie · 20/min |
+| GET | `/oauth/{provider}/start` | `provider` = `42` and configured, else 404 · 302 to the provider with `state` · sets the `oauth_flow` cookie · 20/min |
 | GET | `/oauth/{provider}/callback` | `code`, `state` (or provider `error`) · always 302 to `{FRONTEND_URL}/oauth/callback?status=ok\|verify_email` or `?error=<code>`; on success sets the same cookies as `/login` · 20/min |
 
 ### Own profile — `/profile`
@@ -251,7 +251,7 @@ tokens   → JWTs carry type=access|refresh; every bearer/cookie/WS credential c
 
 ```
 button (plain link) → GET /auth/oauth/{p}/start
-    state = 256-bit random; GitHub: code_verifier (86 chars) + S256 challenge
+    state = 256-bit random (+ code_verifier and S256 challenge if a provider sets `pkce`; 42 doesn't)
     Set-Cookie oauth_flow=<b64url(json{p, s, v, e=now+10 min})>.<b64url(HMAC-SHA256(flow_key, payload))>;
         HttpOnly; SameSite=Lax; Path=/auth/oauth; Max-Age=600 (Secure when https)
         flow_key = HMAC-SHA256(JWT_SECRET_KEY, "matcha/oauth-flow-v1") — derived, never the JWT key itself
@@ -262,8 +262,7 @@ provider → GET /auth/oauth/{p}/callback?code&state      (cross-site top-level 
       typed/shaped values, not expired and not further than 10 min ahead; p == path provider;
       state == query state (hmac.compare_digest) — any failure → error=invalid_state, before any provider call
     provider `error` → error=access_denied
-    exchange code server-side (10 s timeout, no redirects followed, + code_verifier) → profile
-      (42: /v2/me · GitHub: /user + /user/emails primary entry, used only if `verified`)
+    exchange code server-side (10 s timeout, no redirects followed) → profile (42: /v2/me)
     provider access token dropped; provider bodies, codes and tokens never logged or returned; the callback's
       query string is redacted from uvicorn access logs (`main.py` filter)
     linking (below) → AuthService.issue_session (same as /login: refresh hash in refresh_tokens)
@@ -274,7 +273,7 @@ SPA /oauth/callback → AuthProvider's page-load POST /auth/refresh (same-site X
 ```
 
 **Single use** rests on the browser dropping `oauth_flow` (cleared on every callback outcome, 10-minute expiry)
-plus the providers' single-use, short-lived authorization codes (and PKCE for GitHub): a callback URL replayed
+plus the providers' single-use, short-lived authorization codes: a callback URL replayed
 in the same browser finds no cookie; one replayed elsewhere has no valid cookie. The flow is stateless, so
 `/start` cannot exhaust server memory and any instance can serve the callback. The cookie also carries the PKCE
 `code_verifier`; that is acceptable because it is httpOnly, path-scoped, MAC-protected and sent only back to
@@ -301,9 +300,6 @@ Linking, keyed on the provider's stable numeric id (never login or email):
    verified** and the local user `is_validated`. Unvalidated local user → `link_unverified`; a 42 address (no
    verified flag) → `email_in_use`, never linked.
 3. Otherwise a new user + link in one transaction:
-   - **GitHub** only with a *verified primary* email; an unverified or missing one → `no_email` (no account, no
-     link, no mail). Creating an unvalidated account for an address the GitHub user merely typed would let them
-     pre-register someone else's address with a GitHub link that survives the owner's later password reset.
    - **42**: addresses are assigned by 42 to the student (they can't claim someone else's), but there is no
      verified flag, so the account starts with `is_validated = false` and our verification email is sent
      (`status=verify_email`, no session; `email_unavailable` if email isn't configured, checked before anything
@@ -317,7 +313,7 @@ Linking, keyed on the provider's stable numeric id (never login or email):
 Error codes (fixed; the SPA maps them to text): `access_denied`, `invalid_state`, `provider_error`, `no_email`,
 `email_in_use`, `link_unverified`, `already_linked`, `email_unverified`, `email_unavailable`, `server_error`.
 
-PKCE: GitHub yes (S256 only). 42: not documented in its public API docs, so not sent — it is a confidential
+PKCE: not documented in its public API docs, so not sent — it is a confidential
 client (secret only server-to-server) and `state` still binds the callback to the browser; flip `pkce=True`
 in `PROVIDERS` if 42 confirms support.
 
@@ -574,8 +570,8 @@ Stored in `user_profiles.fame_rating`. `profile_viewers` counts distinct viewers
 | Info leakage | `main.py` middleware logs unhandled errors and returns `{"detail":"Internal server error"}`; `/health` returns only `status` (`healthy`/`degraded`/`unhealthy`), database connectivity and `storage.ready` — no versions, hosts or errors | ✅ |
 | Secrets | `.env` gitignored | ✅ |
 | OAuth login CSRF / session fixation | 256-bit `state` in a stateless HMAC-SHA256-sealed (derived key) httpOnly SameSite=Lax cookie, strict parsing, constant-time compare, 10 min TTL, cleared on every callback; single use = cookie clearing + providers' single-use codes (§6). No server state, so `/start` can't exhaust memory | ✅ |
-| OAuth code injection / interception | Code exchanged server-side with the client secret; PKCE S256 (GitHub); `redirect_uri` fixed from config; provider id in the flow must match the callback path (no mix-up) | ✅ |
-| OAuth account takeover / pre-hijack | Link by email only when the provider marks it verified **and** the local account is validated; GitHub sign-up only with a verified primary email; 42 addresses never linked, and a new 42 account's link stays inert until our verification email is clicked; identities keyed on the provider's numeric id; one identity per provider per user | ✅ |
+| OAuth code injection / interception | Code exchanged server-side with the client secret; `redirect_uri` fixed from config; provider id in the flow must match the callback path (no mix-up) | ✅ |
+| OAuth account takeover / pre-hijack | Link by email only when the provider marks it verified **and** the local account is validated; 42 addresses never linked, and a new 42 account's link stays inert until our verification email is clicked; identities keyed on the provider's numeric id; one identity per provider per user | ✅ |
 | Codes in logs | uvicorn access-log query string redacted for `/auth/oauth/*/callback` (`main.py`); app logs carry only error tags/status codes | ✅ |
 | Seed account takeover | Seed users are validated, so their emails use the reserved `matcha-seed[-am].example.org` (RFC 2606) instead of registrable domains; old `.dev` seeds are moved on the next seed run | ✅ |
 | Call signalling abuse | Call frames only between connected, unblocked users (checked at invite and accept, call torn down on unlike / block); `from` stamped by the server; only the call's two bound sockets can act on a `call_id` (foreign / unknown ids get one generic error); SDP / ICE validated structurally with size caps, nothing else relayed; separate invite / signal / per-call rate limits; no exception text in frames | ✅ |

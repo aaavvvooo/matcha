@@ -5,7 +5,6 @@ import { getOAuthProviders, oauthStartUrl } from '../../api/authApi';
 // know is simply not rendered.
 const LABELS = {
   '42': 'Continue with 42',
-  github: 'Continue with GitHub',
 };
 
 const linkStyle = {

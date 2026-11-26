@@ -1,4 +1,4 @@
-"""Hand-rolled OAuth 2.0 authorization-code client for 42 Intra and GitHub (bonus B1).
+"""Hand-rolled OAuth 2.0 authorization-code client for 42 Intra (bonus B1).
 
 No OAuth / account library: plain httpx. Rules:
 - Endpoint URLs are fixed here; the redirect_uri is built from server config only.
@@ -19,8 +19,6 @@ from application.config import (
     FRONTEND_URL,
     OAUTH_42_CLIENT_ID,
     OAUTH_42_CLIENT_SECRET,
-    OAUTH_GITHUB_CLIENT_ID,
-    OAUTH_GITHUB_CLIENT_SECRET,
     OAUTH_REDIRECT_BASE_URL,
 )
 
@@ -45,9 +43,6 @@ class ProviderConfig:
     token_url: str
     scope: str
     pkce: bool
-    # May an address the provider doesn't mark verified start a new (unvalidated)
-    # account? Only for 42, whose addresses are school-assigned.
-    unverified_signup: bool
     client_id: Optional[str]
     client_secret: Optional[str]
 
@@ -82,30 +77,12 @@ PROVIDERS: dict[str, ProviderConfig] = {
         token_url="https://api.intra.42.fr/oauth/token",
         scope="public",
         pkce=False,
-        unverified_signup=True,
         client_id=OAUTH_42_CLIENT_ID,
         client_secret=OAUTH_42_CLIENT_SECRET,
-    ),
-    "github": ProviderConfig(
-        id="github",
-        label="GitHub",
-        authorize_url="https://github.com/login/oauth/authorize",
-        token_url="https://github.com/login/oauth/access_token",
-        scope="read:user user:email",
-        pkce=True,  # GitHub supports S256 only
-        unverified_signup=False,
-        client_id=OAUTH_GITHUB_CLIENT_ID,
-        client_secret=OAUTH_GITHUB_CLIENT_SECRET,
     ),
 }
 
 _42_ME_URL = "https://api.intra.42.fr/v2/me"
-_GITHUB_USER_URL = "https://api.github.com/user"
-_GITHUB_EMAILS_URL = "https://api.github.com/user/emails"
-_GITHUB_HEADERS = {
-    "Accept": "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-}
 
 
 def enabled_providers() -> list[str]:
@@ -162,7 +139,7 @@ async def _exchange_code(
         client, "POST", provider.token_url, f"{provider.id}.token",
         data=form, headers={"Accept": "application/json"},
     )
-    # GitHub reports errors as HTTP 200 + {"error": ...}; only the error tag is logged.
+    # Some providers report errors as HTTP 200 + {"error": ...}; only the error tag is logged.
     token = data.get("access_token") if isinstance(data, dict) else None
     if not isinstance(token, str) or not token:
         err = data.get("error") if isinstance(data, dict) else None
@@ -206,41 +183,10 @@ async def _fetch_42(client: httpx.AsyncClient, token: str) -> ProviderIdentity:
     )
 
 
-async def _fetch_github(client: httpx.AsyncClient, token: str) -> ProviderIdentity:
-    headers = {**_GITHUB_HEADERS, "Authorization": f"Bearer {token}"}
-    user = await _json(client, "GET", _GITHUB_USER_URL, "github.user", headers=headers)
-    if not isinstance(user, dict):
-        raise ProviderError("github.user")
-    emails = await _json(client, "GET", _GITHUB_EMAILS_URL, "github.emails", headers=headers)
-    # Only a verified primary address is used. An unverified one is dropped
-    # entirely (-> no_email): creating an account for it would let whoever
-    # typed it into GitHub pre-register someone else's address with a link
-    # that survives the real owner's later password reset.
-    email: Optional[str] = None
-    if isinstance(emails, list):
-        for entry in emails:
-            if isinstance(entry, dict) and entry.get("primary") is True:
-                if entry.get("verified") is True:
-                    email = _str(entry.get("email")) or None
-                break
-    name = _str(user.get("name"))
-    first, _, last = name.partition(" ")
-    return ProviderIdentity(
-        provider_user_id=_provider_user_id(user.get("id")),
-        login=_str(user.get("login")),
-        email=email,
-        email_verified=email is not None,
-        first_name=first.strip(),
-        last_name=last.strip(),
-    )
-
-
 async def fetch_identity(
     provider: ProviderConfig, code: str, code_verifier: Optional[str]
 ) -> ProviderIdentity:
     """Exchange the code, read the profile, and forget the provider token."""
     async with _client() as client:
         token = await _exchange_code(client, provider, code, code_verifier)
-        if provider.id == "42":
-            return await _fetch_42(client, token)
-        return await _fetch_github(client, token)
+        return await _fetch_42(client, token)

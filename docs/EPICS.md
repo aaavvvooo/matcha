@@ -113,8 +113,8 @@ All ❌. Each bonus reuses mandatory infrastructure, so its dependencies must be
 
 | Feature | Status | Notes |
 |---|---|---|
-| B1.1 Provider registration (42 Intra, plus Google or GitHub); credentials in `.env` | ✅ | 42 + GitHub; a provider without credentials is disabled (404, no button). Setup in README |
-| B1.2 Authorize redirect + callback with `state` (CSRF) and PKCE | ✅ | Hand-rolled with `httpx`, not a user-account-manager library. PKCE S256 for GitHub; 42 doesn't document PKCE (state only) |
+| B1.1 Provider registration (42 Intra, plus Google or GitHub); credentials in `.env` | ✅ | 42 only (GitHub removed 2026-11-26: the subject names no provider); a provider without credentials is disabled (404, no button). Setup in README |
+| B1.2 Authorize redirect + callback with `state` (CSRF) and PKCE | ✅ | Hand-rolled with `httpx`, not a user-account-manager library. 42 doesn't document PKCE (state only; the PKCE switch stays in `PROVIDERS`) |
 | B1.3 Account linking: `oauth_accounts` table; create user or link to existing verified email | ✅ | Never auto-link to an unverified email; 42 emails are never trusted for linking (no verified flag) |
 | B1.4 First OAuth login ⇒ generate username, redirect to profile setup | ✅ | |
 | B1.5 Frontend: provider buttons on login/register, callback page | ✅ | Tokens never placed in URLs; callback page reuses AuthProvider's page-load refresh |

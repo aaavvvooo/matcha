@@ -57,7 +57,6 @@ message listing their ids and changes nothing; rename one of them and restart.
 | `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` | Optional TURN relay for calls (all three required; `TURN_URL` may list several comma-separated URLs) |
 | `OAUTH_REDIRECT_BASE_URL` | Public base URL of the API used in OAuth callback URLs (Compose: `http://localhost:8000`) |
 | `OAUTH_42_CLIENT_ID`, `OAUTH_42_CLIENT_SECRET` | Optional: "Continue with 42" (UID / SECRET of a 42 Intra app) |
-| `OAUTH_GITHUB_CLIENT_ID`, `OAUTH_GITHUB_CLIENT_SECRET` | Optional: "Continue with GitHub" (GitHub OAuth app) |
 
 **OAuth sign-in (optional).** A provider is enabled only when its id + secret, `OAUTH_REDIRECT_BASE_URL` and
 `FRONTEND_URL` are all set; otherwise its button is hidden and its routes return 404. Register one app per
@@ -66,13 +65,11 @@ provider with exactly this callback URL (the backend's, not the frontend's):
 | Provider | Where | Callback / redirect URI |
 |---|---|---|
 | 42 Intra | intra.42.fr → Settings → API → *Register a new app* (scope `public`) | `http://localhost:8000/auth/oauth/42/callback` |
-| GitHub | github.com → Settings → Developer settings → *OAuth Apps* → *New OAuth App* | `http://localhost:8000/auth/oauth/github/callback` |
 
 Replace `http://localhost:8000` with `OAUTH_REDIRECT_BASE_URL` when deployed. Open the app as
 `http://localhost:3000` (not `127.0.0.1`) so the SPA and the API stay the same site for the session cookie.
 New accounts from 42 (which doesn't mark emails verified) must confirm the address through the usual
-verification email before they can sign in; GitHub sign-in requires a verified primary email on the GitHub
-account. OAuth needs the SPA and the API on the same site (true for Compose); see `docs/DESIGN.md` §6 for what a
+verification email before they can sign in. OAuth needs the SPA and the API on the same site (true for Compose); see `docs/DESIGN.md` §6 for what a
 split production deployment would need.
 
 **Voice / video calls.** Calls are peer-to-peer WebRTC, signalled over the chat WebSocket. Browsers only allow

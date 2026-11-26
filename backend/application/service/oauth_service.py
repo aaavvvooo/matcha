@@ -12,11 +12,10 @@ Linking rules (never trust an address the provider does not mark verified):
   2. provider-verified email == validated user -> link + that user
      provider-verified email == unvalidated    -> refuse (link_unverified)
      unverified/absent email == existing user  -> refuse (email_in_use), no link
-  3. otherwise create a user + link in one transaction. GitHub: only with a
-     verified primary email (else no_email: no account, no link). 42: its
-     school-assigned address has no verified flag, so the account starts
-     unvalidated and gets a verification email; the link is inert (no session)
-     until that mail is clicked.
+  3. otherwise create a user + link in one transaction. 42's school-assigned
+     address has no verified flag, so the account starts unvalidated and gets a
+     verification email; the link is inert (no session) until that mail is
+     clicked.
 """
 
 import base64
@@ -289,8 +288,6 @@ class OAuthService:
             return await self._session_for(local)
 
         # 3. New account.
-        if not verified and not provider.unverified_signup:
-            raise OAuthFlowError("no_email")  # defense in depth; the GitHub client already drops it
         if not verified and not email_available:
             raise OAuthFlowError("email_unavailable")
         return await self._create(provider, identity, email, verified)
