@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { forgotPassword } from '../../api/authApi';
+import MatchaCup from '../../components/ui/MatchaCup';
 
 function ForgotPasswordPage() {
   const [usernameOrEmail, setUsernameOrEmail] = useState('');
@@ -26,7 +27,7 @@ function ForgotPasswordPage() {
     return (
       <div className="status-card">
         <div className="status-card__inner">
-          <span className="status-card__icon">&#9993;</span>
+          <MatchaCup size={72} mood="excited"/>
           <h1 className="status-card__title">Check your email</h1>
           <p className="status-card__body">If that account exists, we sent a password reset link.</p>
           <Link to="/login" className="btn btn-ghost">Back to Sign in</Link>
@@ -39,7 +40,7 @@ function ForgotPasswordPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-header">
-          <span className="auth-logo">matcha</span>
+          <span className="auth-logo"><MatchaCup size={44} mood="happy"/>Matcha</span>
           <h1 className="auth-title">Forgot password?</h1>
           <p className="auth-subtitle">We'll send you a reset link</p>
         </div>

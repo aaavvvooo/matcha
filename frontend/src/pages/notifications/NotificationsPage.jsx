@@ -2,7 +2,9 @@ import { useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useNotifications } from '../../context/NotificationContext'
 import { usePageHeader } from '../../context/HeaderContext'
-import Btn from '../../components/ui/Btn'
+import CupLoading from '../../components/ui/CupLoading'
+import CupMessage from '../../components/ui/CupMessage'
+import LoadError from '../../components/ui/LoadError'
 import { notificationText, notificationLink } from '../../utils/notificationInfo'
 import './NotificationsPage.css'
 
@@ -30,14 +32,11 @@ export default function NotificationsPage() {
     <div className="notif-page">
       <div className="notif-inner">
         {loadState === 'error' && notifications.length === 0 ? (
-          <div className="notif-empty" role="alert">
-            <p>Couldn't load your notifications.</p>
-            <Btn variant="secondary" onClick={reload}>Try again</Btn>
-          </div>
+          <LoadError onRetry={reload}>Couldn't load your notifications.</LoadError>
         ) : loadState === 'loading' && notifications.length === 0 ? (
-          <p className="notif-empty">Loading…</p>
+          <CupLoading/>
         ) : notifications.length === 0 ? (
-          <p className="notif-empty">You have no notifications yet.</p>
+          <CupMessage mood="sleepy" title="No notifications yet"/>
         ) : (
         <ul className="notif-list">
           {notifications.map(n => (

@@ -56,6 +56,11 @@ class SocialService:
         if not await self.user_repo.user_exists(user_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    async def _recalculate_fame_of(self, *user_ids: int) -> None:
+        # A connection counts towards both ends, so whatever changes it changes both ratings.
+        for user_id in user_ids:
+            await self.social_repo.recalculate_fame(user_id)
+
     async def get_user_profile(self, viewer_id: int, user_id: int) -> UserProfileResponse:
         profile = await self.profile_repo.get_profile(user_id)
         # Same 404 for missing, unverified, incomplete and blocking users, so the
@@ -122,9 +127,10 @@ class SocialService:
         target = await self.profile_repo.get_profile(liked_id)
         if not target or target["gender"] is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        # Same 404 as a missing user: a block must not be detectable.
+        not_found = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         if await self.social_repo.is_blocked_either_way(liker_id, liked_id):
-            # Same 404 as a missing user: a block must not be detectable.
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+            raise not_found
         photo_count = await self.profile_repo.count_photos(liker_id)
         if photo_count == 0:
             raise HTTPException(
@@ -132,13 +138,21 @@ class SocialService:
                 detail="Add a profile picture before liking other users",
             )
 
-        is_new_like = await self.social_repo.like_user(liker_id, liked_id)
-        await self.social_repo.recalculate_fame(liked_id)
-
-        is_match = await self.social_repo.has_liked(liked_id, liker_id)
+        # One transaction under the pair lock: a block or unlike at the same moment comes wholly
+        # before (and is seen here) or wholly after (and undoes this).
         connection_created = False
-        if is_match:
-            connection_created = await self.social_repo.create_connection(liker_id, liked_id)
+        with _user_fk_as_404():
+            async with self.db.require_pool().acquire() as connection:
+                async with connection.transaction():
+                    conn = cast(Connection, connection)
+                    await self.social_repo.lock_pair(liker_id, liked_id, conn)
+                    if await self.social_repo.is_blocked_either_way(liker_id, liked_id, conn):
+                        raise not_found
+                    is_new_like = await self.social_repo.like_user(liker_id, liked_id, conn)
+                    is_match = await self.social_repo.has_liked(liked_id, liker_id, conn)
+                    if is_match:
+                        connection_created = await self.social_repo.create_connection(liker_id, liked_id, conn)
+        await self._recalculate_fame_of(liker_id, liked_id)
 
         # Repeated likes are no-ops and notify nobody. A like-back is a "match" for both
         # sides instead of a plain "like". Only the request that actually created the
@@ -159,6 +173,7 @@ class SocialService:
         async with pool.acquire() as connection:
             async with connection.transaction():
                 conn = cast(Connection, connection)
+                await self.social_repo.lock_pair(liker_id, liked_id, conn)
                 was_connected = await self.social_repo.are_connected(liker_id, liked_id, conn)
                 removed = await self.social_repo.unlike_user(liker_id, liked_id, conn)
                 await self.social_repo.remove_connection(liker_id, liked_id, conn)
@@ -167,7 +182,7 @@ class SocialService:
                 await self.dates.cancel_between(liker_id, liked_id, conn)
         # The connection is gone: a ringing or running call between the two ends (B4.4).
         await call_manager.end_between(liker_id, liked_id)
-        await self.social_repo.recalculate_fame(liked_id)
+        await self._recalculate_fame_of(liker_id, liked_id)
         # Subject IV.7: notify when a connected user unlikes you.
         if removed and was_connected:
             await self.notifications.notify_safe(liked_id, "unlike", liker_id)
@@ -183,14 +198,14 @@ class SocialService:
             async with pool.acquire() as connection:
                 async with connection.transaction():
                     conn = cast(Connection, connection)
+                    await self.social_repo.lock_pair(blocker_id, blocked_id, conn)
                     await self.social_repo.block_user(blocker_id, blocked_id, conn)
                     await self.social_repo.unlike_user(blocker_id, blocked_id, conn)
                     await self.social_repo.unlike_user(blocked_id, blocker_id, conn)
                     await self.social_repo.remove_connection(blocker_id, blocked_id, conn)
                     await self.dates.cancel_between(blocker_id, blocked_id, conn)
         await call_manager.end_between(blocker_id, blocked_id)
-        await self.social_repo.recalculate_fame(blocker_id)
-        await self.social_repo.recalculate_fame(blocked_id)
+        await self._recalculate_fame_of(blocker_id, blocked_id)
         return {"blocked": True}
 
     async def unblock(self, blocker_id: int, blocked_id: int):

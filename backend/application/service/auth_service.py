@@ -1,5 +1,4 @@
 import hashlib
-import hmac
 from dataclasses import dataclass
 from datetime import timedelta, datetime, timezone
 from typing import Optional, cast
@@ -24,6 +23,7 @@ from application.utils import (
     parse_session_claims,
     session_claims,
 )
+from application.utils.tokens import REFRESH_TOKEN_EXPIRE_DAYS
 from application.websocket.manager import presence_manager
 from application.database import Database
 from application.service.db_errors import map_integrity_errors
@@ -38,6 +38,16 @@ EMAIL_CHANGES_PER_HOUR = 5       # pending email changes requested per account p
 
 _MAX_IDENTIFIER = 254
 _MAX_PASSWORD = 128
+
+
+MAX_SESSIONS_PER_USER = 10
+MAX_TOKENS_PER_SESSION = 5
+# How long a rotated refresh token still works: tabs share the cookie and may refresh together.
+ROTATION_GRACE_SECONDS = 30
+
+
+def _refresh_expiry() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
 
 def _hash_token(token: str) -> str:
@@ -195,15 +205,16 @@ class AuthService:
         return await self.issue_session(user["id"], user["token_version"])
 
     async def issue_session(self, user_id: int, token_version: int) -> tuple[str, str]:
-        """Mint an access + refresh pair and store the refresh hash. Shared by
-        password login, refresh and OAuth sign-in so all end in the same session state.
+        """Start a session: mint an access + refresh pair and store the refresh hash. Shared by
+        password login and OAuth sign-in so both end in the same session state.
         Tokens carry the immutable user id (never the username) and the token version.
         Callers must have authenticated the user and checked is_validated."""
         claims = session_claims(user_id, token_version)
         access_token = create_access_token(data=claims)
         refresh_token = create_refresh_token(data=claims)
-        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-        await self.token_repo.upsert_refresh_token(user_id, _hash_token(refresh_token), expires_at)
+        await self.token_repo.create_session(
+            user_id, _hash_token(refresh_token), _refresh_expiry(), MAX_SESSIONS_PER_USER
+        )
         return access_token, refresh_token
 
     async def _current_session_user(self, payload: dict | None, token_type: str) -> int | None:
@@ -241,8 +252,13 @@ class AuthService:
             user_id = await self._current_session_user(decode_token(refresh_token), "refresh")
 
         if user_id is not None:
-            await self.token_repo.delete_refresh_token(user_id)
-            # Open sockets were authenticated once; end them with the session.
+            # This device's session only. Without a cookie there is no telling which that is: end all.
+            if refresh_token:
+                await self.token_repo.delete_session(user_id, _hash_token(refresh_token))
+            else:
+                await self.token_repo.delete_all_sessions(user_id)
+            # Open sockets were authenticated once; end them with the session (the user's other
+            # devices reconnect with their own).
             await presence_manager.close_user(user_id)
 
     async def refresh(self, refresh_token: str):
@@ -264,13 +280,17 @@ class AuthService:
             )
         user_id, version = claims
 
-        record = await self.token_repo.get_refresh_token(user_id)
-        if not record or not hmac.compare_digest(record["token_hash"], _hash_token(refresh_token)):
-            raise revoked
         user = await self.user_repo.get_user_by_id(user_id)
         if not user or not user["is_validated"] or user["token_version"] != version:
             raise revoked
-        return await self.issue_session(user_id, user["token_version"])
+        claims_out = session_claims(user_id, version)
+        new_refresh_token = create_refresh_token(data=claims_out)
+        if not await self.token_repo.rotate_refresh_token(
+            user_id, version, _hash_token(refresh_token), _hash_token(new_refresh_token), _refresh_expiry(),
+            ROTATION_GRACE_SECONDS, MAX_TOKENS_PER_SESSION,
+        ):
+            raise revoked
+        return create_access_token(data=claims_out), new_refresh_token
 
     async def forget_password(self, username_or_email: str) -> ForgetPasswordResult:
         msg = "If the account exists, a reset email has been sent"
@@ -340,7 +360,7 @@ class AuthService:
                 )
                 await self.token_repo.invalidate_user_tokens(token_info.user_id, None, conn)
                 await self.user_repo.bump_token_version(token_info.user_id, conn)
-                await self.token_repo.delete_refresh_token(token_info.user_id, conn)
+                await self.token_repo.delete_all_sessions(token_info.user_id, conn)
         await presence_manager.close_user(token_info.user_id)
         return user_record
 

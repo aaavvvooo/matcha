@@ -10,16 +10,20 @@ class SocialRepository:
     def __init__(self, db: Database):
         self.db = db
 
+    async def lock_pair(self, a: int, b: int, transaction: Connection) -> None:
+        """Serialises everything that changes what two users are to each other (like, unlike, block,
+        date proposals: same lock as DateRepository), until the transaction ends."""
+        await transaction.execute("SELECT pg_advisory_xact_lock($1::int, $2::int)", min(a, b), max(a, b))
+
     # ── likes ─────────────────────────────────────────────────────────────
-    async def like_user(self, liker_id: int, liked_id: int) -> bool:
+    async def like_user(self, liker_id: int, liked_id: int, transaction: Connection) -> bool:
         query = """
             INSERT INTO likes (liker_id, liked_id)
             VALUES ($1, $2)
             ON CONFLICT DO NOTHING
             RETURNING liker_id
         """
-        row = await self.db.fetch_one(query, liker_id, liked_id)
-        return row is not None
+        return await transaction.fetchrow(query, liker_id, liked_id) is not None
 
     async def unlike_user(
         self, liker_id: int, liked_id: int, transaction: Optional[Connection] = None
@@ -31,8 +35,12 @@ class SocialRepository:
             row = await self.db.fetch_one(query, liker_id, liked_id)
         return row is not None
 
-    async def has_liked(self, liker_id: int, liked_id: int) -> bool:
+    async def has_liked(
+        self, liker_id: int, liked_id: int, transaction: Optional[Connection] = None
+    ) -> bool:
         query = "SELECT 1 FROM likes WHERE liker_id = $1 AND liked_id = $2"
+        if transaction is not None:
+            return await transaction.fetchval(query, liker_id, liked_id) is not None
         return await self.db.fetch_val(query, liker_id, liked_id) is not None
 
     async def count_likers(self, user_id: int) -> int:
@@ -109,7 +117,7 @@ class SocialRepository:
         return await self.db.fetch_all(query, user_id)
 
     # ── connections ────────────────────────────────────────────────────────
-    async def create_connection(self, a: int, b: int) -> bool:
+    async def create_connection(self, a: int, b: int, transaction: Connection) -> bool:
         """Returns True only for the call that actually inserted the row (idempotent under races)."""
         lo, hi = min(a, b), max(a, b)
         query = """
@@ -118,7 +126,7 @@ class SocialRepository:
             ON CONFLICT DO NOTHING
             RETURNING user_a_id
         """
-        return await self.db.fetch_one(query, lo, hi) is not None
+        return await transaction.fetchrow(query, lo, hi) is not None
 
     async def remove_connection(self, a: int, b: int, transaction: Optional[Connection] = None):
         lo, hi = min(a, b), max(a, b)
@@ -136,12 +144,6 @@ class SocialRepository:
         else:
             result = await self.db.fetch_val(query, lo, hi)
         return result is not None
-
-    async def count_connections(self, user_id: int) -> int:
-        return await self.db.fetch_val(
-            "SELECT COUNT(*) FROM connections WHERE user_a_id = $1 OR user_b_id = $1",
-            user_id,
-        )
 
     # ── blocks ─────────────────────────────────────────────────────────────
     async def block_user(
@@ -167,16 +169,17 @@ class SocialRepository:
         )
         return result is not None
 
-    async def is_blocked_either_way(self, a: int, b: int) -> bool:
-        result = await self.db.fetch_val(
-            """
+    async def is_blocked_either_way(
+        self, a: int, b: int, transaction: Optional[Connection] = None
+    ) -> bool:
+        query = """
             SELECT 1 FROM blocks
             WHERE (blocker_id = $1 AND blocked_id = $2)
                OR (blocker_id = $2 AND blocked_id = $1)
-            """,
-            a, b,
-        )
-        return result is not None
+        """
+        if transaction is not None:
+            return await transaction.fetchval(query, a, b) is not None
+        return await self.db.fetch_val(query, a, b) is not None
 
     async def get_blocked_ids(self, user_id: int) -> list[int]:
         rows = await self.db.fetch_all(
@@ -272,17 +275,19 @@ class SocialRepository:
         )
 
     # ── fame rating ────────────────────────────────────────────────────────
-    async def recalculate_fame(self, user_id: int) -> float:
-        likes_received = await self.db.fetch_val(
-            "SELECT COUNT(*) FROM likes WHERE liked_id = $1", user_id
-        )
-        views = await self.db.fetch_val(
-            "SELECT COUNT(*) FROM profile_views WHERE viewed_id = $1", user_id
-        )
-        connections = await self.count_connections(user_id)
-        fame = min(100.0, (likes_received * 3) + (views * 1) + (connections * 5))
-        await self.db.execute(
-            "UPDATE user_profiles SET fame_rating = $1 WHERE user_id = $2",
-            fame, user_id,
-        )
-        return fame
+    async def recalculate_fame(self, user_id: int) -> None:
+        """DESIGN §9. The row is locked before counting, so concurrent recalculations queue up and
+        the last one counts everything committed before it."""
+        async with self.db.require_pool().acquire() as connection:
+            async with connection.transaction():
+                await connection.execute("SELECT 1 FROM user_profiles WHERE user_id = $1 FOR UPDATE", user_id)
+                await connection.execute(
+                    """
+                    UPDATE user_profiles SET fame_rating = LEAST(100,
+                        3 * (SELECT count(*) FROM likes WHERE liked_id = $1)
+                        + (SELECT count(*) FROM profile_views WHERE viewed_id = $1)
+                        + 5 * (SELECT count(*) FROM connections WHERE user_a_id = $1 OR user_b_id = $1))
+                    WHERE user_id = $1
+                    """,
+                    user_id,
+                )

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Sparkle } from 'lucide-react';
+import MatchaCup from '../../components/ui/MatchaCup';
 import Btn from '../../components/ui/Btn';
 import LocationPicker from '../../components/ui/LocationPicker';
 import { apiError } from '../../api/errors';
@@ -171,6 +172,7 @@ function ProfileSetupPage() {
             }}/>
           ))}
         </div>
+        <MatchaCup size={40} mood={step === STEPS.length - 1 ? 'excited' : 'happy'}/>
       </div>
 
       <div style={{ padding: '24px 24px 0' }}>

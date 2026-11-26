@@ -54,7 +54,12 @@ class PresenceManager:
         self._connections.setdefault(user_id, set()).add(websocket)
         self._message_limiters.setdefault(user_id, SlidingWindowLimiter(*MESSAGE_LIMIT))
         if is_first_connection:
-            await self.user_repo.set_online(user_id)
+            try:
+                await self.user_repo.set_online(user_id)
+            except BaseException:
+                # Not registered after all, or the user would stay online for good.
+                await self.disconnect(user_id, websocket)
+                raise
         return True
 
     async def disconnect(self, user_id: int, websocket: WebSocket) -> None:

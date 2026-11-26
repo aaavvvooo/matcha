@@ -33,6 +33,7 @@ Baseline on 2026-11-08: ruff clean, mypy 5 errors — add no new ones.
 ```bash
 uv run ruff check application
 uv run mypy --config-file application/mypy.ini application
+uv run pytest                          # throwaway matcha_test database; needs `docker compose up -d postgres`
 cd ../frontend && npm run build        # must compile with no errors
 ```
 Full stack: `docker compose up --build` from the repo root (runs migrations and seeds 500+ profiles).

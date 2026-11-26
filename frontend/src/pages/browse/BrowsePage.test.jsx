@@ -237,3 +237,52 @@ describe('coming back to Discover', () => {
     expect(browse.mock.calls.length).toBeLessThan(4);
   });
 });
+
+test('a like that fails without a server message still tells the user', async () => {
+  likeUser.mockRejectedValueOnce(new Error('offline'));
+  const card = await renderCard();
+
+  await act(async () => { fireEvent.click([...card.querySelectorAll('button')].find(b => b.textContent.startsWith('Like'))); });
+
+  expect(screen.getByText(/Could not send your like/)).toBeInTheDocument();
+});
+
+describe('the cup on Discover', () => {
+  const moods = () => [...document.querySelectorAll('svg[data-mood]')].map(svg => svg.getAttribute('data-mood'));
+  const likeFirst = async () => {
+    const card = await renderCard();
+    await act(async () => { fireEvent.click([...card.querySelectorAll('button')].find(b => b.textContent.startsWith('Like'))); });
+  };
+
+  test('is searching while people load', () => {
+    browse.mockReturnValue(new Promise(() => {}));
+    render(<BrowsePage />);
+    expect(moods()).toEqual(['searching']);
+  });
+
+  test('pops with love after a like, then leaves', async () => {
+    await likeFirst();
+    expect(moods()).toContain('love');
+    await waitFor(() => expect(moods()).not.toContain('love'), { timeout: 2500 });
+  });
+
+  test('celebrates a match with hearts instead', async () => {
+    likeUser.mockResolvedValue({ is_match: true });
+    await likeFirst();
+    expect(moods()).toContain('match');
+    expect(moods()).not.toContain('love');
+  });
+
+  test('stays away when the like fails', async () => {
+    likeUser.mockRejectedValue(new Error('offline'));
+    await likeFirst();
+    expect(moods()).not.toContain('love');
+  });
+
+  test('is sad when people cannot be loaded', async () => {
+    browse.mockRejectedValue(new Error('offline'));
+    render(<BrowsePage />);
+    await screen.findByRole('button', { name: 'Try again' });
+    expect(moods()).toEqual(['sad']);
+  });
+});

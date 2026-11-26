@@ -1,6 +1,7 @@
 import { useId } from 'react';
+import './cupMessages.css';
 
-function MatchaCup({ size = 80, mood = 'happy', animate = true, style: extraStyle = {} }) {
+function MatchaCup({ size = 80, mood = 'happy', animate = true, style: extraStyle = {}, className = '' }) {
   const s = size;
   const h = size * 110 / 80;
   // Own ids per cup: a shared one resolves to the first cup in the page, whose gradients do not
@@ -16,11 +17,15 @@ function MatchaCup({ size = 80, mood = 'happy', animate = true, style: extraStyl
     sleepy:  { type: 'line',  lx: 28, ly: 66, rx: 52, ry: 66, zzz: true },
     love:    { type: 'heart', lx: 28, ly: 64, rx: 52, ry: 64 },
     match:   { type: 'heart', lx: 28, ly: 62, rx: 52, ry: 62, blush: true, floaties: true },
+    sad:     { type: 'sad',   lx: 28, ly: 66, rx: 52, ry: 66 },
+    searching: { type: 'look', lx: 28, ly: 65, rx: 52, ry: 65 },
   };
   const e = eyes[mood] || eyes.happy;
 
   return (
-    <svg viewBox="0 0 80 110" width={s} height={h} style={{ display: 'block', overflow: 'visible', ...extraStyle }}>
+    <svg
+      className={`matcha-cup ${className}`} data-mood={mood} aria-hidden="true"
+      viewBox="0 0 80 110" width={s} height={h} style={{ display: 'block', overflow: 'visible', ...extraStyle }}>
       <defs>
         <linearGradient id={bodyId} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0"   stopColor="#d4f0c8"/>
@@ -82,6 +87,25 @@ function MatchaCup({ size = 80, mood = 'happy', animate = true, style: extraStyl
           <circle cx={e.rx+1.5} cy={e.ry-1.5} r="1.2" fill="white"/>
         </>
       )}
+      {e.type === 'look' && [e.lx, e.rx].map(cx => (
+        <g key={cx}>
+          <circle cx={cx} cy={e.ly} r="6.5" fill="white" stroke="#3a2818" strokeWidth="1.8"/>
+          <circle cx={cx} cy={e.ly} r="2.8" fill="#3a2818"
+            style={animate ? { animation: 'cupLook 3s ease-in-out infinite' } : {}}/>
+        </g>
+      ))}
+      {e.type === 'sad' && (
+        <>
+          {/* brows rise towards the middle, eyelids droop */}
+          <path d={`M${e.lx-6} ${e.ly-8} Q${e.lx} ${e.ly-12} ${e.lx+5} ${e.ly-13}`} fill="none" stroke="#3a2818" strokeWidth="1.8" strokeLinecap="round"/>
+          <path d={`M${e.rx+6} ${e.ry-8} Q${e.rx} ${e.ry-12} ${e.rx-5} ${e.ry-13}`} fill="none" stroke="#3a2818" strokeWidth="1.8" strokeLinecap="round"/>
+          <circle cx={e.lx} cy={e.ly-1} r="3.6" fill="#3a2818"/>
+          <circle cx={e.rx} cy={e.ry-1} r="3.6" fill="#3a2818"/>
+          <circle cx={e.lx+1.3} cy={e.ly-2.3} r="1.1" fill="white"/>
+          <circle cx={e.rx+1.3} cy={e.ry-2.3} r="1.1" fill="white"/>
+          <path d={`M${e.lx-1} ${e.ly+5} Q${e.lx-4} ${e.ly+10} ${e.lx-1} ${e.ly+11.5} Q${e.lx+2} ${e.ly+10} ${e.lx-1} ${e.ly+5} Z`} fill="#8fc3e8"/>
+        </>
+      )}
       {e.type === 'line' && (
         <>
           <path d={`M${e.lx-5} ${e.ly} Q${e.lx} ${e.ly+2} ${e.lx+5} ${e.ly}`}
@@ -118,6 +142,10 @@ function MatchaCup({ size = 80, mood = 'happy', animate = true, style: extraStyl
       {/* mouth */}
       {mood === 'sleepy'
         ? <path d="M35 74 Q40 75.5 45 74" fill="none" stroke="#3a2818" strokeWidth="1.8" strokeLinecap="round"/>
+        : mood === 'sad'
+        ? <path d="M35 79 Q40 74 45 79" fill="none" stroke="#3a2818" strokeWidth="2" strokeLinecap="round"/>
+        : mood === 'searching'
+        ? <path d="M37 77 Q40 75 43 77" fill="none" stroke="#3a2818" strokeWidth="2" strokeLinecap="round"/>
         : mood === 'excited' || mood === 'match'
         ? <path d="M33 74 Q40 82 47 74" fill="#3a2818"/>
         : <path d="M34 74 Q40 80 46 74" fill="none" stroke="#3a2818" strokeWidth="2" strokeLinecap="round"/>

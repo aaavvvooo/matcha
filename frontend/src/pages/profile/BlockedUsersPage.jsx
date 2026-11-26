@@ -1,52 +1,53 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserX } from 'lucide-react';
 import { getBlockedUsers, unblockUser } from '../../api/usersApi';
 import { usePageHeader } from '../../context/HeaderContext';
+import { useList } from '../../hooks/useList';
 import Avatar from '../../components/ui/Avatar';
+import CupLoading from '../../components/ui/CupLoading';
+import CupMessage from '../../components/ui/CupMessage';
+import LoadError from '../../components/ui/LoadError';
 import Btn from '../../components/ui/Btn';
 import { displayName } from '../../utils/displayName';
 
 export default function BlockedUsersPage() {
   const navigate = useNavigate();
   usePageHeader(useMemo(() => ({ title: 'Blocked users', onBack: () => navigate(-1) }), [navigate]));
-  const [blocked, setBlocked] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { items: blocked, setItems: setBlocked, state, reload } = useList(getBlockedUsers);
   const [confirmTarget, setConfirmTarget] = useState(null);
-
-  useEffect(() => {
-    getBlockedUsers()
-      .then(setBlocked)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const [unblockError, setUnblockError] = useState(null);
 
   async function confirmUnblock() {
     const target = confirmTarget;
     setConfirmTarget(null);
     if (!target) return;
+    setUnblockError(null);
     try {
       await unblockUser(target.id);
       setBlocked(prev => prev.filter(u => u.id !== target.id));
-    } catch {}
+    } catch {
+      setUnblockError(`Could not unblock ${displayName(target, 'this user')}. Try again.`);
+    }
   }
 
   return (
     <div className="screen" style={{ height: '100%', background: 'var(--cream)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div className="page-scroll">
-        {loading && (
-          <div style={{ fontSize: 14, color: 'var(--ink4)', fontStyle: 'italic', textAlign: 'center', marginTop: 40 }}>Loading…</div>
+        {unblockError && <div className="error-msg" role="alert" style={{ marginBottom: 12 }}>{unblockError}</div>}
+
+        {state === 'loading' && (
+          <CupLoading/>
         )}
 
-        {!loading && blocked.length === 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 48 }}>
-            <UserX size={40} strokeWidth={1.5} color="var(--ink4)"/>
-            <div style={{ fontSize: 14, color: 'var(--ink4)', fontStyle: 'italic' }}>You haven't blocked anyone.</div>
-          </div>
+        {state === 'error' && <LoadError onRetry={reload}>Couldn't load the people you blocked.</LoadError>}
+
+        {state === 'ready' && blocked.length === 0 && (
+          <CupMessage mood="happy" title="You haven't blocked anyone."/>
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {blocked.map(u => (
+          {state === 'ready' && blocked.map(u => (
             <div
               key={u.id}
               style={{

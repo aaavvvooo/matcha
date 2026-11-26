@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
-  MessageCircle, Bell, Sparkle, Eye, PartyPopper, HeartCrack,
+  MessageCircle, Sparkle, Eye, PartyPopper, HeartCrack,
   CalendarHeart, CalendarCheck, CalendarX, CalendarClock,
 } from 'lucide-react';
 import { useNotifications } from '../../context/NotificationContext';
 import { usePageHeader } from '../../context/HeaderContext';
 import { useChat } from '../../context/ChatContext';
 import Avatar from '../../components/ui/Avatar';
+import CupLoading from '../../components/ui/CupLoading';
+import CupMessage from '../../components/ui/CupMessage';
+import LoadError from '../../components/ui/LoadError';
 import { displayName } from '../../utils/displayName';
 import { notificationText, notificationLink } from '../../utils/notificationInfo';
 import DatesPanel from '../dates/DatesPanel';
@@ -46,7 +49,7 @@ export default function MatchesPage() {
   const location = useLocation();
   const tab = location.pathname === '/dates' ? 'dates' : localTab;
   const { notifications, unreadCount, clearUnread } = useNotifications();
-  const { conversations, loadConversations } = useChat();
+  const { conversations, conversationsState, loadConversations } = useChat();
   const navigate = useNavigate();
 
   useEffect(() => { loadConversations().catch(() => {}); }, [loadConversations]);
@@ -90,12 +93,12 @@ export default function MatchesPage() {
         {/* Chats tab */}
         {tab === 'chats' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(conversations || []).length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '48px 20px' }}>
-                <MessageCircle size={44} strokeWidth={1.5} color="var(--sand)" style={{ marginBottom: 12 }}/>
-                <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, color: 'var(--ink2)', marginBottom: 8 }}>No conversations yet</div>
-                <div style={{ fontSize: 14, color: 'var(--ink4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>Like someone and wait for a match to start chatting <Sparkle size={13}/></div>
-              </div>
+            {conversations.length === 0 && conversationsState === 'error' ? (
+              <LoadError onRetry={() => loadConversations().catch(() => {})}>Couldn't load your conversations.</LoadError>
+            ) : conversations.length === 0 && conversationsState !== 'ready' ? (
+              <CupLoading/>
+            ) : conversations.length === 0 ? (
+              <CupMessage mood="shy" title="No conversations yet">Like someone and wait for a match to start chatting.</CupMessage>
             ) : (
               conversations.map(c => {
                 const name = displayName(c, 'Unknown');
@@ -136,10 +139,7 @@ export default function MatchesPage() {
         {tab === 'notifs' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {notifications.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '48px 20px' }}>
-                <Bell size={44} strokeWidth={1.5} color="var(--sand)" style={{ marginBottom: 12 }}/>
-                <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, color: 'var(--ink2)' }}>No notifications yet</div>
-              </div>
+              <CupMessage mood="sleepy" title="No notifications yet"/>
             ) : (
               notifications.map(n => {
                 const icon = NOTIF_ICONS[n.type] || <Sparkle size={16}/>;

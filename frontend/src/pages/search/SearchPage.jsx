@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Search as SearchIcon } from 'lucide-react';
 import { search, getAllTags } from '../../api/profilesApi';
 import FameMeter from '../../components/ui/FameMeter';
+import CupMessage from '../../components/ui/CupMessage';
 import Chip from '../../components/ui/Chip';
 import Btn from '../../components/ui/Btn';
 import FormInput from '../../components/ui/FormInput';
@@ -62,6 +62,7 @@ export default function SearchPage() {
   const [tagsError, setTagsError] = useState(false);
   // Only the latest request may update the results (sort can change mid-flight).
   const requestRef = useRef(0);
+  const appliedRef = useRef(null);
 
   // The sliders are always in range; only the tags can break a server bound.
   const searchErrors = filterErrors({ tags: filters.tags });
@@ -76,21 +77,22 @@ export default function SearchPage() {
     getAllTags().then(setAllTags).catch(() => setTagsError(true));
   }, []);
 
-  // offset 0 starts a new result list; a later offset appends the next page.
-  async function runSearch(sort = sortBy, offset = 0) {
+  // offset 0 starts a new result list; a later offset appends the next page. Sorting and paging
+  // keep the filters of the results on screen; only a new search applies the edited ones.
+  async function runSearch({ sort = sortBy, offset = 0, applied = filters } = {}) {
     const request = ++requestRef.current;
     setLoading(true);
     setError(null);
     try {
       const params = {
         sort_by: sort,
-        min_age: num(filters.ageMin),
-        max_age: num(filters.ageMax),
-        min_fame: num(filters.fameMin),
-        max_fame: num(filters.fameMax),
-        max_distance_km: num(filters.maxDistance),
-        tags: filters.tags.join(',') || undefined,
-        location: filters.location.trim() || undefined,
+        min_age: num(applied.ageMin),
+        max_age: num(applied.ageMax),
+        min_fame: num(applied.fameMin),
+        max_fame: num(applied.fameMax),
+        max_distance_km: num(applied.maxDistance),
+        tags: applied.tags.join(',') || undefined,
+        location: applied.location.trim() || undefined,
         limit: PAGE_SIZE,
         offset,
       };
@@ -98,6 +100,7 @@ export default function SearchPage() {
       if (request !== requestRef.current) return;
       // The sort chip only switches once results in that order are shown.
       setSortBy(sort);
+      appliedRef.current = applied;
       setResults(prev => {
         if (offset === 0 || !prev) return data;
         const seen = new Set(prev.map(p => p.user_id));
@@ -119,7 +122,7 @@ export default function SearchPage() {
   }, []);
 
   function changeSort(key) {
-    runSearch(key);
+    runSearch({ sort: key, applied: appliedRef.current ?? filters });
   }
 
   return (
@@ -201,18 +204,14 @@ export default function SearchPage() {
           {error && <div role="alert" style={{ fontSize: 13, color: 'var(--rose)', marginBottom: 12 }}>{error}</div>}
 
           {!results ? null : results.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-              <SearchIcon size={36} strokeWidth={1.5} color="var(--sand)" style={{ marginBottom: 12 }}/>
-              <div style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 20, color: 'var(--ink2)' }}>No matches found</div>
-              <div style={{ fontSize: 14, color: 'var(--ink4)', marginTop: 8 }}>Try broadening your filters</div>
-            </div>
+            <CupMessage mood="searching" title="No matches found">Try broadening your filters</CupMessage>
           ) : (
             <div className="search-grid">
               {results.map(p => <ResultCard key={p.user_id} profile={p}/>)}
             </div>
           )}
           {hasMore && results?.length > 0 && (
-            <Btn variant="secondary" onClick={() => runSearch(sortBy, results.length)} disabled={loading} style={{ width: '100%', marginTop: 6 }}>
+            <Btn variant="secondary" onClick={() => runSearch({ offset: results.length, applied: appliedRef.current })} disabled={loading} style={{ width: '100%', marginTop: 6 }}>
               {loading ? 'Loading…' : 'Load more'}
             </Btn>
           )}

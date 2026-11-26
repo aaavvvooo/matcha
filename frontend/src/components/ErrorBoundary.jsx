@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import MatchaCup from './ui/MatchaCup';
 import Btn from './ui/Btn';
 
 // Catches render-time errors anywhere below it so a single broken component shows a
@@ -31,6 +32,7 @@ class ErrorBoundary extends Component {
           fontFamily: 'var(--font-body)',
         }}
       >
+        <MatchaCup size={84} mood="sad"/>
         <h1 style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 28, margin: 0 }}>
           Something went wrong
         </h1>

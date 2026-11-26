@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react'
 import Avatar from '../ui/Avatar'
+import MatchaCup from '../ui/MatchaCup'
 import { useFocusTrap } from '../../hooks/useFocusTrap'
 import './Calls.css'
 
@@ -12,6 +13,9 @@ const STATUS = {
   connecting: 'Connecting…',
   reconnecting: 'Reconnecting…',
 }
+
+// Waiting for an answer: the cup keeps you company.
+const WAITING = ['calling', 'ringing']
 
 function formatElapsed(total) {
   const m = Math.floor(total / 60)
@@ -66,6 +70,7 @@ export default function CallOverlay({
         {!hasRemoteVideo && (
           <div className="call-stage-avatar">
             <Avatar name={view.peer.name} src={view.peer.photo} size={112} />
+            {WAITING.includes(view.phase) && <MatchaCup size={64} mood="shy" className="cup-float" />}
           </div>
         )}
       </div>

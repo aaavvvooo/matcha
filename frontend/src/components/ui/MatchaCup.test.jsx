@@ -14,3 +14,19 @@ test('two identical cups never share gradient ids, and each paints with its own'
   expect(first.used.every(id => first.ids.includes(id))).toBe(true);
   expect(second.used.every(id => second.ids.includes(id))).toBe(true);
 });
+
+const cup = mood => render(<MatchaCup mood={mood} />).container.querySelector('svg');
+
+test.each(['happy', 'shy', 'excited', 'sleepy', 'love', 'match', 'sad', 'searching'])('draws the %s mood', mood => {
+  expect(cup(mood)).toHaveAttribute('data-mood', mood);
+});
+
+test('every mood has a face of its own', () => {
+  const faces = ['happy', 'shy', 'excited', 'sleepy', 'love', 'match', 'sad', 'searching']
+    .map(mood => cup(mood).innerHTML.replace(/cup(Body|Lid)[\w-]+/g, ''));
+  expect(new Set(faces).size).toBe(faces.length);
+});
+
+test('is decoration: hidden from screen readers', () => {
+  expect(cup('happy')).toHaveAttribute('aria-hidden', 'true');
+});
